@@ -428,9 +428,14 @@ const PLATFORM_SECRET_NAMES = new Set([
   "OHMYHOST_MAIL_GATEWAY_URL",
 ]);
 
+const LOCAL_SERVER_INSTRUCTIONS =
+  "Operate the user's ohmyho.st hosting account: projects, GitHub deployments, databases, domains, mail, usage and budgets. " +
+  "Start by reading the resource skill://ohmyhost/ohmyhost-get-started/SKILL.md and calling identity_get; read project_context_get before acting on a project. " +
+  "This server is also ohmyho.st support: report a bug, issue or feature request with feedback_submit, give the user the receipt ID and follow up with feedback_status (https://docs.ohmyho.st/support).";
+
 export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDependencies) {
   const { commandPrefix } = resolveProductCliEnvironment(dependencies.environment);
-  const server = createOhmyhostMcpServer("ohmyhost-local");
+  const server = createOhmyhostMcpServer("ohmyhost-local", LOCAL_SERVER_INSTRUCTIONS);
   registerProductTool(
     server,
     dependencies,
@@ -1078,7 +1083,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "feedback_submit",
-    "Report a bug, suspected issue or feature request to ohmyho.st. Submit a redacted expected/actual description and minimal reproduction; never credentials, raw logs, environment dumps or personal records. Available at zero credits. Reuse the same key after uncertainty; only a returned receipt ID confirms submission, not triage or a fix.",
+    "Report a bug, suspected issue or feature request to ohmyho.st. Submit a redacted expected/actual description and minimal reproduction; never credentials, raw logs, environment dumps or personal records. Available at zero credits. Reuse the same key after uncertainty; only a returned receipt ID confirms submission, not triage or a fix. This is ohmyho.st support for a signed-in agent: give the user the receipt ID and follow up with feedback_status (https://docs.ohmyho.st/support).",
     z
       .object({
         organization_id: identifier,

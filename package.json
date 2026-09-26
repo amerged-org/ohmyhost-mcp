@@ -1,6 +1,6 @@
 {
   "name": "@amerged/ohmyhost-mcp",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -24,6 +24,13 @@
   },
   "license": "Apache-2.0",
   "homepage": "https://docs.ohmyho.st/",
+  "bugs": {
+    "url": "https://docs.ohmyho.st/support"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amerged-org/ohmyhost-mcp.git"
+  },
   "description": "ohmyho.st mcp client",
   "publishConfig": {
     "access": "public",
