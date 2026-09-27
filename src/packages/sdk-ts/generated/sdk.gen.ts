@@ -1024,7 +1024,7 @@ export const createOrganization = <ThrowOnError extends boolean = true>(
 /**
  * Create or resume an owner's hosted Stripe Checkout
  *
- * Returns a human payment URL, never charges a saved card. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 non-expiring credits. Retry the same offer, packs and Idempotency-Key after uncertainty. Browser return is not payment proof; read this checkout and the organization balance. A conflicting or existing subscription returns billing_purchase_conflict (409); read the original checkout or request an owner billing portal URL instead of another purchase. Works at zero credits.
+ * Returns a human payment URL, never charges a saved card. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 credits. Top-ups require active Paid access and have no time limit during uninterrupted Paid membership; remaining top-ups expire when the workspace returns to Free. Monthly Paid credits expire at billing-period end without rollover. Retry the same offer, packs and Idempotency-Key after uncertainty. Browser return is not payment proof; read this checkout and the organization balance. A conflicting or existing subscription returns billing_purchase_conflict (409); read the original checkout or request an owner billing portal URL instead of another purchase. Works at zero credits.
  */
 export const createBillingCheckout = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -1199,7 +1199,7 @@ export const getBillingRecharge = <ThrowOnError extends boolean = true>(
 /**
  * Enable or disable explicitly authorized auto-recharge
  *
- * Owner-only. An agent must obtain explicit approval for off-session charges and the gross monthly spending cap before enabling. Each refill costs USD 9 before tax for 1000 non-expiring credits when available credits fall below 100. A saved Stripe card is required; follow setup_url if returned. Current revision prevents stale edits; retry the original Idempotency-Key and payload after uncertainty. Disable prevents new charge initiation; already initiated payments may complete. No subscription or Paid features are created.
+ * Owner-only. An agent must obtain explicit approval for off-session charges and the gross monthly spending cap before enabling. Each refill costs USD 9 before tax for 1000 top-up credits when available credits fall below 100. Active Paid access is required to enable recharge and initiate a payment; remaining refill credits expire on downgrade to Free. A saved Stripe card is required; follow setup_url if returned. Current revision prevents stale edits; retry the original Idempotency-Key and payload after uncertainty. Disable prevents new charge initiation; already initiated payments may complete. No subscription or Paid features are created.
  */
 export const configureBillingRecharge = <ThrowOnError extends boolean = true>(
   parameters: {

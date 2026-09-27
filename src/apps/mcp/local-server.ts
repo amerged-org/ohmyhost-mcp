@@ -599,7 +599,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "billing_checkout_create",
-    "Owner-only: create or resume a hosted Checkout. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 non-expiring credits. Return the URL to the human to review/pay; never auto-pay or treat browser return as confirmation. Preserve the same offer/packs/idempotency key after uncertainty. An existing active, overdue, unpaid or paused subscription must be managed through billing_portal_create, not replaced with another Paid purchase. Then read checkout status and organization credits. Works at zero credit.",
+    "Owner-only: create or resume a hosted Checkout. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 top-up credits. Monthly Paid credits expire at billing-period end; top-ups carry over while Paid and expire on downgrade to Free. Return the URL to the human to review/pay; never auto-pay or treat browser return as confirmation. Preserve the same offer/packs/idempotency key after uncertainty. An existing active, overdue, unpaid or paused subscription must be managed through billing_portal_create, not replaced with another Paid purchase. Then read checkout status and organization credits. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
     z.object({
       organization_id: identifier,
       offer: z.enum(["topup", "paid"]),
@@ -638,7 +638,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "billing_recharge_configure",
-    "Owner-only: enable or disable automatic off-session payments. NEVER enable without explicit human approval for USD 9 plus tax per 1000 non-expiring credits, refill below 100 credits, and the chosen gross USD monthly limit. Set consent off_session_v1 only after that approval; null when disabling. Read current revision first. Preserve the original idempotency key and payload after uncertainty. A saved Stripe card may require setup_url. Disabling prevents new payment initiation; in-progress payments may finish. This does not create a subscription or Paid access.",
+    "Owner-only: enable or disable automatic off-session payments. Enabling requires active Paid access. NEVER enable without explicit human approval for USD 9 plus tax per 1000 top-up credits, which carry over while Paid and expire on downgrade to Free, refill below 100 credits, and the chosen gross USD monthly limit. Set consent off_session_v1 only after that approval; null when disabling. Read current revision first. Preserve the original idempotency key and payload after uncertainty. A saved Stripe card may require setup_url. Disabling prevents new payment initiation; in-progress payments may finish. This does not create a subscription or Paid access.",
     z.object({
       organization_id: identifier,
       enabled: z.boolean(),
@@ -716,7 +716,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "organization_account_get",
-    "Owner-only: read the effective Free/Paid plan, its Stripe or granted source, available expiring Free credits and purchased credits that never expire, reservations and next expiry. Granted Paid features do not imply a Stripe subscription or extra monthly Paid allowance. This read grants no access or credits.",
+    "Owner-only: read the effective Free/Paid plan, its Stripe or granted source, available monthly credits that expire at period end and top-up credits that carry over while Paid but expire on downgrade to Free, reservations and next expiry. Granted Paid features do not imply a Stripe subscription or extra monthly Paid allowance. This read grants no access or credits.",
     z.object({ organization_id: identifier }),
     (client, input) => client.getOrganizationAccount(input.organization_id),
   );
@@ -732,7 +732,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "organization_credits_get",
-    "Read the owner's shared organization credit pool, seven-day grace_started_at/grace_expires_at and published rate_cards. Existing services/domains are not immediately shut down at zero credit; an explicit project stop budget is separate. One credit is 1000000 microcredits. Each rate states credit_micros for units_per_charge; publication alone does not enable billing. active_meters identifies billed sources; provider outages and platform overrun are not customer debt. Works at zero credit.",
+    "Read the owner's shared organization credit pool, seven-day grace_started_at/grace_expires_at and published rate_cards. Existing services/domains are not immediately shut down at zero credit; an explicit project stop budget is separate. One credit is 1000000 microcredits. Each rate states credit_micros for units_per_charge; publication alone does not enable billing. active_meters identifies billed sources; provider outages and platform overrun are not customer debt. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
     z.object({ organization_id: identifier }),
     (client, input) => client.getOrganizationCredits(input.organization_id),
   );
