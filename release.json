@@ -1,6 +1,6 @@
 {
   "version": "0.1.26",
-  "sourceCommit": "95915b057269795dfb88a22f72ca7bf78b9b2673",
+  "sourceCommit": "8866862cf6b155c43030ac7e3dd6364da1fb7bf8",
   "npm": {
     "name": "@amerged/ohmyhost-mcp",
     "version": "0.1.26",
@@ -14,5 +14,13 @@
     "dist/index.js": "7e38c2f886eb08337c33dbe2c23f52f7ecee40a46720ba51c7ed0c3e8f592714",
     "dist/stdio-main.js": "d45f0789d433c61319dc6163dc2793856fdd509ee7da39abea70caad24712ce5"
   },
-  "generatedAt": "2026-09-29T04:34:59.423Z"
+  "generatedAt": "2026-09-29T04:34:59.423Z",
+  "publicationSourceCommit": "95915b057269795dfb88a22f72ca7bf78b9b2673",
+  "sourceEquivalence": {
+    "upstreamSourceCommit": "8866862cf6b155c43030ac7e3dd6364da1fb7bf8",
+    "publicationSourceCommit": "95915b057269795dfb88a22f72ca7bf78b9b2673",
+    "npmSha256": "e6f78d6434124c7a5b00c93c62b723fdcb5a7cadeabe71161f3f46b9fe56e990",
+    "matchedMirroredPayloads": 85,
+    "normalization": "Only canonical public package/workspace Apache metadata and canonical license/NOTICE/dependency notices; all other source bytes raw identical"
+  }
 }
