@@ -351,9 +351,13 @@ export type PaidDomainPlan = {
   risks: Array<string>;
 };
 
+/**
+ * awaiting_deployment means the requested hostname is declared but not provisioned. Its hostname is present, suspension_reason, custom_hostname_status, ssl_status and url are null, and validation_records is empty. Authorize Cloudflare, deploy to Prod, then repeat the same apply.
+ */
 export type PaidDomain = {
   status:
     | "not_configured"
+    | "awaiting_deployment"
     | "pending"
     | "active"
     | "reconciliation_required"
@@ -4686,7 +4690,7 @@ export type PlanPaidProjectDomainError =
 
 export type PlanPaidProjectDomainResponses = {
   /**
-   * Manual CNAME instructions and exact provider effects.
+   * The requested hostname, routing target and staged provider effects.
    */
   200: PaidDomainPlan;
 };
@@ -4880,7 +4884,7 @@ export type ApplyPaidProjectDomainError =
 
 export type ApplyPaidProjectDomainResponses = {
   /**
-   * Current Cloudflare for SaaS hostname and certificate state.
+   * Declared hostname or current Cloudflare for SaaS hostname and certificate state.
    */
   200: PaidDomain;
 };

@@ -1,4 +1,4 @@
-import { PINNED_BUN_VERSION } from "./framework-build-script.mjs";
+import { isAdmittedNextVersion, PINNED_BUN_VERSION } from "./framework-build-script.mjs";
 import { managedCustomerAuthDatabaseMessage } from "./customer-auth-admission.js";
 export { managedCustomerAuthAdmissionIssue } from "./customer-auth-admission.js";
 
@@ -129,7 +129,7 @@ export interface FrameworkVersionAdmission {
 const VERIFIED_VERSIONS: Readonly<Record<AdmittedFramework, ReadonlySet<string>>> = Object.freeze({
   vite: new Set(["5.4.21", "8.0.16", "8.2.2"]),
   "tanstack-start": new Set(["1.168.26", "1.168.49"]),
-  nextjs: new Set(["15.5.23", "16.3.2"]),
+  nextjs: new Set(["15.5.26", "16.3.7"]),
 });
 
 export function classifyFrameworkVersion(
@@ -173,10 +173,7 @@ function insideAdmittedWindow(framework: AdmittedFramework, version: VersionTupl
         compareVersions(version, [1, 168, 26]) >= 0 && compareVersions(version, [1, 168, 49]) <= 0
       );
     case "nextjs":
-      return (
-        (version[0] === 15 && version[1] === 5) ||
-        (compareVersions(version, [16, 0, 0]) >= 0 && compareVersions(version, [16, 3, 4]) <= 0)
-      );
+      return isAdmittedNextVersion(version.join("."));
   }
 }
 

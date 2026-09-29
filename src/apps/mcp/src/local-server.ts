@@ -576,7 +576,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "domain_paid_plan",
-    "Plan a customer-owned production hostname and return the manual CNAME/validation instructions. This does not activate or change DNS. Without Paid, only a project that shows the powered-by flag (powered_by_flag_get) can activate its own hostname; for any other Free project domain_paid_apply answers paid_plan_required. production_deployment_required means Prod has no active deployment: deploy to Prod or promote the current Dev deployment, then plan again.",
+    "Plan a customer-owned production hostname before or after the first Prod deployment. This reads the project and describes declaration and activation without changing DNS. domain_paid_apply can declare a hostname as awaiting_deployment for early Cloudflare consent. Without Paid, only a project that shows the powered-by flag (powered_by_flag_get) can connect its own hostname; for any other Free project domain_paid_apply answers paid_plan_required.",
     z.object({ project_id: identifier, hostname: domainName }),
     (client, input) =>
       client.planPaidDomain({ projectId: input.project_id, hostname: input.hostname }),
@@ -585,7 +585,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "domain_paid_apply",
-    "Activate the explicitly requested customer hostname. Requires Paid access, or a Free workspace whose project shows the powered-by flag (powered_by_flag_set, only with the owner's consent); otherwise it answers paid_plan_required. The backend may reuse only its scoped customer OAuth grant. After domain_cloudflare_status is authorized, replay the original hostname/key to reconcile its exact DNS records. Otherwise return the manual DNS records to the human. Preserve the original hostname/key after uncertainty; no arbitrary DNS or provider credentials are accepted. production_deployment_required changed nothing: deploy to Prod or promote Dev first, then repeat the same hostname/key.",
+    "Declare or activate the explicitly requested customer hostname. Requires Paid access, or a Free workspace whose project shows the powered-by flag (powered_by_flag_set, only with the owner's consent). Without an active Prod deployment, returns awaiting_deployment and reserves the hostname without provider resources, DNS changes or domain charges; request Cloudflare consent now, then deploy to Prod. After Prod succeeds and domain_cloudflare_status is authorized, replay the original hostname/key to activate and reconcile its exact DNS records. Otherwise return the manual records to the human. Preserve the original hostname/key after uncertainty; no arbitrary DNS or provider credentials are accepted.",
     z.object({
       project_id: identifier,
       hostname: domainName,

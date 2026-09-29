@@ -1,26 +1,18 @@
 {
-  "version": "0.1.26",
-  "sourceCommit": "8866862cf6b155c43030ac7e3dd6364da1fb7bf8",
+  "version": "0.1.27",
+  "sourceCommit": "9493648144b8e863e07ac609a4b5b7ea0c1a7995",
   "npm": {
     "name": "@amerged/ohmyhost-mcp",
-    "version": "0.1.26",
-    "integrity": "sha512-3xWApy0uXfjEtfAxdky3FZlzKHu3WDWzQhnHN8qiNE9Ipi+wi6Sj2y93bB0l7EtEOZvaYEx4rK800Nd/Vx6PSg==",
-    "sha256": "e6f78d6434124c7a5b00c93c62b723fdcb5a7cadeabe71161f3f46b9fe56e990",
-    "tarball": "https://registry.npmjs.org/@amerged/ohmyhost-mcp/-/ohmyhost-mcp-0.1.26.tgz"
+    "version": "0.1.27",
+    "integrity": "sha512-Jd7kXFYNcemO583P+2kTTHKcRkyiUw5r9FFBLbqZywAlqN/JzJMr2pWfSWPE/h9D/FZNaARMGsNRzQvud1+QRw==",
+    "sha256": "7dd588c476dabc521ee00ae2c55ca915b13bba23fe4cac6f002ae2e81b8fcd90",
+    "tarball": "https://registry.npmjs.org/@amerged/ohmyhost-mcp/-/ohmyhost-mcp-0.1.27.tgz"
   },
   "omitted": {
-    "README.md": "dcd4189dd441b18c46289f41f52364d206551ac14030b679694d972c3d9a5ba1",
-    "dist/chunk-K57THTQL.js": "2fe46eba8d56a4b5c6b06f80a2507f669c54be0b0043c051dbd91c8ed464d0dc",
-    "dist/index.js": "7e38c2f886eb08337c33dbe2c23f52f7ecee40a46720ba51c7ed0c3e8f592714",
-    "dist/stdio-main.js": "d45f0789d433c61319dc6163dc2793856fdd509ee7da39abea70caad24712ce5"
+    "README.md": "71477b5846be530a6b7e8287afd7b20ae8b9a37450eb58dc2a6693c12ae2b13c",
+    "dist/chunk-QF7MOXLY.js": "ddeacbd9ef2a5a56f6b161ad2f4a01f191066b33e02f8463aa8c1a88a407a31f",
+    "dist/index.js": "be412c60a5645d025b42453fa50015f7281b0a384ebb24da991a0d5933603fc6",
+    "dist/stdio-main.js": "c46a57af1cf6a96619f29111f75d6a11e5115b75090b87a188292345f1243e49"
   },
-  "generatedAt": "2026-09-29T04:34:59.423Z",
-  "publicationSourceCommit": "95915b057269795dfb88a22f72ca7bf78b9b2673",
-  "sourceEquivalence": {
-    "upstreamSourceCommit": "8866862cf6b155c43030ac7e3dd6364da1fb7bf8",
-    "publicationSourceCommit": "95915b057269795dfb88a22f72ca7bf78b9b2673",
-    "npmSha256": "e6f78d6434124c7a5b00c93c62b723fdcb5a7cadeabe71161f3f46b9fe56e990",
-    "matchedMirroredPayloads": 85,
-    "normalization": "Only canonical public package/workspace Apache metadata and canonical license/NOTICE/dependency notices; all other source bytes raw identical"
-  }
+  "generatedAt": "2026-09-29T17:15:36.483Z"
 }

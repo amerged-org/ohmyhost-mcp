@@ -94,6 +94,7 @@ export interface PublicPaidDomainPlan {
 export interface PublicPaidDomain {
   readonly status:
     | "not_configured"
+    | "awaiting_deployment"
     | "pending"
     | "active"
     | "reconciliation_required"
@@ -153,6 +154,7 @@ export const parsePaidDomain = (value: unknown): PublicPaidDomain => {
   if (
     ![
       "not_configured",
+      "awaiting_deployment",
       "pending",
       "active",
       "reconciliation_required",
@@ -176,7 +178,13 @@ export const parsePaidDomain = (value: unknown): PublicPaidDomain => {
     !Array.isArray(records) ||
     records.length > 16 ||
     !records.every(isPaidValidationRecord) ||
-    (input["url"] !== null && input["url"] !== `https://${String(hostname)}`)
+    (input["url"] !== null && input["url"] !== `https://${String(hostname)}`) ||
+    (status === "awaiting_deployment" &&
+      (hostname === null ||
+        input["custom_hostname_status"] !== null ||
+        input["ssl_status"] !== null ||
+        input["url"] !== null ||
+        records.length !== 0))
   ) {
     throw new ResponseContractError();
   }

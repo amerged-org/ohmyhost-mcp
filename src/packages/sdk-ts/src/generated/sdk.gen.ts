@@ -2560,7 +2560,7 @@ export const configureProjectDomains = <ThrowOnError extends boolean = true>(
 /**
  * Plan one Paid customer-owned hostname
  *
- * The hostname routes to the project's current Prod deployment. A project whose Prod environment has no active deployment returns production_deployment_required (409); deploy to Prod or promote the current Dev deployment, then plan again.
+ * Plan the customer's requested hostname before or after the first Prod deployment. This read-only plan explains declaration, Cloudflare consent and activation; it does not claim the hostname, create provider resources or change DNS.
  */
 export const planPaidProjectDomain = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -2698,7 +2698,7 @@ export const getPaidProjectDomain = <ThrowOnError extends boolean = true>(
 /**
  * Apply one Paid customer-owned hostname
  *
- * Requires Paid access (a Stripe period or a grant) or, for a Free workspace, a project that currently shows the powered-by flag, and no expired credit-exhaustion grace. Returns paid_plan_required otherwise, or insufficient_organization_credits after seven days with no available credits, without provider mutation. Top-ups lift a credit-exhaustion block but never start or extend Paid access. After that check, a project whose Prod environment has no active deployment returns production_deployment_required (409) without claiming the hostname or any provider mutation; a changed request under a used key returns idempotency_key_reused (409).
+ * Requires Paid access (a Stripe period or a grant) or, for a Free workspace, a project that currently shows the powered-by flag, and no expired credit-exhaustion grace. Returns paid_plan_required otherwise, or insufficient_organization_credits after seven days with no available credits, without provider mutation. Top-ups lift a credit-exhaustion block but never start or extend Paid access. Without an active Prod deployment, apply declares the hostname as awaiting_deployment, enabling Cloudflare consent without provider resources, DNS changes or domain charges. After a successful Prod deployment, replay the same hostname and idempotency key to activate it. A changed request under a used key returns idempotency_key_reused (409).
  */
 export const applyPaidProjectDomain = <ThrowOnError extends boolean = true>(
   parameters: {
