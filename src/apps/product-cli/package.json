@@ -1,0 +1,45 @@
+{
+  "name": "@ohmyhost/product-cli",
+  "version": "0.1.26",
+  "private": true,
+  "ohmyhost": {
+    "deployment": "production",
+    "fakeProviderBoundary": {
+      "typescriptProject": "tsconfig.build.json",
+      "artifactRoot": "dist",
+      "entrypoints": [
+        "src/bin.ts",
+        "src/index.ts"
+      ],
+      "bundles": []
+    }
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./credential-store": {
+      "source": "./src/credential-store.ts",
+      "types": "./dist/credential-store.d.ts",
+      "import": "./dist/credential-store.js"
+    }
+  },
+  "bin": {
+    "ohmyhost": "./dist/bin.js"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run --root ../.. apps/product-cli/test"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "1.3.0",
+    "@ohmyhost/contracts": "workspace:*",
+    "@ohmyhost/sdk-ts": "workspace:*",
+    "@ohmyhost/workos-auth-contracts": "workspace:*"
+  },
+  "license": "Apache-2.0"
+}

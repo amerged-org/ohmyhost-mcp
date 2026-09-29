@@ -1,0 +1,38 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.amerged-org/ohmyhost-mcp",
+  "title": "ohmyho.st",
+  "description": "Operate ohmyho.st hosting from your coding agent: deploy GitHub apps, Postgres, mail, domains.",
+  "repository": {
+    "url": "https://github.com/amerged-org/ohmyhost-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://docs.ohmyho.st/agents/mcp",
+  "version": "0.1.26",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@amerged/ohmyhost-mcp",
+      "version": "0.1.26",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "OHMYHOST_ENVIRONMENT",
+          "description": "Platform to use: production (default) or development.",
+          "isRequired": false,
+          "format": "string",
+          "default": "production"
+        },
+        {
+          "name": "OHMYHOST_TOKEN",
+          "description": "Optional user API token; without it the server uses the login saved by ohmyhost login.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

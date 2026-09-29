@@ -1,6 +1,6 @@
 {
   "name": "@amerged/ohmyhost-mcp",
-  "version": "0.1.23",
+  "version": "0.1.26",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -27,6 +27,7 @@
   "bugs": {
     "url": "https://docs.ohmyho.st/support"
   },
+  "mcpName": "io.github.amerged-org/ohmyhost-mcp",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/amerged-org/ohmyhost-mcp.git"

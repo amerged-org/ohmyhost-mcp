@@ -1,0 +1,47 @@
+{
+  "name": "@ohmyhost/mcp",
+  "version": "0.1.26",
+  "private": true,
+  "ohmyhost": {
+    "deployment": "production",
+    "fakeProviderBoundary": {
+      "typescriptProject": "tsconfig.build.json",
+      "artifactRoot": "dist",
+      "entrypoints": [
+        "src/index.ts",
+        "src/stdio-main.ts",
+        "src/worker-main.ts"
+      ],
+      "bundles": []
+    }
+  },
+  "type": "module",
+  "bin": {
+    "ohmyhost-mcp": "./dist/stdio-main.js"
+  },
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "deploy:dry-run": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "test": "vitest run --root ../.. apps/mcp/test",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ohmyhost/contracts": "workspace:*",
+    "@modelcontextprotocol/server": "2.0.0",
+    "@ohmyhost/agent-skills": "workspace:*",
+    "@ohmyhost/product-cli": "workspace:*",
+    "@ohmyhost/sdk-ts": "workspace:*",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "wrangler": "4.125.0"
+  },
+  "license": "Apache-2.0"
+}

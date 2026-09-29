@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.23; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.26; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.23 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.26 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -32,7 +32,7 @@ Confirm the connection and call `identity_get`; a saved configuration alone is n
 
 ## Authenticate
 
-Authenticate one of two ways: set `OHMYHOST_TOKEN` in the server's `env` block, or sign in once with `ohmyhost login --json` and let MCP reuse that local session. The token wins wherever it is set, and needs no browser. New user API tokens are optional, remain valid until revoked and are shown only once. Login and token lifetimes are separate.
+Authenticate one of two ways: load `OHMYHOST_TOKEN` from a private credential source into the server environment, or sign in with `ohmyhost login --json` and let MCP use the saved logins. With several saved logins, pass `profile_name` on each call (`profile_list` shows the names), or bind the server to one login with `OHMYHOST_PROFILE=NAME` next to `OHMYHOST_ENVIRONMENT`; a bound server refuses calls for another login (`profile_context_mismatch`). A server registered for the user serves every session on this computer, so bind it only when the customer asks, and reload it afterwards. The token wins wherever it is set and needs no browser. New user API tokens are optional and remain valid until revoked; the portal shows a new value once, while CLI/MCP token creation saves it directly to the chosen private env file. Login and token lifetimes are separate.
 
 Keep tokens out of shared or committed MCP configuration; the public configuration carries only `OHMYHOST_ENVIRONMENT=production`.
 
@@ -96,10 +96,12 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `project_budget_set`: Set an owner's optional monthly project budget in microcredits (1000000 = one credit).
 - `project_context_get`: Read fresh project status, DNS/mail next actions, authorized usage and bounded shared notes.
 - `project_create`: Create an ohmyho.st project.
+- `project_data_change`: Owner only: execute the exact reviewed project_data_plan after explicit customer confirmation.
+- `project_data_plan`: Owner only: plan a Dev/Prod data assignment change and review the data, files, deployments and database logins it keeps or removes.
 - `project_dev_access_create`: Create an owner-only one-hour single-use access link for the protected Dev app.
 - `project_dev_access_mode_set`: Owner only: choose public Dev (no platform token) or protected Dev (share link required).
 - `project_dev_share_link_get`: Owner only: get or create the persistent protected Dev link.
-- `project_dev_share_link_revoke`: Owner only: revoke the persistent Dev link and active sessions immediately; Dev stays protected until a new link is obtained.
+- `project_dev_share_link_revoke`: Owner only: revoke the persistent Dev link and active sessions immediately without changing the Dev access mode.
 - `project_dev_share_link_rotate`: Owner only: replace the persistent Dev link and immediately revoke old links and sessions.
 - `project_export_create`: Owner-only: request an asynchronous password-encrypted SQL ZIP, including at zero credits.
 - `project_export_get`: Owner-only: read the original SQL ZIP export's progress/error and verified download URL.
@@ -134,7 +136,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.23 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.26 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

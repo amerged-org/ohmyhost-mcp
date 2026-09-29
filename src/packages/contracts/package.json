@@ -1,0 +1,137 @@
+{
+  "name": "@ohmyhost/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./operation-failure": {
+      "source": "./src/operation-failure.ts",
+      "types": "./dist/operation-failure.d.ts",
+      "import": "./dist/operation-failure.js"
+    },
+    "./billing": {
+      "source": "./src/billing.ts",
+      "types": "./dist/billing.d.ts",
+      "import": "./dist/billing.js"
+    },
+    "./credit-pricing": {
+      "source": "./src/credit-pricing.ts",
+      "types": "./dist/credit-pricing.d.ts",
+      "import": "./dist/credit-pricing.js"
+    },
+    "./platform-origins": {
+      "source": "./src/platform-origins.ts",
+      "types": "./dist/platform-origins.d.ts",
+      "import": "./dist/platform-origins.js"
+    },
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./application-root": {
+      "source": "./src/application-root.ts",
+      "types": "./dist/application-root.d.ts",
+      "import": "./dist/application-root.js"
+    },
+    "./database-migration-admission": {
+      "source": "./src/database-migration-admission.ts",
+      "types": "./dist/database-migration-admission.d.ts",
+      "import": "./dist/database-migration-admission.js"
+    },
+    "./framework-family": {
+      "source": "./src/framework-family.ts",
+      "types": "./dist/framework-family.d.ts",
+      "import": "./dist/framework-family.js"
+    },
+    "./operation-deployment-result": {
+      "source": "./src/operation-deployment-result.ts",
+      "types": "./dist/operation-deployment-result.d.ts",
+      "import": "./dist/operation-deployment-result.js"
+    },
+    "./operation-data-change-result": {
+      "source": "./src/operation-data-change-result.ts",
+      "types": "./dist/operation-data-change-result.d.ts",
+      "import": "./dist/operation-data-change-result.js"
+    },
+    "./framework-admission": {
+      "source": "./src/framework-admission.ts",
+      "types": "./dist/framework-admission.d.ts",
+      "import": "./dist/framework-admission.js"
+    },
+    "./framework-build-script": {
+      "source": "./src/framework-build-script.ts",
+      "types": "./dist/framework-build-script.d.ts",
+      "import": "./dist/framework-build-script.js"
+    },
+    "./browser-capabilities": {
+      "source": "./src/browser-capabilities.ts",
+      "types": "./dist/browser-capabilities.d.ts",
+      "import": "./dist/browser-capabilities.js"
+    },
+    "./openapi.yaml": "./openapi.yaml",
+    "./ohmyhost.schema.json": "./schemas/ohmyhost.schema.json",
+    "./feedback": {
+      "source": "./src/feedback.ts",
+      "types": "./dist/feedback.d.ts",
+      "import": "./dist/feedback.js"
+    },
+    "./user-api-keys": {
+      "source": "./src/user-api-keys.ts",
+      "types": "./dist/user-api-keys.d.ts",
+      "import": "./dist/user-api-keys.js"
+    },
+    "./project-exports": {
+      "source": "./src/project-exports.ts",
+      "types": "./dist/project-exports.d.ts",
+      "import": "./dist/project-exports.js"
+    },
+    "./project-context": {
+      "source": "./src/project-context.ts",
+      "types": "./dist/project-context.d.ts",
+      "import": "./dist/project-context.js"
+    },
+    "./database-compute": {
+      "source": "./src/database-compute.ts",
+      "types": "./dist/database-compute.d.ts",
+      "import": "./dist/database-compute.js"
+    },
+    "./database-access": {
+      "source": "./src/database-access.ts",
+      "types": "./dist/database-access.d.ts",
+      "import": "./dist/database-access.js"
+    },
+    "./functions": {
+      "source": "./src/functions.ts",
+      "types": "./dist/functions.d.ts",
+      "import": "./dist/functions.js"
+    },
+    "./problem-policy": {
+      "source": "./src/problem-policy.ts",
+      "types": "./dist/problem-policy.d.ts",
+      "import": "./dist/problem-policy.js"
+    },
+    "./secret-names": {
+      "source": "./src/secret-names.ts",
+      "types": "./dist/secret-names.d.ts",
+      "import": "./dist/secret-names.js"
+    },
+    "./project-data-changes": {
+      "source": "./src/project-data-changes.ts",
+      "types": "./dist/project-data-changes.d.ts",
+      "import": "./dist/project-data-changes.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run --root ../.. packages/contracts/test",
+    "validate": "pnpm run typecheck && pnpm run test"
+  },
+  "dependencies": {
+    "ajv": "8.18.0",
+    "yaml": "2.8.3"
+  },
+  "license": "Apache-2.0"
+}

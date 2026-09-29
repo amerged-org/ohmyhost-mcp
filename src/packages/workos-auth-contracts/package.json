@@ -1,0 +1,39 @@
+{
+  "name": "@ohmyhost/workos-auth-contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./user-api-keys": {
+      "source": "./src/user-api-keys.ts",
+      "types": "./dist/user-api-keys.d.ts",
+      "import": "./dist/user-api-keys.js"
+    },
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./parsing": {
+      "source": "./src/parsing.ts",
+      "types": "./dist/parsing.d.ts",
+      "import": "./dist/parsing.js"
+    },
+    "./device-flow": {
+      "source": "./src/device-flow.ts",
+      "types": "./dist/device-flow.d.ts",
+      "import": "./dist/device-flow.js"
+    },
+    "./tokens": {
+      "source": "./src/tokens.ts",
+      "types": "./dist/tokens.d.ts",
+      "import": "./dist/tokens.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run --root ../.. packages/workos-auth-contracts/src"
+  },
+  "license": "Apache-2.0"
+}

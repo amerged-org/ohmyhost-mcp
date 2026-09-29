@@ -1,0 +1,24 @@
+{
+  "name": "@ohmyhost/agent-skills",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/generate-skill-resources.mjs && tsc --project tsconfig.build.json",
+    "generate:check": "node scripts/generate-skill-resources.mjs --check",
+    "test": "node scripts/generate-skill-resources.mjs --check && vitest run --root ../.. packages/agent-skills/test",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@ohmyhost/customer-runtime": "workspace:*",
+    "prettier": "3.6.2"
+  },
+  "license": "Apache-2.0"
+}
