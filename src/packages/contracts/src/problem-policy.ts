@@ -450,6 +450,13 @@ export const PROBLEM_POLICY = {
       "A live project connection already holds this hostname. Remove it from the project you manage with 'ohmyhost domain paid delete --project ULID --hostname HOST --yes --json', then apply it to the new project. Repeating while that connection remains cannot work; report the request_id if you cannot manage its owning project.",
     title: "Domain hostname is already connected",
   },
+  domain_dns_conflict: {
+    status: 409,
+    retryable: false,
+    action:
+      "Review DNS for the requested hostname and resolve the conflicting delegation or another project's managed records. Preserve mailbox MX, TXT and CAA records. Then repeat the original domain paid apply or delete with the same hostname and idempotency key; do not create another deployment or repeatedly resubmit unchanged conflicts.",
+    title: "Domain DNS records conflict",
+  },
   data_change_blocked: {
     status: 409,
     retryable: true,

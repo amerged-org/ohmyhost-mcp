@@ -1163,6 +1163,18 @@ function repositoryBlockers(
   existingConfiguration: OhmyhostConfig | null,
 ): RepositoryInitBlocker[] {
   const blockers: RepositoryInitBlocker[] = [];
+  if (
+    framework !== "nextjs" &&
+    existingConfiguration !== null &&
+    "command" in existingConfiguration.build &&
+    existingConfiguration.build.ssg_cache_max_mib !== undefined
+  ) {
+    blockers.push({
+      code: "framework_unsupported",
+      message:
+        "build.ssg_cache_max_mib is supported only by Next.js; remove it from this application's configuration.",
+    });
+  }
   if (framework === "unknown") {
     blockers.push({
       code: "framework_unsupported",

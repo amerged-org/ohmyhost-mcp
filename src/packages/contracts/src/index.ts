@@ -24,6 +24,8 @@ export type OhmyhostApplicationBuild = Readonly<{
   install: string;
   command: string;
   output: string;
+  /** Maximum private immutable Next.js prerender cache, in MiB; defaults to 32. */
+  ssg_cache_max_mib?: number;
 }>;
 export type OhmyhostFunctionsBuild = Readonly<{ install: string }>;
 
@@ -88,6 +90,9 @@ export function parseOhmyhostConfig(value: unknown): OhmyhostConfig {
             install: input.build.install,
             command: (input.build as OhmyhostApplicationBuild).command,
             output: (input.build as OhmyhostApplicationBuild).output,
+            ...((input.build as OhmyhostApplicationBuild).ssg_cache_max_mib === undefined
+              ? {}
+              : { ssg_cache_max_mib: (input.build as OhmyhostApplicationBuild).ssg_cache_max_mib }),
           }),
     runtime: Object.freeze({
       mode: input.runtime.mode,

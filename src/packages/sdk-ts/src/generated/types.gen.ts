@@ -1116,6 +1116,7 @@ export type ProblemDetails = {
     | "service_unavailable"
     | "source_commit_not_found"
     | "domain_hostname_taken"
+    | "domain_dns_conflict"
     | "data_change_blocked"
     | "data_change_in_progress"
     | "data_change_not_applicable"

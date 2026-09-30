@@ -1,6 +1,6 @@
 import { GENERATED_SKILL_RESOURCES } from "./generated-skill-resources.js";
 
-export const OHMYHOST_SKILL_INSTALL_SOURCE = "amerged-org/docs";
+export const OHMYHOST_SKILL_INSTALL_SOURCE = "amerged-org/ohmyhost-docs";
 
 export interface OhmyhostSkillResource {
   readonly skillName: string;
