@@ -8,6 +8,10 @@ export * from "./profile-store.js";
 export * from "./project-link-store.js";
 export * from "./repository-init.js";
 export * from "./workspace.js";
+export * from "./source-workspace.js";
+export * from "./source-publisher.js";
+export * from "./source-managed-client.js";
+export * from "./source-publication-store.js";
 export type { PublicAccount } from "./runtime-contract.js";
 export {
   parseAccountProfile,
@@ -24,6 +28,8 @@ export {
   parseOperationEvent,
   parseSafeProblem,
   parseProjectDataChangePlan,
+  parseProjectSource,
+  parseProjectSourceBinding,
 } from "./runtime-contract.js";
 
 export * from "./user-token-file.js";

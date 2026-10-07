@@ -1,6 +1,6 @@
 {
   "name": "@ohmyhost/product-cli",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "private": true,
   "ohmyhost": {
     "deployment": "production",
@@ -39,7 +39,9 @@
     "@napi-rs/keyring": "1.3.0",
     "@ohmyhost/contracts": "workspace:*",
     "@ohmyhost/sdk-ts": "workspace:*",
-    "@ohmyhost/workos-auth-contracts": "workspace:*"
+    "@ohmyhost/workos-auth-contracts": "workspace:*",
+    "ignore": "7.0.12",
+    "isomorphic-git": "1.43.0"
   },
   "license": "Apache-2.0"
 }

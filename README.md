@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.28; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.29; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.28 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.29 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -119,8 +119,19 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `secret_delete`: Delete an environment secret
 - `secret_set_command`: Return the stdin-only CLI command for setting a secret; the value never enters MCP.
 - `secrets_list`: List secret metadata without values
-- `source_get`: Get linked source status
+- `source_changes`: Save an atomic file batch against the generation and parent commit you read.
+- `source_diff`: Compare two managed versions without changing files or deployments.
+- `source_file`: Read one managed source file with its exact hash and mode.
+- `source_files`: List the exact managed source tree at a version; omit commit_sha to read current main.
+- `source_get`: Get linked source status.
+- `source_initialize`: Create managed version history for an unbound project.
+- `source_inspect`: Read local working-directory, Git/worktree, monorepo and sanitized remote context without sign-in.
 - `source_link`: Link a repository covered by the workspace GitHub connection.
+- `source_publish`: Local MCP only: capture current filtered files, including uncommitted/new files, and save one managed version without importing Git history.
+- `source_publish_complete`: Complete a local pending source publication after polling its operation.
+- `source_restore`: Restore an earlier managed file tree as a new version against current generation and parent.
+- `source_upload`: Observe the exact managed snapshot upload after an uncertain response.
+- `source_versions`: Read managed version history for this project; next_commit_sha continues the same history page.
 - `token_create`: Create your own non-expiring API token after interactive login and save it to the selected private env file.
 - `token_revoke`: Revoke one of your own API tokens after explicit confirmation and interactive login.
 - `tokens_list`: List your token metadata after interactive login.
@@ -136,7 +147,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.28 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.29 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

@@ -1,4 +1,24 @@
 import { open } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import {
+  assertManagedSourceResponse,
+  type ManagedProjectSource,
+} from "@ohmyhost/contracts/managed-sources";
+import {
+  createSourceSnapshot,
+  inspectSourceWorkspace,
+  SourceWorkspaceError,
+  type SourceWorkspace,
+} from "./source-workspace.js";
+import { publishSourceSnapshot } from "./source-publisher.js";
+import {
+  prepareLocalSourcePublication,
+  completeLocalSourcePublication,
+  inspectLocalSourcePublications,
+  LocalSourcePublicationError,
+  type LocalSourceMetadataDirectory,
+} from "./source-publication-store.js";
+import { readProjectLinks } from "./project-link-store.js";
 import {
   parseProjectDatabaseWrite,
   assertProjectDatabaseWriteReceipt,
@@ -94,6 +114,7 @@ import {
   parseOperationEvent,
   parseProjectPage,
   parseProjectStatus,
+  parseProjectSourceBinding,
   parseProjectDatabaseQuery,
   parsePaidDomain,
   parsePaidDomainPlan,
@@ -212,6 +233,11 @@ export class PublicResponseTooLargeError extends Error {
 }
 
 export interface ProductCliDependencies {
+  readonly sourceDirectory?: string;
+  readonly sourceMetadataDirectory?: LocalSourceMetadataDirectory;
+  readonly sourceWorkspace?: () => Promise<SourceWorkspace>;
+  readonly linkedSourceProvider?: "github" | "managed";
+  readonly linkedProjectId?: string;
   readonly apiToken?: string;
   readonly commandPrefix: string;
   /** One credential store for a run without saved logins; a chosen saved login uses its own. */
@@ -234,11 +260,15 @@ export interface ProductCliDependencies {
    * keeping product mutation capabilities out of login.
    */
   readonly accountProfile: (accessToken: () => Promise<string>) => Promise<PublicAccount>;
-  /** Optional onboarding guidance; production supplies only this one read-only SDK query. */
+  /** Optional onboarding guidance uses only these narrow read-only SDK queries. */
   readonly githubConnectionStatus?: (
     accessToken: () => Promise<string>,
     organizationId: string,
   ) => ReturnType<ProductApi["getGithubConnection"]>;
+  readonly projectSourceStatus?: (
+    accessToken: () => Promise<string>,
+    projectId: string,
+  ) => Promise<unknown>;
   readonly projectLinkStore: ProjectLinkStore;
   readonly productApiOrigin: string;
   readonly tokenRevoker: TokenRevoker;
@@ -389,6 +419,24 @@ const HELP_USAGE = Object.freeze({
   "source auto-deploy set":
     "ohmyhost source auto-deploy set --project ULID --branch BRANCH --enabled true|false --idempotency-key KEY --json",
   "source auto-deploy status": "ohmyhost source auto-deploy status --project ULID --json",
+  "source inspect":
+    "ohmyhost source inspect [--directory PATH] --json (read local source and sanitized GitHub context without sign-in)",
+  "source status": "ohmyhost source status --project ULID --json",
+  "source files": "ohmyhost source files --project ULID [--commit SHA] --json",
+  "source file": "ohmyhost source file --project ULID --path PATH [--commit SHA] --json",
+  "source versions":
+    "ohmyhost source versions --project ULID [--limit 1..100] [--before SHA] --json",
+  "source diff": "ohmyhost source diff --project ULID --from SHA --to SHA --json",
+  "source upload":
+    "ohmyhost source upload --project ULID --operation ULID --json (observe the same upload after uncertainty)",
+  "source publish":
+    "ohmyhost source publish --project ULID --mode initialize|commit|switch [--directory PATH] --expected-source-generation N [--expected-source-connection ULID] [--expected-commit SHA] --message TEXT --idempotency-key KEY [--wait] --json (current files, no history import; one managed commit)",
+  "source publish complete":
+    "ohmyhost source publish complete --project ULID [--directory PATH] [--operation ULID] --json (confirm the recorded publication and save this directory's own committed base)",
+  "source initialize":
+    "ohmyhost source initialize --project ULID --template empty|vite-react --expected-source-generation N --idempotency-key KEY [--wait] --json",
+  "source restore":
+    "ohmyhost source restore --project ULID --expected-source-generation N --expected-commit SHA --restore-commit SHA --message TEXT --idempotency-key KEY [--wait] --json (restore as a new version; publication is separate)",
   "domain cloudflare authorize":
     "ohmyhost domain cloudflare authorize --project ULID --zone ZONE --idempotency-key KEY --json",
   "domain cloudflare status": "ohmyhost domain cloudflare status --project ULID --json",
@@ -608,6 +656,24 @@ export class ProductCli {
       if (command.kind === "help" || command.kind === "version")
         return cliMetadataResult(command.kind, command.kind === "help" ? command.topic : undefined);
       if (command.kind === "init") throw new ProviderCapabilityBlockedError();
+      if (command.kind === "source-inspect")
+        return success(name, {
+          status: "inspected",
+          workspace: await inspectSourceWorkspace(
+            resolve(this.dependencies.sourceDirectory ?? process.cwd(), command.directory),
+          ),
+          pending_publications: await inspectLocalSourcePublications(
+            resolve(this.dependencies.sourceDirectory ?? process.cwd(), command.directory),
+          ),
+        });
+      if (
+        command.kind === "source-read" ||
+        command.kind === "source-publish" ||
+        command.kind === "source-initialize" ||
+        command.kind === "source-restore" ||
+        command.kind === "source-complete"
+      )
+        return await this.managedSource(command, signal);
       if (
         this.dependencies.apiToken !== undefined &&
         (command.kind === "organization-create" ||
@@ -1083,12 +1149,31 @@ export class ProductCli {
   }
 
   private async githubNextAction(
-    api: Pick<ProductApi, "getGithubConnection">,
+    api: Pick<ProductApi, "getGithubConnection"> & {
+      readonly managedSource?: Pick<NonNullable<ProductApi["managedSource"]>, "getSource">;
+    },
     organizationId: string,
   ): Promise<Readonly<Record<string, string>>> {
     // Optional onboarding guidance must not turn a completed login into failure when
     // a scoped key cannot read source connections or the status endpoint is unavailable.
     try {
+      let provider = this.dependencies.linkedSourceProvider;
+      if (this.dependencies.linkedProjectId !== undefined) {
+        if (api.managedSource === undefined) return {};
+        const binding = await api.managedSource.getSource(this.dependencies.linkedProjectId);
+        if (binding !== null) parseProjectSourceBinding(binding);
+        provider =
+          binding === null ? undefined : (binding as { provider: "github" | "managed" }).provider;
+      }
+      if (provider === "managed") return {};
+      if (provider !== "github" && this.dependencies.sourceWorkspace !== undefined) {
+        const workspace = await this.dependencies.sourceWorkspace();
+        if (!workspace.git?.remotes.some((remote) => remote.githubRepository !== null))
+          return {
+            next_action:
+              "Ask once whether to deploy directly with ohmyho.st storing the versions or set up GitHub for this project. Inspect current source first; a missing GitHub connection does not require GitHub.",
+          };
+      }
       const github = parseGithubOrganizationConnectionStatus(
         await api.getGithubConnection(organizationId),
       );
@@ -1347,6 +1432,7 @@ export class ProductCli {
       }
       this.#profile = profile;
       const readGithubConnection = this.dependencies.githubConnectionStatus;
+      const readProjectSource = this.dependencies.projectSourceStatus;
       if (organization !== null)
         return success("login", {
           status: "authenticated",
@@ -1356,6 +1442,17 @@ export class ProductCli {
             ? {}
             : await this.githubNextAction(
                 {
+                  ...(readProjectSource === undefined
+                    ? {}
+                    : {
+                        managedSource: {
+                          getSource: (selectedProjectId) =>
+                            readProjectSource(
+                              async () => credential.accessToken,
+                              selectedProjectId,
+                            ),
+                        },
+                      }),
                   getGithubConnection: (selectedOrganizationId) =>
                     readGithubConnection(
                       async () => credential.accessToken,
@@ -1844,6 +1941,7 @@ export class ProductCli {
     if (
       project.project_id !== command.projectId ||
       source === null ||
+      source.provider !== "github" ||
       source.status !== "ready" ||
       source.repository_full_name.toLowerCase() !==
         `${command.repositoryOwner}/${command.repositoryName}`.toLowerCase()
@@ -1864,6 +1962,201 @@ export class ProductCli {
       repository_full_name: source.repository_full_name,
     });
     return success("link", { status: "completed", operation, organization_id: organizationId });
+  }
+
+  private async managedSource(
+    command: Extract<
+      ProductCliCommand,
+      {
+        kind:
+          | "source-read"
+          | "source-publish"
+          | "source-initialize"
+          | "source-restore"
+          | "source-complete";
+      }
+    >,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const source = api.managedSource;
+    if (source === undefined) throw new ProviderCapabilityBlockedError();
+    const name = parsedCommandName(command);
+    if (command.kind === "source-complete") {
+      const completed = await completeLocalSourcePublication({
+        api: source,
+        getOperation: (id) => api.getOperation(id),
+        directory: resolve(this.dependencies.sourceDirectory ?? process.cwd(), command.directory),
+        metadataDirectory: this.dependencies.sourceMetadataDirectory,
+        apiOrigin: this.dependencies.productApiOrigin,
+        identity: await api.getCurrentIdentity(),
+        projectId: command.projectId,
+        operationId: command.operationId,
+      });
+      return success(name, completed);
+    }
+    if (command.kind === "source-read") {
+      const result =
+        command.action === "status"
+          ? await source.getSource(command.projectId)
+          : command.action === "files" || command.action === "file"
+            ? await source.files({
+                projectId: command.projectId,
+                commitSha: command.commitSha,
+                path: command.path,
+              })
+            : command.action === "versions"
+              ? await source.versions({
+                  projectId: command.projectId,
+                  limit: command.limit,
+                  beforeCommitSha: command.beforeCommitSha,
+                })
+              : command.action === "diff"
+                ? await source.diff({
+                    projectId: command.projectId,
+                    fromCommitSha: String(command.fromCommitSha),
+                    toCommitSha: String(command.toCommitSha),
+                  })
+                : await source.getUpload({
+                    projectId: command.projectId,
+                    operationId: String(command.operationId),
+                  });
+      if (command.action === "status") {
+        if (result !== null) parseProjectSourceBinding(result);
+      } else
+        assertManagedSourceResponse(command.action === "file" ? "files" : command.action, result);
+      return success(name, { status: "succeeded", source: result, context: this.context() });
+    }
+    let operation: ReturnType<typeof parseOperation>;
+    let receipt: unknown;
+    let snapshot: { sha256: string; total_bytes: number; files: number } | undefined;
+    if (command.kind === "source-publish") {
+      const directory = resolve(
+        this.dependencies.sourceDirectory ?? process.cwd(),
+        command.directory,
+      );
+      const captured = await createSourceSnapshot({
+        directory,
+      });
+      const prepared = await prepareLocalSourcePublication({
+        directory,
+        metadataDirectory: this.dependencies.sourceMetadataDirectory,
+        apiOrigin: this.dependencies.productApiOrigin,
+        identity: await api.getCurrentIdentity(),
+        projectId: command.projectId,
+        request: command.request,
+        explicitExpectedCommit: command.explicitExpectedCommit,
+        snapshotSha256: captured.sha256,
+        idempotencyKey: command.idempotencyKey,
+      });
+      const published = await publishSourceSnapshot({
+        api: source,
+        projectId: command.projectId,
+        request: prepared.request,
+        snapshot: captured,
+        idempotencyKey: command.idempotencyKey,
+        signal,
+        accepted: prepared.accepted,
+        rejected: prepared.rejected,
+      });
+      operation = parseOperation(published.operation);
+      receipt = published.receipt;
+      snapshot = {
+        sha256: captured.sha256,
+        total_bytes: captured.totalBytes,
+        files: captured.files.length,
+      };
+    } else
+      operation = parseOperation(
+        command.kind === "source-initialize"
+          ? await source.initialize({
+              projectId: command.projectId,
+              body: command.request,
+              idempotencyKey: command.idempotencyKey,
+            })
+          : await source.restore({
+              projectId: command.projectId,
+              body: command.request,
+              idempotencyKey: command.idempotencyKey,
+            }),
+      );
+    if (command.wait) operation = await this.waitForOperation(api, operation, signal);
+    if (operation.state === "succeeded" && command.kind === "source-publish") {
+      const completed = await completeLocalSourcePublication({
+        api: source,
+        getOperation: (id) => api.getOperation(id),
+        directory: resolve(this.dependencies.sourceDirectory ?? process.cwd(), command.directory),
+        metadataDirectory: this.dependencies.sourceMetadataDirectory,
+        apiOrigin: this.dependencies.productApiOrigin,
+        identity: await api.getCurrentIdentity(),
+        projectId: command.projectId,
+        operationId: operation.id,
+      });
+      receipt = completed.receipt;
+    } else if (operation.state === "succeeded") {
+      const current = await source.getSource(command.projectId);
+      parseProjectSourceBinding(current);
+      if (
+        current === null ||
+        typeof current !== "object" ||
+        !("provider" in current) ||
+        current.provider !== "managed"
+      )
+        throw new ResponseContractError();
+      const managed = current as ManagedProjectSource;
+      const expectedGeneration =
+        command.kind === "source-initialize" ||
+        (command.kind === "source-publish" && command.request.mode !== "commit")
+          ? command.request.expected_source_generation + 1
+          : command.request.expected_source_generation;
+      if (managed.source_generation !== expectedGeneration || managed.status !== "ready")
+        throw new ResponseContractError();
+      const [organizationId, ...others] = parseCurrentIdentity(
+        await api.getCurrentIdentity(),
+      ).organization_ids;
+      if (organizationId === undefined || others.length > 0) throw new ResponseContractError();
+      const prior = (
+        await readProjectLinks(
+          join(
+            this.dependencies.sourceDirectory ?? process.cwd(),
+            this.dependencies.sourceMetadataDirectory ?? ".ohmyhost",
+          ),
+          this.dependencies.productApiOrigin,
+        )
+      ).links.find(
+        (link) => link.organization_id === organizationId && link.project_id === command.projectId,
+      );
+      const confirmed =
+        prior?.version === 3 &&
+        prior.source.provider === "managed" &&
+        prior.source.source_connection_id === managed.source_connection_id &&
+        prior.source.source_generation === managed.source_generation
+          ? prior.source.last_confirmed_commit_sha
+          : null;
+      await this.dependencies.projectLinkStore.save({
+        version: 3,
+        api_origin: this.dependencies.productApiOrigin,
+        organization_id: organizationId,
+        project_id: command.projectId,
+        source: {
+          provider: "managed",
+          source_connection_id: managed.source_connection_id,
+          source_generation: managed.source_generation,
+          namespace: managed.namespace,
+          repository_name: managed.repository_name,
+          branch: "main",
+          last_confirmed_commit_sha: confirmed,
+        },
+      });
+    }
+    return success(name, {
+      status: command.wait ? "completed" : "accepted",
+      operation,
+      ...(receipt === undefined ? {} : { receipt }),
+      ...(snapshot === undefined ? {} : { snapshot }),
+      next_action:
+        "Read the resulting commit_sha, then plan and deploy that exact version. Publication is a separate action.",
+    });
   }
 
   private async configureAutoDeploy(
@@ -2512,6 +2805,17 @@ const classifyFailure = (
   signal: AbortSignal,
   actingAs?: Readonly<Record<string, unknown>>,
 ): CliResult => {
+  if (error instanceof LocalSourcePublicationError)
+    return failure(
+      command,
+      2,
+      error.code,
+      error.code === "source_publication_pending",
+      error.message,
+      error.operation,
+    );
+  if (error instanceof SourceWorkspaceError)
+    return failure(command, 2, error.code, error.code === "source_snapshot_changed", error.message);
   if (signal.aborted || isCancellation(error)) {
     return failure(
       command,
@@ -2743,6 +3047,12 @@ const failure = (
 };
 
 const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
+  if (command.kind === "source-inspect") return "source inspect";
+  if (command.kind === "source-publish") return "source publish";
+  if (command.kind === "source-complete") return "source publish complete";
+  if (command.kind === "source-initialize") return "source initialize";
+  if (command.kind === "source-restore") return "source restore";
+  if (command.kind === "source-read") return `source ${command.action}`;
   if (command.kind === "export-create") return "export create";
   if (command.kind === "export-get") return "export get";
   if (command.kind === "token-create") return "token create";

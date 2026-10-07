@@ -15,7 +15,7 @@ import { join } from "node:path";
  * Which project this working copy deploys to for one organization. The same checkout may be linked
  * once per organization, so a second account never overwrites or inherits the first one's link.
  */
-export interface ProjectLinkMetadata {
+export interface LegacyScopedProjectLink {
   readonly version: 2;
   readonly api_origin: string;
   readonly organization_id: string;
@@ -23,6 +23,33 @@ export interface ProjectLinkMetadata {
   readonly installation_id: string;
   readonly repository_full_name: string;
 }
+
+/** Provider binding follows the project; managed sources also cache this directory's confirmed base. */
+export interface CurrentProjectLink {
+  readonly version: 3;
+  readonly api_origin: string;
+  readonly organization_id: string;
+  readonly project_id: string;
+  readonly source:
+    | {
+        readonly provider: "managed";
+        readonly source_connection_id: string;
+        readonly source_generation: number;
+        readonly namespace: string;
+        readonly repository_name: string;
+        readonly branch: "main";
+        readonly last_confirmed_commit_sha: string | null;
+      }
+    | {
+        readonly provider: "github";
+        readonly source_connection_id: string;
+        readonly source_generation: number;
+        readonly installation_id: string;
+        readonly repository_full_name: string;
+      };
+}
+
+export type ProjectLinkMetadata = LegacyScopedProjectLink | CurrentProjectLink;
 
 /** A link written before links named their organization; it is verified before any use. */
 export interface LegacyProjectLink {
@@ -60,6 +87,10 @@ export async function readProjectLinks(
     const organizationId = /^([0-7][0-9A-HJKMNP-TV-Z]{25})\.json$/u.exec(name)?.[1];
     if (organizationId === undefined) continue;
     const link = await readJson(join(directory, LINKS, name));
+    if (isCurrentLink(link, apiOrigin, organizationId)) {
+      links.push(link);
+      continue;
+    }
     if (
       isRecord(link, [
         "version",
@@ -98,6 +129,66 @@ export async function readProjectLinks(
           }
         : null,
   };
+}
+
+function isCurrentLink(
+  value: Record<string, unknown> | null,
+  apiOrigin: string,
+  organizationId: string,
+): value is unknown & CurrentProjectLink & Record<string, unknown> {
+  if (
+    !isRecord(value, ["version", "api_origin", "organization_id", "project_id", "source"]) ||
+    value["version"] !== 3 ||
+    value["api_origin"] !== apiOrigin ||
+    value["organization_id"] !== organizationId ||
+    typeof value["project_id"] !== "string" ||
+    !ULID.test(value["project_id"])
+  )
+    return false;
+  const candidate = value["source"];
+  if (typeof candidate !== "object" || candidate === null || !("provider" in candidate))
+    return false;
+  const source = candidate as Record<string, unknown>;
+  const keys =
+    source["provider"] === "managed"
+      ? [
+          "provider",
+          "source_connection_id",
+          "source_generation",
+          "namespace",
+          "repository_name",
+          "branch",
+          "last_confirmed_commit_sha",
+        ]
+      : [
+          "provider",
+          "source_connection_id",
+          "source_generation",
+          "installation_id",
+          "repository_full_name",
+        ];
+  if (
+    !isRecord(source, keys) ||
+    typeof source["source_connection_id"] !== "string" ||
+    !ULID.test(source["source_connection_id"]) ||
+    !Number.isSafeInteger(source["source_generation"]) ||
+    Number(source["source_generation"]) < 1
+  )
+    return false;
+  return source["provider"] === "managed"
+    ? source["branch"] === "main" &&
+        (source["last_confirmed_commit_sha"] === null ||
+          (typeof source["last_confirmed_commit_sha"] === "string" &&
+            /^[a-f0-9]{40}$/u.test(source["last_confirmed_commit_sha"]))) &&
+        typeof source["namespace"] === "string" &&
+        typeof source["repository_name"] === "string" &&
+        /^[a-z0-9][a-z0-9_-]{0,127}$/u.test(source["namespace"]) &&
+        /^[a-z0-9][a-z0-9_-]{0,127}$/u.test(source["repository_name"])
+    : source["provider"] === "github" &&
+        typeof source["installation_id"] === "string" &&
+        /^[1-9][0-9]{0,19}$/u.test(source["installation_id"]) &&
+        typeof source["repository_full_name"] === "string" &&
+        /^[^/]+\/[^/]+$/u.test(source["repository_full_name"]);
 }
 
 export type LinkedProject =

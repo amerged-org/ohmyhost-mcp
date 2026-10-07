@@ -1,5 +1,25 @@
 import { isUserSecretName, USER_SECRET_NAME_PATTERN } from "@ohmyhost/contracts/secret-names";
+import {
+  normalizeMcpSourceChanges,
+  formatMcpSourceFileResponse,
+  McpSourceChangesInputError,
+} from "@ohmyhost/contracts/mcp-source-codec";
 import type { ManagedMailCommand } from "@ohmyhost/sdk-ts";
+import {
+  parseManagedSourceRequest,
+  isManagedSourcePath,
+} from "@ohmyhost/contracts/managed-sources";
+import {
+  createSourceSnapshot,
+  inspectSourceWorkspace,
+  publishSourceSnapshot,
+  SourceWorkspaceError,
+  type ManagedSourceApi,
+  prepareLocalSourcePublication,
+  completeLocalSourcePublication,
+  inspectLocalSourcePublications,
+  LocalSourcePublicationError,
+} from "@ohmyhost/product-cli";
 import mcpPackage from "../package.json" with { type: "json" };
 import { SavedLoginCredentialError } from "./local-client.js";
 import {
@@ -57,6 +77,8 @@ import type {
 } from "@ohmyhost/sdk-ts";
 
 export interface LocalMcpProductClient {
+  readonly managedSource?: ManagedSourceApi;
+  readonly productApiOrigin?: string;
   checkProjectHandle(input: { handle: string }): Promise<unknown>;
   changeProjectHandle(input: {
     projectId: string;
@@ -449,13 +471,42 @@ const deletableSecretName = z
   );
 
 const LOCAL_SERVER_INSTRUCTIONS =
-  "Operate the user's ohmyho.st hosting account: projects, GitHub deployments, databases, domains, mail, usage and budgets. " +
+  "Operate the user's ohmyho.st hosting account: projects, managed or GitHub sources and deployments, databases, domains, mail, usage and budgets. " +
+  "Use the existing project source binding first. A local or cloud workspace can contain Git without GitHub. If unbound current files have no relevant GitHub source, ask once whether to deploy directly with ohmyho.st saving versions or set up GitHub; do not require GitHub just because no connection exists. " +
   "Start by reading the resource skill://ohmyhost/ohmyhost-get-started/SKILL.md and calling identity_get; read project_context_get before acting on a project. " +
   "This server is also ohmyho.st support: report a bug, issue or feature request with feedback_submit, give the user the receipt ID and follow up with feedback_status (https://docs.ohmyho.st/support).";
 
 export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDependencies) {
   const { commandPrefix } = resolveProductCliEnvironment(dependencies.environment);
   const server = createOhmyhostMcpServer("ohmyhost-local", LOCAL_SERVER_INSTRUCTIONS);
+  server.registerTool(
+    "source_inspect",
+    {
+      title: "Inspect local application source",
+      description:
+        "Read local working-directory, Git/worktree, monorepo and sanitized remote context without sign-in. This tool exists only in local MCP and never proves repository authorization. No source files or history are uploaded.",
+      inputSchema: z.object({ directory: z.string().min(1).max(4096).default(".") }),
+      annotations: readAnnotations(),
+    },
+    async (input) => {
+      try {
+        return toolResult({
+          ...(await inspectSourceWorkspace(input.directory)),
+          pending_publications: await inspectLocalSourcePublications(input.directory),
+        });
+      } catch (error) {
+        if (error instanceof SourceWorkspaceError)
+          return {
+            ...toolResult({
+              error: { code: error.code, retryable: false, suggested_action: error.message },
+            }),
+            isError: true,
+          };
+        return toolError(error, dependencies);
+      }
+    },
+  );
+  registerManagedSourceTools(server, dependencies);
   registerProductTool(
     server,
     dependencies,
@@ -1355,9 +1406,14 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "source_get",
-    "Get linked source status",
-    z.object({ project_id: identifier }),
-    (client, input) => client.getSource(input.project_id),
+    "Get linked source status. Set include_binding to true to read the source connection ID and generation before managed changes or an explicit source switch.",
+    z.object({ project_id: identifier, include_binding: z.boolean().default(false) }),
+    (client, input) => {
+      if (input.include_binding !== true) return client.getSource(input.project_id);
+      if (client.managedSource === undefined)
+        throw new Error("Managed source client is unavailable");
+      return client.managedSource.getSource(input.project_id);
+    },
   );
   registerProductTool(
     server,
@@ -1831,6 +1887,258 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
   return server;
 }
 
+function registerManagedSourceTools(
+  server: McpServer,
+  dependencies: LocalOhmyhostMcpDependencies,
+): void {
+  const generation = z.number().int().min(0).max(2147483646);
+  const path = z.string().refine(isManagedSourcePath);
+  const message = z.string().min(1).max(200);
+  const parent = {
+    project_id: identifier,
+    expected_source_generation: generation,
+    expected_commit_sha: commitSha.nullable(),
+    message,
+    idempotency_key: idempotencyKey,
+  };
+  const port = (client: LocalMcpProductClient): ManagedSourceApi => {
+    if (client.managedSource === undefined) throw new Error("Managed source client is unavailable");
+    return client.managedSource;
+  };
+  registerProductTool(
+    server,
+    dependencies,
+    "source_initialize",
+    "Create managed version history for an unbound project. Normal blank chat uses vite-react; existing local files use source_publish instead. Returns an asynchronous operation; poll operation_get and source_get with include_binding true before planning the resulting commit. Does not publish an application.",
+    z.object({
+      project_id: identifier,
+      template: z.enum(["empty", "vite-react"]).default("vite-react"),
+      expected_source_generation: generation,
+      idempotency_key: idempotencyKey,
+    }),
+    (client, input) =>
+      port(client).initialize({
+        projectId: input.project_id,
+        idempotencyKey: input.idempotency_key,
+        body: parseManagedSourceRequest("initialize", {
+          template: input.template,
+          expected_source_generation: input.expected_source_generation,
+        }),
+      }),
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "source_files",
+    "List the exact managed source tree at a version; omit commit_sha to read current main. Read source_get with include_binding true before changing files and keep the generation and commit for concurrency checks.",
+    z.object({ project_id: identifier, commit_sha: commitSha.optional() }),
+    (client, input) =>
+      port(client).files({ projectId: input.project_id, commitSha: input.commit_sha }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "source_file",
+    "Read one managed source file with its exact hash and mode. UTF-8 content_text is the default; binary files retain content_base64 with guidance. Use format base64 for legacy byte payloads, and keep the executable flag when replacing a file.",
+    z.object({
+      project_id: identifier,
+      path,
+      commit_sha: commitSha.optional(),
+      format: z.enum(["text", "base64"]).default("text"),
+    }),
+    async (client, input) =>
+      formatMcpSourceFileResponse(
+        await port(client).files({
+          projectId: input.project_id,
+          path: input.path,
+          commitSha: input.commit_sha,
+        }),
+        input.format,
+      ),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "source_versions",
+    "Read managed version history for this project; next_commit_sha continues the same history page.",
+    z.object({
+      project_id: identifier,
+      limit: z.number().int().min(1).max(100).default(50),
+      before_commit_sha: commitSha.optional(),
+    }),
+    (client, input) =>
+      port(client).versions({
+        projectId: input.project_id,
+        limit: input.limit,
+        beforeCommitSha: input.before_commit_sha,
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "source_diff",
+    "Compare two managed versions without changing files or deployments.",
+    z.object({ project_id: identifier, from_commit_sha: commitSha, to_commit_sha: commitSha }),
+    (client, input) =>
+      port(client).diff({
+        projectId: input.project_id,
+        fromCommitSha: input.from_commit_sha,
+        toCommitSha: input.to_commit_sha,
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "source_changes",
+    "Save an atomic file batch against the generation and parent commit you read. Each file takes exactly one UTF-8 content_text or binary/legacy content_base64; null content_base64 deletes it. Keep executable flags. A conflict requires reading the new version; publication is separate.",
+    z.object({
+      ...parent,
+      changes: z
+        .array(
+          z
+            .object({
+              path,
+              content_text: z
+                .string()
+                .max(2 * 1024 * 1024)
+                .optional(),
+              content_base64: z.string().max(2_796_204).nullable().optional(),
+              executable: z.boolean().default(false),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(2000),
+    }),
+    (client, input) =>
+      port(client).changes({
+        projectId: input.project_id,
+        idempotencyKey: input.idempotency_key,
+        body: normalizeMcpSourceChanges({
+          expected_source_generation: input.expected_source_generation,
+          expected_commit_sha: input.expected_commit_sha,
+          message: input.message,
+          changes: input.changes,
+        }),
+      }),
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "source_restore",
+    "Restore an earlier managed file tree as a new version against current generation and parent. This preserves history and does not automatically deploy or revert database data.",
+    z.object({ ...parent, restore_commit_sha: commitSha }),
+    (client, input) =>
+      port(client).restore({
+        projectId: input.project_id,
+        idempotencyKey: input.idempotency_key,
+        body: parseManagedSourceRequest("restore", {
+          expected_source_generation: input.expected_source_generation,
+          expected_commit_sha: input.expected_commit_sha,
+          message: input.message,
+          restore_commit_sha: input.restore_commit_sha,
+        }),
+      }),
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "source_publish",
+    "Local MCP only: capture current filtered files, including uncommitted/new files, and save one managed version without importing Git history. Use initialize for unbound source, commit for managed source, or explicit switch for the current GitHub project's move to managed; project URL and data stay with that project. Honors nested ignore rules and excludes credentials, links, dependencies and generated output. Rejects symlinks and changing files. Reuse the key after uncertainty and observe the upload before any new attempt; publication is a separate deployment action.",
+    z.object({
+      ...parent,
+      expected_commit_sha: commitSha.nullable().optional(),
+      directory: z.string().min(1).max(4096).default("."),
+      mode: z.enum(["initialize", "commit", "switch"]),
+      expected_source_connection_id: identifier.nullable(),
+    }),
+    async (client, input, signal) => {
+      const current = await client.getCurrentIdentity(signal);
+      const snapshot = await createSourceSnapshot({ directory: input.directory });
+      const request = parseManagedSourceRequest("upload", {
+        expected_source_generation: input.expected_source_generation,
+        expected_commit_sha: input.expected_commit_sha ?? null,
+        expected_source_connection_id: input.expected_source_connection_id,
+        mode: input.mode,
+        message: input.message,
+      });
+      const prepared = await prepareLocalSourcePublication({
+        directory: input.directory,
+        metadataDirectory: resolveProductCliEnvironment(dependencies.environment).linkDirectory,
+        apiOrigin:
+          client.productApiOrigin ??
+          resolveProductCliEnvironment(dependencies.environment).apiOrigin,
+        identity: { actor_id: current.actor_id, organization_ids: current.organization_ids },
+        projectId: input.project_id,
+        request,
+        explicitExpectedCommit: input.expected_commit_sha !== undefined,
+        snapshotSha256: snapshot.sha256,
+        idempotencyKey: input.idempotency_key,
+      });
+      const result = await publishSourceSnapshot({
+        api: port(client),
+        projectId: input.project_id,
+        snapshot,
+        idempotencyKey: input.idempotency_key,
+        signal,
+        request: prepared.request,
+        accepted: prepared.accepted,
+        rejected: prepared.rejected,
+      });
+      return {
+        ...result,
+        snapshot: {
+          sha256: snapshot.sha256,
+          total_bytes: snapshot.totalBytes,
+          files: snapshot.files.length,
+        },
+        next_action:
+          "Poll operation_get, then call source_publish_complete with the same directory, project, operation and login to confirm this directory's base. Do not ask the user again.",
+      };
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "source_publish_complete",
+    "Complete a local pending source publication after polling its operation. Uses the owner-only directory record and verified login, checks the exact confirmed source manifest, and stores that operation's commit as this directory's base even when another chat has advanced main. Never reads a fresh remote head as the local base. No files are uploaded and no deployment starts.",
+    z.object({
+      project_id: identifier,
+      directory: z.string().min(1).max(4096).default("."),
+      operation_id: identifier.optional(),
+    }),
+    async (client, input, signal) => {
+      const current = await client.getCurrentIdentity(signal);
+      return completeLocalSourcePublication({
+        directory: input.directory,
+        metadataDirectory: resolveProductCliEnvironment(dependencies.environment).linkDirectory,
+        apiOrigin:
+          client.productApiOrigin ??
+          resolveProductCliEnvironment(dependencies.environment).apiOrigin,
+        identity: { actor_id: current.actor_id, organization_ids: current.organization_ids },
+        projectId: input.project_id,
+        operationId: input.operation_id,
+        api: port(client),
+        getOperation: (id) => client.getOperation(id),
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "source_upload",
+    "Observe the exact managed snapshot upload after an uncertain response. sealed and committed uploads must not be uploaded again; commit_sha identifies the saved version.",
+    z.object({ project_id: identifier, operation_id: identifier }),
+    (client, input) =>
+      port(client).getUpload({ projectId: input.project_id, operationId: input.operation_id }),
+  );
+}
+
 export const createLocalOhmyhostMcpHandler = (dependencies: LocalOhmyhostMcpDependencies) =>
   createMcpHandler(() => createLocalOhmyhostMcpServer(dependencies));
 
@@ -1997,6 +2305,27 @@ function toolError(
  * problem. What no branch recognizes is reported as such, never as a guessed cause.
  */
 function safeFailure(error: unknown, commandPrefix: string): SafeFailure {
+  if (error instanceof McpSourceChangesInputError)
+    return {
+      code: "invalid_request",
+      retryable: false,
+      suggestedAction:
+        "Provide exactly one content_text or content_base64 per file, within the 2 MiB source limits. Use null content_base64 to delete a file.",
+    };
+  if (error instanceof LocalSourcePublicationError)
+    return {
+      code: error.code,
+      retryable: error.code === "source_publication_pending",
+      suggestedAction:
+        error.message +
+        (error.operation === undefined ? "" : ` Read operation_get ${error.operation.id}.`),
+    };
+  if (error instanceof SourceWorkspaceError)
+    return {
+      code: error.code,
+      retryable: error.code === "source_snapshot_changed",
+      suggestedAction: error.message,
+    };
   if (error instanceof UserTokenFileError)
     return { code: error.code, retryable: false, suggestedAction: error.message };
   if (error instanceof DOMException && error.name === "TimeoutError")

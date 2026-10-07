@@ -1,4 +1,20 @@
 const failures = {
+  authorization_changed: [
+    "Authorization changed before this operation could finish.",
+    "Read the current project and sign-in status. Reconnect the client or ask the project owner to grant the required access, then submit a new request with a new idempotency key. This terminal operation cannot resume; preserve the project's existing data and deployment.",
+  ],
+  source_commit_conflict: [
+    "Another source change was saved before this version could be committed.",
+    "Read the current source and compare it with this operation's original version. Merge both changes, then submit the combined files using the current commit and a new idempotency key. Do not overwrite the remote version or reuse this failed operation.",
+  ],
+  source_snapshot_invalid: [
+    "The uploaded source did not match its complete verified manifest.",
+    "Capture a stable source snapshot and start a new upload with a new idempotency key. Verify every file hash, path and size, upload all selected files and seal the complete manifest before deployment. This failed upload cannot be published.",
+  ],
+  source_upload_expired: [
+    "The source upload expired before it was committed.",
+    "Read the current source version, capture the intended files again and start a new upload with a new idempotency key. Complete every file upload and seal the manifest before expiry. The expired upload cannot be deployed.",
+  ],
   operation_abandoned: [
     "ohmyho.st stopped this operation before it finished and ended it.",
     "Repeating this operation cannot resume it. Read project status for what is live; if this operation names a deployment_id, read 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' or MCP deployment_logs. Then submit the request once more with a new idempotency key: a deployment, promotion, rollback or deletion from a fresh plan, a rename with the ETag from project status. If it ends the same way, report both operation IDs through feedback.",
@@ -66,7 +82,7 @@ const failures = {
   ],
   build_failed: [
     "The build did not produce a verified deployable artifact.",
-    "Read the BUILD_FAILED item of this operation's deployment_id with 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' or MCP deployment_logs. Its excerpt is the tail of your install and build output: fix that error, push and plan the new commit. Without an excerpt the build printed nothing, passed the 8-minute limit or failed inside ohmyho.st: plan the same commit once more, and report the operation ID through feedback if it fails again.",
+    "Read the BUILD_FAILED item of its deployment_id with 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' or MCP deployment_logs. Its excerpt shows install and build output: fix that error, save or push the corrected version and plan its commit. Without an excerpt the build printed nothing, passed the 8-minute limit or failed inside ohmyho.st: plan the same commit once more, and report the operation ID through feedback if it fails again.",
   ],
   insufficient_organization_credits: [
     "The organization does not have sufficient available credits for this operation.",
@@ -74,23 +90,23 @@ const failures = {
   ],
   paid_plan_required: [
     "Transactional mail requires an active Paid plan for this organization.",
-    "Ask the organization Owner to activate Paid through billing checkout; top-ups and signup credits do not activate it. Then plan the same deployment or promotion again. If the app should send no mail, instead set mail.enabled to false in ohmyhost.yaml, commit and push, and plan the new commit. Replaying this operation cannot enable mail. Do not reset the database.",
+    "Ask the organization Owner to activate Paid through billing checkout; top-ups and signup credits do not activate it. Then plan the same deployment or promotion again. If the app should send no mail, instead set mail.enabled to false in ohmyhost.yaml, save or push the corrected version and plan its commit. Replaying this operation cannot enable mail. Do not reset the database.",
   ],
   database_migration_failed: [
     "The database migrations were not applied; none of this deployment's new migration files took effect.",
-    "Read the DATABASE_MIGRATION_FAILED item in 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' and fix what it names; run 'ohmyhost init --dry-run --json' for migration_sql_not_admitted. Keep applied files unchanged, give new files later timestamps, and add to existing tables only nullable columns without default and non-unique indexes. Push and plan the new commit; never reset the database.",
+    "Read the DATABASE_MIGRATION_FAILED item in 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' and fix what it names; run 'ohmyhost init --dry-run --json' for migration_sql_not_admitted. Keep applied files unchanged, give new files later timestamps, and add to existing tables only nullable columns without default and non-unique indexes. Save or push the corrected version and plan its commit; never reset the database.",
   ],
   runtime_candidate_failed: [
     "The deployed candidate failed its runtime checks.",
-    "Read the HEALTH_CHECK_FAILED item with 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' or MCP deployment_logs. ohmyhost.yaml runtime.healthcheck (default /) must answer 2xx to a cookieless GET without redirect; status_code and, for owners, excerpt show the answer. After a promotion or rollback, fix that environment, often a missing secret, and plan it again; else fix the app, push and plan the new commit. No such item: plan once more, then report.",
+    "Read the HEALTH_CHECK_FAILED item with 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' or MCP deployment_logs. ohmyhost.yaml runtime.healthcheck (default /) must answer 2xx to a cookieless GET without redirect; status_code and, for owners, excerpt show the answer. After promotion or rollback, fix the environment's secrets and plan again; otherwise fix the app, save or push the corrected version and plan its commit. No item: plan once, then report.",
   ],
   runtime_candidate_rejected: [
     "The runtime refused to load the built Worker.",
-    "The built Worker could not be loaded: top-level code throws or calls fetch, timers or random values outside a handler, an import cannot be resolved, a Worker module such as src/ohmyhost/companion.ts has no default export, or the bundle is too large. Fix that, push and plan the new commit; replaying this operation cannot pass. If none of this applies, report the operation ID through feedback.",
+    "The built Worker could not be loaded: top-level code throws or calls fetch, timers or random values outside a handler, an import cannot be resolved, a Worker module such as src/ohmyhost/companion.ts has no default export, or the bundle is too large. Fix that, save or push the corrected version and plan its commit; replaying this operation cannot pass. If none of this applies, report the operation ID through feedback.",
   ],
   storage_jurisdiction_conflict: [
     "storage.jurisdiction must equal the project's hosting region.",
-    "Set storage.jurisdiction in ohmyhost.yaml to the project's region (us or eu) shown by 'ohmyhost project status', commit and push, then plan the new commit (for a promotion, deploy it to Dev and promote again); the unchanged commit fails again. A project cannot move its files between regions; do not delete or recreate the project to change it.",
+    "Set storage.jurisdiction in ohmyhost.yaml to the project's region (us or eu) shown by 'ohmyhost project status', save or push the corrected version, then plan its commit (for a promotion, deploy it to Dev and promote again); the unchanged commit fails again. A project cannot move its files between regions; do not delete or recreate the project to change it.",
   ],
   provider_state_absent: [
     "Reconciliation confirmed that the required deployment resources are absent.",

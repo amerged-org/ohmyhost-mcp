@@ -1,5 +1,52 @@
 /** Canonical public status, retry policy and recovery text shared by the API and clients. */
 export const PROBLEM_POLICY = {
+  source_generation_conflict: {
+    status: 409,
+    retryable: false,
+    action:
+      "Read the project's current source and generation, reconcile any source switch, then prepare a new request.",
+    title: "Source binding changed",
+  },
+  source_commit_conflict: {
+    status: 409,
+    retryable: false,
+    action:
+      "Read the current managed version and its changes, reconcile them with your working files, then publish against that exact commit.",
+    title: "Source version changed",
+  },
+  source_upload_conflict: {
+    status: 409,
+    retryable: false,
+    action:
+      "Read the existing upload and operation. Reuse a key only for its original request; complete its original manifest or start a new upload.",
+    title: "Source upload conflicts",
+  },
+  source_upload_expired: {
+    status: 409,
+    retryable: false,
+    action: "Start a fresh source upload and transfer the verified snapshot again.",
+    title: "Source upload expired",
+  },
+  source_scope_unavailable: {
+    status: 404,
+    retryable: false,
+    action: "Check the selected account, workspace, project and client permissions.",
+    title: "Source is unavailable",
+  },
+  source_snapshot_invalid: {
+    status: 409,
+    retryable: false,
+    action:
+      "Verify the source file contents, hashes and complete manifest before preparing a new upload.",
+    title: "Source snapshot is inconsistent",
+  },
+  source_snapshot_too_large: {
+    status: 413,
+    retryable: false,
+    action:
+      "Use safe repository-relative paths and a bounded source snapshot. Keep generated outputs and large media outside the source tree.",
+    title: "Source snapshot exceeds its limits",
+  },
   cloudflare_zone_not_bound: {
     status: 409,
     retryable: false,
@@ -280,10 +327,10 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "Set storage.jurisdiction in ohmyhost.yaml to the project's region (us or eu) shown by 'ohmyhost project status', commit and push, then plan the new commit (for a promotion, deploy it to Dev and promote again); the unchanged commit fails again. A project cannot move its files between regions; do not delete or recreate the project to change it.",
+      "Set storage.jurisdiction in ohmyhost.yaml to the project's region (us or eu) shown by 'ohmyhost project status', save or push the corrected version, then plan its commit (for a promotion, deploy it to Dev and promote again); the unchanged commit fails again. A project cannot move its files between regions; do not delete or recreate the project to change it.",
     title: "Storage jurisdiction conflict",
     restAction:
-      "Set storage.jurisdiction in ohmyhost.yaml to the project's region (us or eu) shown by 'ohmyhost project status', commit and push, then plan the new commit (for a promotion, deploy it to Dev and promote again); the unchanged commit fails again. A project cannot move its files between regions; do not delete or recreate the project to change it.",
+      "Set storage.jurisdiction in ohmyhost.yaml to the project's region (us or eu) shown by 'ohmyhost project status', save or push the corrected version, then plan its commit (for a promotion, deploy it to Dev and promote again); the unchanged commit fails again. A project cannot move its files between regions; do not delete or recreate the project to change it.",
   },
   shared_data_requires_promotion: {
     status: 409,
@@ -303,28 +350,28 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "Read detail for the file, reason and required change. Run ohmyhost init --dry-run --json at that commit, apply its blockers and the matching ohmyho.st framework Skill, then commit and push. Plan the new commit; repeating the unchanged source cannot fix an admission error.",
+      "Read detail for the file, reason and required change. Run ohmyhost init --dry-run --json at that commit, apply its blockers and the matching ohmyho.st framework Skill, then save or push the corrected version. Plan its commit; repeating the unchanged source cannot fix an admission error.",
     title: "Framework conversion required",
     restAction:
-      "Read detail for the file, reason and required change. Run ohmyhost init --dry-run --json at that commit, apply its blockers and the matching ohmyho.st framework Skill, then commit and push. Plan the new commit; repeating the unchanged source cannot fix an admission error.",
+      "Read detail for the file, reason and required change. Run ohmyhost init --dry-run --json at that commit, apply its blockers and the matching ohmyho.st framework Skill, then save or push the corrected version. Plan its commit; repeating the unchanged source cannot fix an admission error.",
   },
   repository_configuration_missing: {
     status: 409,
     retryable: false,
     action:
-      "The planned commit has no ohmyhost.yaml at the Git repository root. If the repository has none, run 'ohmyhost init --json' at the root (--root DIR when the app lives in a subdirectory, --region eu for an EU project). Otherwise move the existing file to the root and set applicationRoot to the app directory, for example website. Commit and push, then plan the new commit.",
+      "The planned commit has no ohmyhost.yaml at the Git repository root. If the repository has none, run 'ohmyhost init --json' at the root (--root DIR when the app lives in a subdirectory, --region eu for an EU project). Otherwise move the existing file to the root and set applicationRoot to the app directory, for example website. Save or push the corrected version, then plan its commit.",
     title: "Repository configuration missing",
     restAction:
-      "The planned commit has no ohmyhost.yaml at the Git repository root. If the repository has none, run 'ohmyhost init --json' at the root (--root DIR when the app lives in a subdirectory, --region eu for an EU project). Otherwise move the existing file to the root and set applicationRoot to the app directory, for example website. Commit and push, then plan the new commit.",
+      "The planned commit has no ohmyhost.yaml at the Git repository root. If the repository has none, run 'ohmyhost init --json' at the root (--root DIR when the app lives in a subdirectory, --region eu for an EU project). Otherwise move the existing file to the root and set applicationRoot to the app directory, for example website. Save or push the corrected version, then plan its commit.",
   },
   migration_filename_noncanonical: {
     status: 409,
     retryable: false,
     action:
-      "Every file in the migrations directory (database.migrations in ohmyhost.yaml) must be named YYYYMMDDHHMMSS_name.sql: 14 digits, an underscore, then lowercase letters, digits, _ or -. Rename each file that does not match and move any other file, such as README.md or .gitkeep, out of that directory. Commit and push, then plan the new commit. Never rename a migration a deployment already applied.",
+      "Every file in the migrations directory (database.migrations in ohmyhost.yaml) must be named YYYYMMDDHHMMSS_name.sql: 14 digits, an underscore, then lowercase letters, digits, _ or -. Rename each file that does not match and move any other file, such as README.md or .gitkeep, out of that directory. Save or push the corrected version, then plan its commit. Never rename a migration a deployment already applied.",
     title: "Migration filename noncanonical",
     restAction:
-      "Every file in the migrations directory (database.migrations in ohmyhost.yaml) must be named YYYYMMDDHHMMSS_name.sql: 14 digits, an underscore, then lowercase letters, digits, _ or -. Rename each file that does not match and move any other file, such as README.md or .gitkeep, out of that directory. Commit and push, then plan the new commit. Never rename a migration a deployment already applied.",
+      "Every file in the migrations directory (database.migrations in ohmyhost.yaml) must be named YYYYMMDDHHMMSS_name.sql: 14 digits, an underscore, then lowercase letters, digits, _ or -. Rename each file that does not match and move any other file, such as README.md or .gitkeep, out of that directory. Save or push the corrected version, then plan its commit. Never rename a migration a deployment already applied.",
   },
   environment_secret_mutation_blocked: {
     status: 409,
@@ -336,10 +383,10 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "A Next.js file under app/, pages/, middleware or proxy imports a native addon (.node) or a Node.js module that does not run on Workers: child_process, cluster, dgram, domain, http2, inspector, readline, repl, sqlite, trace_events, tty, v8, vm, wasi, worker_threads or _stream_wrap, with or without node:. Remove or replace that import, commit and push, then plan the new commit.",
+      "A Next.js file under app/, pages/, middleware or proxy imports a native addon (.node) or a Node.js module that does not run on Workers: child_process, cluster, dgram, domain, http2, inspector, readline, repl, sqlite, trace_events, tty, v8, vm, wasi, worker_threads or _stream_wrap, with or without node:. Remove or replace that import, save or push the corrected version, then plan its commit.",
     title: "Workers runtime incompatible",
     restAction:
-      "A Next.js file under app/, pages/, middleware or proxy imports a native addon (.node) or a Node.js module that does not run on Workers: child_process, cluster, dgram, domain, http2, inspector, readline, repl, sqlite, trace_events, tty, v8, vm, wasi, worker_threads or _stream_wrap, with or without node:. Remove or replace that import, commit and push, then plan the new commit.",
+      "A Next.js file under app/, pages/, middleware or proxy imports a native addon (.node) or a Node.js module that does not run on Workers: child_process, cluster, dgram, domain, http2, inspector, readline, repl, sqlite, trace_events, tty, v8, vm, wasi, worker_threads or _stream_wrap, with or without node:. Remove or replace that import, save or push the corrected version, then plan its commit.",
   },
   payload_too_large: {
     status: 413,
@@ -427,18 +474,18 @@ export const PROBLEM_POLICY = {
     status: 503,
     retryable: true,
     action:
-      "The service could not complete or confirm this request; it may already have taken effect. Wait, then repeat exactly the same request with the same idempotency key, waiting longer each time; never switch to a new key. If 'ohmyhost plan' keeps failing, check that the commit is pushed to the linked repository and that 'ohmyhost init --dry-run --json' at that commit reports no blockers. If it still fails, report the request_id through feedback.",
+      "The service could not complete or confirm this request; it may already have taken effect. Wait, then repeat exactly the same request with the same idempotency key, waiting longer each time; never switch to a new key. If 'ohmyhost plan' keeps failing, check that the commit is saved in the project's selected source and that 'ohmyhost init --dry-run --json' at that commit reports no blockers. If it still fails, report the request_id through feedback.",
     title: "Service unavailable",
     restAction:
-      "The service could not complete or confirm this request; it may already have taken effect. Wait, then repeat exactly the same request with the same idempotency key, waiting longer each time; never switch to a new key. If 'ohmyhost plan' keeps failing, check that the commit is pushed to the linked repository and that 'ohmyhost init --dry-run --json' at that commit reports no blockers. If it still fails, report the request_id through feedback.",
+      "The service could not complete or confirm this request; it may already have taken effect. Wait, then repeat exactly the same request with the same idempotency key, waiting longer each time; never switch to a new key. If 'ohmyhost plan' keeps failing, check that the commit is saved in the project's selected source and that 'ohmyhost init --dry-run --json' at that commit reports no blockers. If it still fails, report the request_id through feedback.",
   },
   source_commit_not_found: {
     status: 409,
     retryable: false,
     action:
-      "The requested commit is not in the linked repository. Push that exact commit to the repository named by project status, or select a commit already there, then run 'ohmyhost plan' with its full SHA. Repeating the unchanged unavailable commit cannot work.",
+      "The requested commit is not in the linked repository. Save or push that exact version using the source named by project status, or select a version already there, then run 'ohmyhost plan' with its full SHA. Repeating the unchanged unavailable commit cannot work.",
     restAction:
-      "The requested commit is not in the linked repository. Push that exact commit to the repository named by project status, or select a commit already there, then run 'ohmyhost plan' with its full SHA. Repeating the unchanged unavailable commit cannot work.",
+      "The requested commit is not in the linked repository. Save or push that exact version using the source named by project status, or select a version already there, then run 'ohmyhost plan' with its full SHA. Repeating the unchanged unavailable commit cannot work.",
     title: "Source commit not found",
   },
   domain_hostname_taken: {

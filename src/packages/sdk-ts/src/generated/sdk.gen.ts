@@ -15,8 +15,13 @@ import type {
   ApplyPaidProjectDomainResponses,
   ChangeDatabaseComputeErrors,
   ChangeDatabaseComputeResponses,
+  ChangeManagedSourceErrors,
+  ChangeManagedSourceResponses,
   ChangeProjectHandleErrors,
   ChangeProjectHandleResponses,
+  CommitManagedSourceUploadErrors,
+  CommitManagedSourceUploadResponses,
+  CommitSha,
   CompleteCloudflareDnsAuthorizationErrors,
   CompleteCloudflareDnsAuthorizationResponses,
   CompleteGithubSourceAuthorizationErrors,
@@ -43,6 +48,8 @@ import type {
   CreateDeploymentErrors,
   CreateDeploymentRequest,
   CreateDeploymentResponses,
+  CreateManagedSourceUploadErrors,
+  CreateManagedSourceUploadResponses,
   CreateOrganizationErrors,
   CreateOrganizationRequest,
   CreateOrganizationResponses,
@@ -67,6 +74,8 @@ import type {
   DeletePaidProjectDomainResponses,
   DeleteProjectErrors,
   DeleteProjectResponses,
+  DiffManagedSourceErrors,
+  DiffManagedSourceResponses,
   DisableManagedMailReceivingErrors,
   DisableManagedMailReceivingResponses,
   EnsureProjectDevShareLinkErrors,
@@ -100,6 +109,8 @@ import type {
   GetManagedMailDomainResponses,
   GetManagedMailMessageErrors,
   GetManagedMailMessageResponses,
+  GetManagedSourceUploadErrors,
+  GetManagedSourceUploadResponses,
   GetOperationErrors,
   GetOperationResponses,
   GetOrganizationAccountErrors,
@@ -132,6 +143,8 @@ import type {
   GetProjectStatusResponses,
   GetPublicDeploymentStatsErrors,
   GetPublicDeploymentStatsResponses,
+  InitializeManagedSourceErrors,
+  InitializeManagedSourceResponses,
   LinkProjectSourceErrors,
   LinkProjectSourceRequest,
   LinkProjectSourceResponses,
@@ -145,6 +158,10 @@ import type {
   ListFunctionRunsResponses,
   ListManagedMailMessagesErrors,
   ListManagedMailMessagesResponses,
+  ListManagedSourceFilesErrors,
+  ListManagedSourceFilesResponses,
+  ListManagedSourceVersionsErrors,
+  ListManagedSourceVersionsResponses,
   ListProjectDatabaseAccessErrors,
   ListProjectDatabaseAccessResponses,
   ListProjectsErrors,
@@ -153,6 +170,14 @@ import type {
   ListUserApiKeysResponses,
   ManagedMailDomainRequest,
   ManagedMailWebhookRequest,
+  ManagedSourceBlobRequest,
+  ManagedSourceChangesRequest,
+  ManagedSourceFinalizeRequest,
+  ManagedSourceInitializeRequest,
+  ManagedSourcePath,
+  ManagedSourceRestoreRequest,
+  ManagedSourceSwitchRequest,
+  ManagedSourceUploadRequest,
   PaidDomainRequest,
   PlanDeploymentErrors,
   PlanDeploymentPromotionErrors,
@@ -178,6 +203,8 @@ import type {
   PutEnvironmentSecretErrors,
   PutEnvironmentSecretRequest,
   PutEnvironmentSecretResponses,
+  PutManagedSourceBlobErrors,
+  PutManagedSourceBlobResponses,
   QueryProjectDatabaseErrors,
   QueryProjectDatabaseResponses,
   ReconcileOperationErrors,
@@ -186,6 +213,8 @@ import type {
   RecordSignupSourceResponses,
   RegisterFeatureInterestErrors,
   RegisterFeatureInterestResponses,
+  RestoreManagedSourceErrors,
+  RestoreManagedSourceResponses,
   RetryManagedMailMessageErrors,
   RetryManagedMailMessageResponses,
   RevokeCurrentSessionErrors,
@@ -221,6 +250,8 @@ import type {
   SubmitContactRequestResponses,
   SubmitFeedbackErrors,
   SubmitFeedbackResponses,
+  SwitchManagedSourceErrors,
+  SwitchManagedSourceResponses,
   Ulid,
   UserApiKeyId,
   VerifyManagedMailWebhookErrors,
@@ -2248,11 +2279,14 @@ export const linkProjectSource = <ThrowOnError extends boolean = true>(
 
 /**
  * Get the linked source status
+ *
+ * GitHub sources use the unchanged released projection by default. Set include_binding=true to request the exact GitHub source connection ID and generation. Managed sources always return their full source binding. The explicit projections are strict; binding fields are never inferred from a legacy response.
  */
 export const getProjectSource = <ThrowOnError extends boolean = true>(
   parameters: {
     "X-Request-Id"?: string;
     project_id: Ulid;
+    include_binding?: boolean;
   },
   options?: Options<never, ThrowOnError>,
 ): RequestResult<GetProjectSourceResponses, GetProjectSourceErrors, ThrowOnError, "data"> => {
@@ -2263,6 +2297,7 @@ export const getProjectSource = <ThrowOnError extends boolean = true>(
         args: [
           { in: "headers", key: "X-Request-Id" },
           { in: "path", key: "project_id" },
+          { in: "query", key: "include_binding" },
         ],
       },
     ],
@@ -2278,6 +2313,512 @@ export const getProjectSource = <ThrowOnError extends boolean = true>(
     url: "/v1/projects/{project_id}/source",
     ...options,
     ...params,
+  });
+};
+
+/**
+ * Initialize a managed Cloudflare Git source
+ */
+export const initializeManagedSource = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    managedSourceInitializeRequest: ManagedSourceInitializeRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  InitializeManagedSourceResponses,
+  InitializeManagedSourceErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "managedSourceInitializeRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    InitializeManagedSourceResponses,
+    InitializeManagedSourceErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source:initialize",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read managed source files
+ */
+export const listManagedSourceFiles = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    commit_sha?: CommitSha;
+    path?: ManagedSourcePath;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ListManagedSourceFilesResponses,
+  ListManagedSourceFilesErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "commit_sha" },
+          { in: "query", key: "path" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    ListManagedSourceFilesResponses,
+    ListManagedSourceFilesErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source/files",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Read managed source version history
+ */
+export const listManagedSourceVersions = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    limit?: number;
+    before_commit_sha?: CommitSha;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ListManagedSourceVersionsResponses,
+  ListManagedSourceVersionsErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "limit" },
+          { in: "query", key: "before_commit_sha" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    ListManagedSourceVersionsResponses,
+    ListManagedSourceVersionsErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source/versions",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Compare two managed source versions
+ */
+export const diffManagedSource = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    from_commit_sha: CommitSha;
+    to_commit_sha: CommitSha;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<DiffManagedSourceResponses, DiffManagedSourceErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "from_commit_sha" },
+          { in: "query", key: "to_commit_sha" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    DiffManagedSourceResponses,
+    DiffManagedSourceErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source/diff",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Save an atomic managed source file batch
+ */
+export const changeManagedSource = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    managedSourceChangesRequest: ManagedSourceChangesRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<ChangeManagedSourceResponses, ChangeManagedSourceErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "managedSourceChangesRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    ChangeManagedSourceResponses,
+    ChangeManagedSourceErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source/changes",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Restore an earlier file tree as a new version
+ */
+export const restoreManagedSource = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    managedSourceRestoreRequest: ManagedSourceRestoreRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RestoreManagedSourceResponses,
+  RestoreManagedSourceErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "managedSourceRestoreRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    RestoreManagedSourceResponses,
+    RestoreManagedSourceErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source:restore",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Start a stable managed source snapshot upload
+ */
+export const createManagedSourceUpload = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    managedSourceUploadRequest: ManagedSourceUploadRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateManagedSourceUploadResponses,
+  CreateManagedSourceUploadErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "managedSourceUploadRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateManagedSourceUploadResponses,
+    CreateManagedSourceUploadErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source/uploads",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read a managed source upload receipt
+ */
+export const getManagedSourceUpload = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    operation_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetManagedSourceUploadResponses,
+  GetManagedSourceUploadErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "operation_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetManagedSourceUploadResponses,
+    GetManagedSourceUploadErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source/uploads/{operation_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Upload one source file with its content hash
+ */
+export const putManagedSourceBlob = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    operation_id: Ulid;
+    managedSourceBlobRequest: ManagedSourceBlobRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  PutManagedSourceBlobResponses,
+  PutManagedSourceBlobErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "operation_id" },
+          { key: "managedSourceBlobRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).put<
+    PutManagedSourceBlobResponses,
+    PutManagedSourceBlobErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source/uploads/{operation_id}/files",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Commit one complete uploaded source snapshot
+ */
+export const commitManagedSourceUpload = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    operation_id: Ulid;
+    managedSourceFinalizeRequest: ManagedSourceFinalizeRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CommitManagedSourceUploadResponses,
+  CommitManagedSourceUploadErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "operation_id" },
+          { key: "managedSourceFinalizeRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CommitManagedSourceUploadResponses,
+    CommitManagedSourceUploadErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source/uploads/{operation_id}:commit",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Switch an existing GitHub project to a prepared managed source
+ */
+export const switchManagedSource = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    managedSourceSwitchRequest: ManagedSourceSwitchRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<SwitchManagedSourceResponses, SwitchManagedSourceErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "managedSourceSwitchRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    SwitchManagedSourceResponses,
+    SwitchManagedSourceErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/source:switch",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
   });
 };
 

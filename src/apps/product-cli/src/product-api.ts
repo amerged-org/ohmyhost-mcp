@@ -143,6 +143,8 @@ import {
   parseOperation,
   type PublicAccount,
 } from "./runtime-contract.js";
+import { GeneratedSdkManagedSourceApi } from "./source-managed-client.js";
+import type { ManagedSourceApi } from "./source-publisher.js";
 
 export interface ProjectCreateInput {
   readonly organizationId: string;
@@ -154,6 +156,7 @@ export interface ProjectCreateInput {
 }
 
 export interface ProductApi {
+  readonly managedSource?: ManagedSourceApi;
   planProjectDataChange(input: {
     projectId: string;
     change: ProjectDataChangeKind;
@@ -436,6 +439,7 @@ export interface ProductApi {
 
 export class GeneratedSdkProductApi implements ProductApi {
   readonly #client: OhMyHostClient;
+  public readonly managedSource: ManagedSourceApi;
 
   public constructor(
     baseUrl: string,
@@ -443,6 +447,7 @@ export class GeneratedSdkProductApi implements ProductApi {
     fetch: typeof globalThis.fetch,
   ) {
     this.#client = createClient({ auth: accessToken, baseUrl, fetch, throwOnError: true });
+    this.managedSource = new GeneratedSdkManagedSourceApi(() => this.#client);
   }
 
   public async changeDatabaseCompute(input: {

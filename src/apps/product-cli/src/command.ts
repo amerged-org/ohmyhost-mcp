@@ -7,7 +7,63 @@ import type { ManagedMailCommand } from "@ohmyhost/sdk-ts";
 import { USER_API_KEY_ID } from "@ohmyhost/contracts/user-api-keys";
 import { WORKOS_USER_API_KEY_PATTERN } from "@ohmyhost/workos-auth-contracts/user-api-keys";
 import { isProfileName, isProfileUserId } from "./profile-store.js";
+import {
+  isManagedSourcePath,
+  parseManagedSourceRequest,
+  type ManagedSourceUploadRequest,
+  type ManagedSourceRestoreRequest,
+  type ManagedSourceInitializeRequest,
+} from "@ohmyhost/contracts/managed-sources";
+export type SourceCliCommand =
+  | { readonly kind: "source-inspect"; readonly directory: string }
+  | {
+      readonly kind: "source-read";
+      readonly action: "status" | "files" | "file" | "versions" | "diff" | "upload";
+      readonly projectId: string;
+      readonly commitSha?: string;
+      readonly path?: string;
+      readonly limit?: number;
+      readonly beforeCommitSha?: string;
+      readonly fromCommitSha?: string;
+      readonly toCommitSha?: string;
+      readonly operationId?: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "source-publish";
+      readonly projectId: string;
+      readonly directory: string;
+      readonly request: ManagedSourceUploadRequest;
+      readonly explicitExpectedCommit: boolean;
+      readonly idempotencyKey: string;
+      readonly wait: boolean;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "source-complete";
+      readonly projectId: string;
+      readonly directory: string;
+      readonly operationId?: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "source-initialize";
+      readonly projectId: string;
+      readonly request: ManagedSourceInitializeRequest;
+      readonly idempotencyKey: string;
+      readonly wait: boolean;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "source-restore";
+      readonly projectId: string;
+      readonly request: ManagedSourceRestoreRequest;
+      readonly idempotencyKey: string;
+      readonly wait: boolean;
+      readonly credentialStore: "native";
+    };
 export type ProductCliCommand =
+  | SourceCliCommand
   | {
       readonly kind: "project-data-plan";
       readonly projectId: string;
@@ -571,7 +627,190 @@ export class InvalidCommandError extends Error {
   }
 }
 
+function parseSourceCommand(values: string[], wait: boolean): SourceCliCommand {
+  const action = values.shift();
+  if (action === "publish" && values[0] === "complete") {
+    values.shift();
+    if (wait) throw new InvalidCommandError();
+    const options = parseOptionalOptions(values, ["--project", "--directory", "--operation"]);
+    const projectId = options["--project"],
+      operationId = options["--operation"];
+    if (
+      projectId === undefined ||
+      !/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(projectId) ||
+      (operationId !== undefined && !/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(operationId))
+    )
+      throw new InvalidCommandError();
+    return {
+      kind: "source-complete",
+      projectId,
+      directory: options["--directory"] ?? ".",
+      operationId,
+      credentialStore: "native",
+    };
+  }
+  if (action === "inspect") {
+    if (wait) throw new InvalidCommandError();
+    const options = parseOptionalOptions(values, ["--directory"]);
+    return { kind: "source-inspect", directory: options["--directory"] ?? "." };
+  }
+  const allowed =
+    action === "publish"
+      ? [
+          "--project",
+          "--directory",
+          "--mode",
+          "--expected-source-generation",
+          "--expected-source-connection",
+          "--expected-commit",
+          "--message",
+          "--idempotency-key",
+        ]
+      : action === "restore"
+        ? [
+            "--project",
+            "--expected-source-generation",
+            "--expected-commit",
+            "--restore-commit",
+            "--message",
+            "--idempotency-key",
+          ]
+        : action === "initialize"
+          ? ["--project", "--template", "--expected-source-generation", "--idempotency-key"]
+          : [
+              "--project",
+              "--commit",
+              "--path",
+              "--limit",
+              "--before",
+              "--from",
+              "--to",
+              "--operation",
+            ];
+  const options = parseOptionalOptions(values, allowed);
+  const projectId = options["--project"];
+  if (projectId === undefined || !/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(projectId))
+    throw new InvalidCommandError();
+  const credentialStore = "native" as const;
+  if (action === "publish" || action === "restore" || action === "initialize") {
+    const idempotencyKey = options["--idempotency-key"];
+    const rawGeneration = options["--expected-source-generation"];
+    if (
+      idempotencyKey === undefined ||
+      rawGeneration === undefined ||
+      !/^(?:0|[1-9][0-9]*)$/u.test(rawGeneration)
+    )
+      throw new InvalidCommandError();
+    const expected_source_generation = Number(rawGeneration);
+    try {
+      if (action === "initialize")
+        return {
+          kind: "source-initialize",
+          projectId,
+          request: parseManagedSourceRequest("initialize", {
+            expected_source_generation,
+            template: options["--template"] ?? "vite-react",
+          }),
+          idempotencyKey,
+          wait,
+          credentialStore,
+        };
+      const common = {
+        expected_source_generation,
+        expected_commit_sha: options["--expected-commit"] ?? null,
+        message: options["--message"],
+      };
+      if (action === "restore")
+        return {
+          kind: "source-restore",
+          projectId,
+          request: parseManagedSourceRequest("restore", {
+            ...common,
+            restore_commit_sha: options["--restore-commit"],
+          }),
+          idempotencyKey,
+          wait,
+          credentialStore,
+        };
+      return {
+        kind: "source-publish",
+        projectId,
+        directory: options["--directory"] ?? ".",
+        request: parseManagedSourceRequest("upload", {
+          ...common,
+          mode: options["--mode"],
+          expected_source_connection_id: options["--expected-source-connection"] ?? null,
+        }),
+        explicitExpectedCommit: options["--expected-commit"] !== undefined,
+        idempotencyKey,
+        wait,
+        credentialStore,
+      };
+    } catch {
+      throw new InvalidCommandError();
+    }
+  }
+  if (wait || !["status", "files", "file", "versions", "diff", "upload"].includes(action ?? ""))
+    throw new InvalidCommandError();
+  const commitSha = options["--commit"],
+    path = options["--path"],
+    beforeCommitSha = options["--before"],
+    fromCommitSha = options["--from"],
+    toCommitSha = options["--to"],
+    operationId = options["--operation"];
+  const permitted =
+    action === "status"
+      ? ["--project"]
+      : action === "versions"
+        ? ["--project", "--limit", "--before"]
+        : action === "diff"
+          ? ["--project", "--from", "--to"]
+          : action === "upload"
+            ? ["--project", "--operation"]
+            : action === "file"
+              ? ["--project", "--commit", "--path"]
+              : ["--project", "--commit"];
+  if (
+    Object.keys(options).some((key) => !permitted.includes(key)) ||
+    [commitSha, beforeCommitSha, fromCommitSha, toCommitSha].some(
+      (value) => value !== undefined && !/^[a-f0-9]{40}$/u.test(value),
+    ) ||
+    (action === "file" && !isManagedSourcePath(path)) ||
+    (action === "diff" && (fromCommitSha === undefined || toCommitSha === undefined)) ||
+    (action === "upload" &&
+      (operationId === undefined || !/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(operationId)))
+  )
+    throw new InvalidCommandError();
+  const limit = options["--limit"] === undefined ? undefined : Number(options["--limit"]);
+  if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1 || limit > 100))
+    throw new InvalidCommandError();
+  return {
+    kind: "source-read",
+    action: action as Extract<SourceCliCommand, { kind: "source-read" }>["action"],
+    projectId,
+    commitSha,
+    path,
+    beforeCommitSha,
+    fromCommitSha,
+    toCommitSha,
+    operationId,
+    limit,
+    credentialStore,
+  };
+}
+
 export type RecognizedCommandLabel =
+  | "source inspect"
+  | "source status"
+  | "source files"
+  | "source file"
+  | "source versions"
+  | "source diff"
+  | "source upload"
+  | "source publish"
+  | "source publish complete"
+  | "source initialize"
+  | "source restore"
   | "project data plan"
   | "project data change"
   | "database compute set"
@@ -768,6 +1007,24 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     if (value === "database" && values[0] === "psql") return "database psql";
     if (value === "link" || value === "plan" || value === "deploy" || value === "logs")
       return value;
+    if (value === "source" && values[0] === "publish" && values[1] === "complete")
+      return "source publish complete";
+    if (
+      value === "source" &&
+      [
+        "inspect",
+        "status",
+        "files",
+        "file",
+        "versions",
+        "diff",
+        "upload",
+        "publish",
+        "initialize",
+        "restore",
+      ].includes(values[0] ?? "")
+    )
+      return `source ${values[0]}` as RecognizedCommandLabel;
     if (value === "source" && values[0] === "auto-deploy") {
       if (values[1] === "set") return "source auto-deploy set";
       if (values[1] === "status") return "source auto-deploy status";
@@ -842,6 +1099,10 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
   const follow = removeFlag(values, "--follow");
   const stdin = removeFlag(values, "--stdin");
   const first = values.shift();
+  if (first === "source" && values[0] !== "auto-deploy") {
+    if (dryRun || revoke || yes || follow || stdin) throw new InvalidCommandError();
+    return parseSourceCommand(values, wait);
+  }
   if (
     first === "whoami" &&
     !dryRun &&

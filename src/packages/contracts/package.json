@@ -5,6 +5,11 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./mcp-source-codec": {
+      "source": "./src/mcp-source-codec.ts",
+      "types": "./dist/mcp-source-codec.d.ts",
+      "import": "./dist/mcp-source-codec.js"
+    },
     "./operation-failure": {
       "source": "./src/operation-failure.ts",
       "types": "./dist/operation-failure.d.ts",
@@ -121,6 +126,11 @@
       "source": "./src/project-data-changes.ts",
       "types": "./dist/project-data-changes.d.ts",
       "import": "./dist/project-data-changes.js"
+    },
+    "./managed-sources": {
+      "source": "./src/managed-sources.ts",
+      "types": "./dist/managed-sources.d.ts",
+      "import": "./dist/managed-sources.js"
     }
   },
   "scripts": {

@@ -1,5 +1,9 @@
 import { parseFeedbackSubmissionDetail } from "@ohmyhost/contracts/feedback";
 import {
+  assertGithubSourceResponse,
+  assertManagedSourceResponse,
+} from "@ohmyhost/contracts/managed-sources";
+import {
   parseProjectDataChangePlan as readProjectDataChangePlan,
   type ProjectDataChangePlan,
 } from "@ohmyhost/contracts/project-data-changes";
@@ -822,7 +826,20 @@ export const parseProjectStatus = (value: unknown): Readonly<Record<string, unkn
   return input;
 };
 
-const parseProjectSource = (value: unknown): void => {
+export const parseProjectSource = (value: unknown): void => {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "provider" in value &&
+    value.provider === "managed"
+  ) {
+    try {
+      assertManagedSourceResponse("source", value);
+    } catch {
+      throw new ResponseContractError();
+    }
+    return;
+  }
   const input = exactRecord(value, [
     "provider",
     "installation_id",
@@ -846,6 +863,22 @@ const parseProjectSource = (value: unknown): void => {
     !isIsoInstant(input["updated_at"]) ||
     (input["failure_summary"] !== undefined && !boundedString(input["failure_summary"], 1, 512))
   ) {
+    throw new ResponseContractError();
+  }
+};
+
+/** Binding-aware reads opt in explicitly; a legacy GitHub projection cannot supply a fence. */
+export const parseProjectSourceBinding = (value: unknown): void => {
+  try {
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "provider" in value &&
+      value.provider === "managed"
+    )
+      assertManagedSourceResponse("source", value);
+    else assertGithubSourceResponse("binding", value);
+  } catch {
     throw new ResponseContractError();
   }
 };

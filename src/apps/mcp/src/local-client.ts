@@ -105,6 +105,7 @@ import {
   type OhMyHostClient,
   type Operation,
   type OperationEvent,
+  type ProjectSource,
 } from "@ohmyhost/sdk-ts";
 
 import type {
@@ -128,6 +129,7 @@ import {
   parsePaidDomainPlan,
   parseOperation,
   parseProjectDataChangePlan,
+  parseProjectSource,
   parseAccountProfile,
   parseCurrentIdentity,
   chooseWorkspace,
@@ -136,6 +138,8 @@ import {
   selectWorkspace,
   InteractiveSessionRequiredError,
   NativeKeyringProfileRegistry,
+  GeneratedSdkManagedSourceApi,
+  type ManagedSourceApi,
   type AuthenticatedProductApiOverrides,
   type EffectiveContext,
   type LocalProfile,
@@ -205,6 +209,8 @@ export async function createAuthenticatedLocalMcpClient(
 }
 
 export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
+  public readonly managedSource: ManagedSourceApi;
+  public readonly productApiOrigin: string;
   #client: OhMyHostClient;
 
   #workspace: WorkspaceSession | undefined;
@@ -225,6 +231,8 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
   ) {
     this.#rescope = (token) => createClient({ auth: token, baseUrl, fetch, throwOnError: true });
     this.#client = this.#rescope(accessToken);
+    this.productApiOrigin = baseUrl;
+    this.managedSource = new GeneratedSdkManagedSourceApi(() => this.#client);
     this.#workspace = workspace;
     this.#context = context ?? {
       credential: workspace === undefined ? "environment_token" : "profile",
@@ -811,8 +819,10 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
       { client: this.#client },
     );
   }
-  public getSource(projectId: string) {
-    return getProjectSource({ project_id: projectId }, { client: this.#client });
+  public async getSource(projectId: string): Promise<ProjectSource> {
+    const source = await getProjectSource({ project_id: projectId }, { client: this.#client });
+    if (source !== null) parseProjectSource(source);
+    return source as ProjectSource;
   }
   public async getOperation(operationId: string): Promise<Operation> {
     return parseOperation(

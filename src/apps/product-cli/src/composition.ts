@@ -1,9 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { inspectSourceWorkspace, SourceWorkspaceError } from "./source-workspace.js";
+import {
+  inspectLocalSourcePublications,
+  LocalSourcePublicationError,
+} from "./source-publication-store.js";
 import {
   createClient,
   getGithubOrganizationConnection,
   getProject,
+  getProjectSource,
   revokeCurrentSession,
 } from "@ohmyhost/sdk-ts";
 import { WORKOS_USER_API_KEY_PATTERN } from "@ohmyhost/workos-auth-contracts/user-api-keys";
@@ -558,6 +564,14 @@ export const runProductionCli = async (
     return written(invalidCommandFailure(argv, environment));
   }
   const workingDirectory = overrides.workingDirectory ?? process.cwd();
+  const directoryOption = args.indexOf("--directory");
+  const selectedSourceDirectory =
+    args[0] === "source" &&
+    args[1] === "publish" &&
+    directoryOption !== -1 &&
+    args[directoryOption + 1] !== undefined
+      ? resolve(workingDirectory, args[directoryOption + 1] as string)
+      : workingDirectory;
   let command: ProductCliCommand;
   let linked: Extract<LinkedProject, { outcome: "linked" }> | null;
   let links: DirectoryLinks = { links: [], legacy: null };
@@ -570,7 +584,7 @@ export const runProductionCli = async (
         return { outcome: "none" };
       }
       links = await readProjectLinks(
-        join(workingDirectory, platform.linkDirectory),
+        join(selectedSourceDirectory, platform.linkDirectory),
         platform.apiOrigin,
       );
       let named = profileName;
@@ -649,6 +663,22 @@ export const runProductionCli = async (
       );
     return runOfflineInit(command, io, diagnostics);
   }
+  if (command.kind === "source-inspect") {
+    try {
+      const workspace = await inspectSourceWorkspace(resolve(workingDirectory, command.directory));
+      return written({
+        exitCode: 0,
+        stdout: `${JSON.stringify({ version: 1, command: "source inspect", status: "inspected", workspace, pending_publications: await inspectLocalSourcePublications(workspace.directory) })}\n`,
+        stderr: "",
+      });
+    } catch (error) {
+      return written(
+        error instanceof SourceWorkspaceError || error instanceof LocalSourcePublicationError
+          ? errorDocument("source inspect", 2, error.code, false, error.message)
+          : classifyCliFailure("source inspect", error, signal),
+      );
+    }
+  }
   if (command.kind === "help" || command.kind === "version") {
     return written(
       cliMetadataResult(command.kind, command.kind === "help" ? command.topic : undefined),
@@ -726,7 +756,7 @@ export const runProductionCli = async (
     );
   const registry =
     overrides.profiles ?? new NativeKeyringProfileRegistry(undefined, platform.credentialService);
-  const linkDirectory = join(workingDirectory, platform.linkDirectory);
+  const linkDirectory = join(selectedSourceDirectory, platform.linkDirectory);
   const projectId = commandProjectId(command);
   // A command that named its project read no link yet, but the link still says whose project it is.
   if (projectId !== undefined && linked === null)
@@ -843,6 +873,16 @@ export const runProductionCli = async (
     return written(result);
   }
   const selected = profile;
+  if (command.kind === "whoami" || command.kind === "login")
+    links = await readProjectLinks(linkDirectory, platform.apiOrigin);
+  const sourceOrganizationId =
+    selected?.organizationId ?? (command.kind === "login" ? command.organizationId : undefined);
+  const boundSource =
+    sourceOrganizationId === null || sourceOrganizationId === undefined
+      ? links.links.length === 1
+        ? links.links[0]
+        : undefined
+      : links.links.find((link) => link.organization_id === sourceOrganizationId);
   const productApiOrigin = platform.apiOrigin;
   const lifecycle = new GeneratedSdkSessionRevoker({
     environment,
@@ -850,6 +890,15 @@ export const runProductionCli = async (
     ...(selected === undefined ? {} : { request: { name: selected.name } }),
   });
   const cli = new ProductCli({
+    sourceDirectory: workingDirectory,
+    sourceMetadataDirectory: platform.linkDirectory,
+    sourceWorkspace: () => inspectSourceWorkspace(workingDirectory),
+    ...(boundSource === undefined
+      ? {}
+      : {
+          linkedSourceProvider: boundSource.version === 3 ? boundSource.source.provider : "github",
+          linkedProjectId: boundSource.project_id,
+        }),
     ...(apiToken === undefined ? {} : { apiToken }),
     commandPrefix: platform.commandPrefix,
     profiles: registry,
@@ -885,6 +934,19 @@ export const runProductionCli = async (
     githubConnectionStatus: (accessToken, organizationId) =>
       getGithubOrganizationConnection(
         { organization_id: organizationId },
+        {
+          client: createClient({
+            baseUrl: productApiOrigin,
+            auth: accessToken,
+            throwOnError: true,
+            fetch: boundedFetch(),
+          }),
+          signal,
+        },
+      ),
+    projectSourceStatus: (accessToken, projectId) =>
+      getProjectSource(
+        { project_id: projectId, include_binding: true },
         {
           client: createClient({
             baseUrl: productApiOrigin,
@@ -1351,7 +1413,15 @@ export const createBoundedFetch =
       if (isAbortOrTimeout(error)) throw error;
       throw new NetworkTransportError();
     }
-    return streaming ? response : bufferBoundedResponse(response, responseLimit);
+    const requestUrl = new URL(input instanceof Request ? input.url : String(input));
+    const sourceRead =
+      /^\/v1\/projects\/[0-7][0-9A-HJKMNP-TV-Z]{25}\/source\/(?:files|diff|versions)$/u.test(
+        requestUrl.pathname,
+      );
+    const limit = sourceRead
+      ? Math.max(responseLimit, Math.ceil((2 * 1024 * 1024) / 3) * 4 + 64 * 1024)
+      : responseLimit;
+    return streaming ? response : bufferBoundedResponse(response, limit);
   };
 
 const bufferBoundedResponse = async (response: Response, limit: number): Promise<Response> => {

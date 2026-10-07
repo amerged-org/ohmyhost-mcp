@@ -533,7 +533,16 @@ export type GithubSourceAuthorization = {
   repository_name: string;
 };
 
-export type ProjectSource = {
+export type ProjectSource = GithubProjectSource | ManagedProjectSource;
+
+export type ProjectSourceBinding = GithubSourceBinding | ManagedProjectSource;
+
+export type ProjectSourceResponse =
+  | GithubProjectSource
+  | GithubSourceBinding
+  | ManagedProjectSource;
+
+export type GithubProjectSource = {
   provider: "github";
   installation_id: string;
   repository_full_name: string;
@@ -541,6 +550,163 @@ export type ProjectSource = {
   linked_at: string;
   updated_at: string;
   failure_summary?: string;
+};
+
+export type GithubSourceBinding = {
+  source_connection_id: Ulid;
+  source_generation: number;
+  provider: "github";
+  installation_id: string;
+  repository_full_name: string;
+  status: "pending" | "ready" | "failed" | "revoked";
+  linked_at: string;
+  updated_at: string;
+  failure_summary?: string;
+};
+
+export type CommitSha = string;
+
+export type NullableCommitSha = string | null;
+
+export type SourceGeneration = number;
+
+/**
+ * Printable ASCII USTAR-compatible relative repository path without dot segments, backslashes, Git metadata or credential files. Environment secrets use the protected secret form; .env.example is allowed.
+ */
+export type ManagedSourcePath = string;
+
+export type SourceContentBase64 = string;
+
+export type SourceMessage = string;
+
+export type SourceManifestFile = {
+  path: ManagedSourcePath;
+  sha256: string;
+  byte_length: number;
+  executable: boolean;
+};
+
+export type SourceManifest = Array<SourceManifestFile>;
+
+export type ManagedProjectSource = {
+  /**
+   * Actual source initialization child operation, when one exists; present only while pending or failed.
+   */
+  initialization_operation_id?: Ulid;
+  /**
+   * Canonical public operation failure code for failed initialization; never a provider error.
+   */
+  initialization_error_code?: string;
+  provider: "managed";
+  source_connection_id: Ulid;
+  source_generation: SourceGeneration;
+  namespace: string;
+  repository_name: string;
+  branch: "main";
+  current_commit_sha: NullableCommitSha;
+  status: "pending" | "ready" | "failed" | "revoked";
+  linked_at: string;
+  updated_at: string;
+};
+
+export type ManagedSourceInitializeRequest = {
+  template: "vite-react" | "empty";
+  expected_source_generation: SourceGeneration;
+};
+
+export type ManagedSourceUploadRequest = {
+  mode: "initialize" | "commit" | "switch";
+  expected_source_generation: SourceGeneration;
+  expected_source_connection_id: string | null;
+  expected_commit_sha: NullableCommitSha;
+  message: SourceMessage;
+};
+
+export type ManagedSourceBlobRequest = {
+  path: ManagedSourcePath;
+  content_base64: SourceContentBase64;
+  executable: boolean;
+  sha256: string;
+};
+
+export type ManagedSourceFinalizeRequest = {
+  files: SourceManifest;
+  expected_source_generation: SourceGeneration;
+};
+
+export type ManagedSourceSwitchRequest = {
+  upload_operation_id: Ulid;
+  files: SourceManifest;
+  expected_source_generation: SourceGeneration;
+  expected_source_connection_id: Ulid;
+};
+
+export type ManagedSourceChangesRequest = {
+  expected_source_generation: SourceGeneration;
+  expected_commit_sha: NullableCommitSha;
+  message: SourceMessage;
+  changes: Array<{
+    path: ManagedSourcePath;
+    executable: boolean;
+    content_base64: string | null;
+  }>;
+};
+
+export type ManagedSourceRestoreRequest = {
+  expected_source_generation: SourceGeneration;
+  expected_commit_sha: NullableCommitSha;
+  restore_commit_sha: CommitSha;
+  message: SourceMessage;
+};
+
+export type ManagedSourceUploadReceipt = {
+  operation_id: Ulid;
+  state: "staging" | "sealed" | "committed" | "failed";
+  expected_source_generation: SourceGeneration;
+  expected_commit_sha: NullableCommitSha;
+  commit_sha: NullableCommitSha;
+  expires_at: string;
+};
+
+export type ManagedSourceFilesResponse = ManagedSourceFiles | ManagedSourceFileResponse;
+
+export type ManagedSourceFiles = {
+  commit_sha: CommitSha;
+  files: SourceManifest;
+};
+
+export type ManagedSourceFileResponse = {
+  commit_sha: CommitSha;
+  file: {
+    path: ManagedSourcePath;
+    sha256: string;
+    byte_length: number;
+    executable: boolean;
+    content_base64: SourceContentBase64;
+  };
+};
+
+export type ManagedSourceVersions = {
+  next_commit_sha: NullableCommitSha;
+  versions: Array<{
+    commit_sha: CommitSha;
+    parent_commit_sha: NullableCommitSha;
+    message: string;
+    created_at: string;
+  }>;
+};
+
+export type ManagedSourceDiff = {
+  from_commit_sha: CommitSha;
+  to_commit_sha: CommitSha;
+  changes: Array<{
+    path: ManagedSourcePath;
+    change: "added" | "modified" | "deleted";
+    before_sha256: string | null;
+    after_sha256: string | null;
+    before_executable: boolean | null;
+    after_executable: boolean | null;
+  }>;
 };
 
 export type FunctionRun = {
@@ -923,6 +1089,10 @@ export type FeedbackUpdate = {
  * Phase 1 project creation request. The server assigns resource identifiers.
  */
 export type CreateProjectRequest = {
+  source?: {
+    provider: "managed";
+    template: "vite-react" | "empty";
+  };
   organization_id: Ulid;
   data_mode?: ProjectDataMode;
   dev_access_mode?: "protected" | "public";
@@ -1280,6 +1450,10 @@ export type OperationFailure = {
   code:
     | "operation_failed"
     | "operation_abandoned"
+    | "authorization_changed"
+    | "source_commit_conflict"
+    | "source_snapshot_invalid"
+    | "source_upload_expired"
     | "recovery_dispatch_failed"
     | "recovery_job_failed"
     | "recovery_input_expired"
@@ -4207,7 +4381,12 @@ export type GetProjectSourceData = {
      */
     project_id: Ulid;
   };
-  query?: never;
+  query?: {
+    /**
+     * Return exact source binding metadata for GitHub; managed sources are always full.
+     */
+    include_binding?: boolean;
+  };
   url: "/v1/projects/{project_id}/source";
 };
 
@@ -4242,12 +4421,740 @@ export type GetProjectSourceError = GetProjectSourceErrors[keyof GetProjectSourc
 
 export type GetProjectSourceResponses = {
   /**
-   * The current GitHub source connection and status.
+   * The current source, using the default or explicitly requested binding projection.
    */
-  200: ProjectSource;
+  200: ProjectSourceResponse;
 };
 
 export type GetProjectSourceResponse = GetProjectSourceResponses[keyof GetProjectSourceResponses];
+
+export type InitializeManagedSourceData = {
+  body: ManagedSourceInitializeRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/source:initialize";
+};
+
+export type InitializeManagedSourceErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type InitializeManagedSourceError =
+  InitializeManagedSourceErrors[keyof InitializeManagedSourceErrors];
+
+export type InitializeManagedSourceResponses = {
+  /**
+   * The mutation was accepted for asynchronous processing.
+   */
+  202: Operation;
+};
+
+export type InitializeManagedSourceResponse =
+  InitializeManagedSourceResponses[keyof InitializeManagedSourceResponses];
+
+export type ListManagedSourceFilesData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: {
+    commit_sha?: CommitSha;
+    path?: ManagedSourcePath;
+  };
+  url: "/v1/projects/{project_id}/source/files";
+};
+
+export type ListManagedSourceFilesErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListManagedSourceFilesError =
+  ListManagedSourceFilesErrors[keyof ListManagedSourceFilesErrors];
+
+export type ListManagedSourceFilesResponses = {
+  /**
+   * The tenant-scoped managed source result.
+   */
+  200: ManagedSourceFilesResponse;
+};
+
+export type ListManagedSourceFilesResponse =
+  ListManagedSourceFilesResponses[keyof ListManagedSourceFilesResponses];
+
+export type ListManagedSourceVersionsData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: {
+    limit?: number;
+    before_commit_sha?: CommitSha;
+  };
+  url: "/v1/projects/{project_id}/source/versions";
+};
+
+export type ListManagedSourceVersionsErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListManagedSourceVersionsError =
+  ListManagedSourceVersionsErrors[keyof ListManagedSourceVersionsErrors];
+
+export type ListManagedSourceVersionsResponses = {
+  /**
+   * The tenant-scoped managed source result.
+   */
+  200: ManagedSourceVersions;
+};
+
+export type ListManagedSourceVersionsResponse =
+  ListManagedSourceVersionsResponses[keyof ListManagedSourceVersionsResponses];
+
+export type DiffManagedSourceData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    from_commit_sha: CommitSha;
+    to_commit_sha: CommitSha;
+  };
+  url: "/v1/projects/{project_id}/source/diff";
+};
+
+export type DiffManagedSourceErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DiffManagedSourceError = DiffManagedSourceErrors[keyof DiffManagedSourceErrors];
+
+export type DiffManagedSourceResponses = {
+  /**
+   * The tenant-scoped managed source result.
+   */
+  200: ManagedSourceDiff;
+};
+
+export type DiffManagedSourceResponse =
+  DiffManagedSourceResponses[keyof DiffManagedSourceResponses];
+
+export type ChangeManagedSourceData = {
+  body: ManagedSourceChangesRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/source/changes";
+};
+
+export type ChangeManagedSourceErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ChangeManagedSourceError = ChangeManagedSourceErrors[keyof ChangeManagedSourceErrors];
+
+export type ChangeManagedSourceResponses = {
+  /**
+   * The mutation was accepted for asynchronous processing.
+   */
+  202: Operation;
+};
+
+export type ChangeManagedSourceResponse =
+  ChangeManagedSourceResponses[keyof ChangeManagedSourceResponses];
+
+export type RestoreManagedSourceData = {
+  body: ManagedSourceRestoreRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/source:restore";
+};
+
+export type RestoreManagedSourceErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RestoreManagedSourceError =
+  RestoreManagedSourceErrors[keyof RestoreManagedSourceErrors];
+
+export type RestoreManagedSourceResponses = {
+  /**
+   * The mutation was accepted for asynchronous processing.
+   */
+  202: Operation;
+};
+
+export type RestoreManagedSourceResponse =
+  RestoreManagedSourceResponses[keyof RestoreManagedSourceResponses];
+
+export type CreateManagedSourceUploadData = {
+  body: ManagedSourceUploadRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/source/uploads";
+};
+
+export type CreateManagedSourceUploadErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateManagedSourceUploadError =
+  CreateManagedSourceUploadErrors[keyof CreateManagedSourceUploadErrors];
+
+export type CreateManagedSourceUploadResponses = {
+  /**
+   * The mutation was accepted for asynchronous processing.
+   */
+  202: Operation;
+};
+
+export type CreateManagedSourceUploadResponse =
+  CreateManagedSourceUploadResponses[keyof CreateManagedSourceUploadResponses];
+
+export type GetManagedSourceUploadData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Operation identifier.
+     */
+    operation_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/source/uploads/{operation_id}";
+};
+
+export type GetManagedSourceUploadErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetManagedSourceUploadError =
+  GetManagedSourceUploadErrors[keyof GetManagedSourceUploadErrors];
+
+export type GetManagedSourceUploadResponses = {
+  /**
+   * The tenant-scoped managed source result.
+   */
+  200: ManagedSourceUploadReceipt;
+};
+
+export type GetManagedSourceUploadResponse =
+  GetManagedSourceUploadResponses[keyof GetManagedSourceUploadResponses];
+
+export type PutManagedSourceBlobData = {
+  body: ManagedSourceBlobRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Operation identifier.
+     */
+    operation_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/source/uploads/{operation_id}/files";
+};
+
+export type PutManagedSourceBlobErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type PutManagedSourceBlobError =
+  PutManagedSourceBlobErrors[keyof PutManagedSourceBlobErrors];
+
+export type PutManagedSourceBlobResponses = {
+  /**
+   * The tenant-scoped managed source result.
+   */
+  200: SourceManifestFile;
+};
+
+export type PutManagedSourceBlobResponse =
+  PutManagedSourceBlobResponses[keyof PutManagedSourceBlobResponses];
+
+export type CommitManagedSourceUploadData = {
+  body: ManagedSourceFinalizeRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Operation identifier.
+     */
+    operation_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/source/uploads/{operation_id}:commit";
+};
+
+export type CommitManagedSourceUploadErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CommitManagedSourceUploadError =
+  CommitManagedSourceUploadErrors[keyof CommitManagedSourceUploadErrors];
+
+export type CommitManagedSourceUploadResponses = {
+  /**
+   * The mutation was accepted for asynchronous processing.
+   */
+  202: Operation;
+};
+
+export type CommitManagedSourceUploadResponse =
+  CommitManagedSourceUploadResponses[keyof CommitManagedSourceUploadResponses];
+
+export type SwitchManagedSourceData = {
+  body: ManagedSourceSwitchRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/source:switch";
+};
+
+export type SwitchManagedSourceErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type SwitchManagedSourceError = SwitchManagedSourceErrors[keyof SwitchManagedSourceErrors];
+
+export type SwitchManagedSourceResponses = {
+  /**
+   * The mutation was accepted for asynchronous processing.
+   */
+  202: Operation;
+};
+
+export type SwitchManagedSourceResponse =
+  SwitchManagedSourceResponses[keyof SwitchManagedSourceResponses];
 
 export type GetProjectSourceAutoDeployData = {
   body?: never;

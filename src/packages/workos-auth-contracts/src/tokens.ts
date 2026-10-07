@@ -42,6 +42,22 @@ export interface WorkosM2mClaims {
 
 export type WorkosTokenClaims = WorkosSessionClaims | WorkosM2mClaims;
 
+/** A third-party client's user delegation, distinct from an AuthKit login session. */
+export interface WorkosConnectUserClaims {
+  readonly kind: "connect_user";
+  readonly issuer: string;
+  readonly audience: readonly string[];
+  readonly subject: string;
+  readonly clientId: string;
+  readonly organizationId?: string;
+  readonly consentId: string;
+  readonly tokenId?: string;
+  readonly expiresAt: number;
+  readonly issuedAt: number;
+  readonly notBefore?: number;
+  readonly scopes: readonly string[];
+}
+
 export interface WorkosRsaJwk {
   readonly kty: "RSA";
   readonly kid: string;
@@ -129,10 +145,19 @@ export const parseWorkosJwtHeader = (value: unknown): WorkosJwtHeader => {
   };
 };
 
-export const parseWorkosTokenClaims = (
+export function parseWorkosTokenClaims(value: unknown, kind: "session" | "m2m"): WorkosTokenClaims;
+export function parseWorkosTokenClaims(
   value: unknown,
-  kind: "session" | "m2m",
-): WorkosTokenClaims => {
+  kind: "connect_user",
+): WorkosConnectUserClaims;
+export function parseWorkosTokenClaims(
+  value: unknown,
+  kind: "session" | "m2m" | "connect_user",
+): WorkosTokenClaims | WorkosConnectUserClaims;
+export function parseWorkosTokenClaims(
+  value: unknown,
+  kind: "session" | "m2m" | "connect_user",
+): WorkosTokenClaims | WorkosConnectUserClaims {
   const input = expectRecord(value, "invalid_jwt_claims");
   const common = {
     issuer: expectString(input["iss"], "iss"),
@@ -141,6 +166,38 @@ export const parseWorkosTokenClaims = (
     issuedAt: parseEpoch(input["iat"], "iat"),
   };
   const notBefore = input["nbf"] === undefined ? undefined : parseEpoch(input["nbf"], "nbf");
+  if (kind === "connect_user") {
+    if (!/^user_[A-Za-z0-9]{1,120}$/u.test(common.subject)) {
+      throw new WorkosContractError(
+        "invalid_principal_kind",
+        "Connect user token subject must identify a user",
+      );
+    }
+    const clientId = expectString(input["client_id"], "client_id");
+    if (clientId.length > 2_048 || /[\s\p{Cc}]/u.test(clientId)) {
+      throw new WorkosContractError("invalid_client", "Connect client identifier is invalid");
+    }
+    const organizationId = expectString(input["org_id"], "org_id", { optional: true });
+    if (organizationId !== undefined && !/^org_[A-Za-z0-9]{1,120}$/u.test(organizationId)) {
+      throw new WorkosContractError("invalid_organization", "Connect organization is invalid");
+    }
+    const consentId = expectString(input["sid"], "sid");
+    if (!/^app_consent_[A-Za-z0-9]{1,120}$/u.test(consentId)) {
+      throw new WorkosContractError("invalid_consent", "Connect consent identifier is invalid");
+    }
+    const tokenId = expectString(input["jti"], "jti", { optional: true });
+    return {
+      kind,
+      ...common,
+      audience: parseAudience(input["aud"]),
+      clientId,
+      ...(organizationId === undefined ? {} : { organizationId }),
+      consentId,
+      ...(tokenId === undefined ? {} : { tokenId }),
+      ...(notBefore === undefined ? {} : { notBefore }),
+      scopes: parseScopes(input["scope"]),
+    };
+  }
   if (kind === "m2m") {
     if (!common.subject.startsWith("client_")) {
       throw new WorkosContractError(
@@ -186,7 +243,7 @@ export const parseWorkosTokenClaims = (
     ...(role === undefined ? {} : { role }),
     permissions,
   };
-};
+}
 
 export const parseWorkosJwks = (value: unknown): readonly WorkosRsaJwk[] => {
   const input = expectRecord(value, "invalid_jwks");
