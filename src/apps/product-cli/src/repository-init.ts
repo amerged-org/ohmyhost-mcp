@@ -1242,7 +1242,7 @@ function repositoryBlockers(
       .join(", ");
     blockers.push({
       code: "framework_version_unsupported",
-      message: `${unsupported} is outside the versions ohmyho.st builds: next 15.5.26+ (15.5.x) or 16.3.6–16.3.7, vite 5.4.0–8.2.2, @tanstack/react-start 1.168.26–1.168.49, as an exact version or a ^ or ~ range whose base version is inside. Pin a version in that range in package.json, update the lockfile, commit and push.`,
+      message: `${unsupported} is outside the versions ohmyho.st builds: next 15.5.26+ (15.5.x) or 16.3.8, vite 5.4.0–8.2.2, @tanstack/react-start 1.168.26–1.168.49, as an exact version or a ^ or ~ range whose base version is inside. Pin a version in that range in package.json, update the lockfile, commit and push.`,
     });
   }
   const scripts = packageJson["scripts"];
@@ -1297,7 +1297,7 @@ function repositoryBlockers(
       blockers.push({
         code: "next_adapter_unconfigured",
         message:
-          'Next.js needs scripts.build exactly "next build" or "next build --webpack", react and react-dom at exact versions such as "19.1.0" (no ^ or ~), next within 15.5.26+ (15.5.x) or 16.3.6–16.3.7, and exactly one next.config.js, .mjs or .ts, with at most one open-next.config file. ohmyho.st adds the OpenNext build itself; do not make it the build script.',
+          'Next.js needs scripts.build exactly "next build" or "next build --webpack", react and react-dom at exact versions such as "19.1.0" (no ^ or ~), next within 15.5.26+ (15.5.x) or 16.3.8, and exactly one next.config.js, .mjs or .ts, with at most one open-next.config file. ohmyho.st adds the OpenNext build itself; do not make it the build script.',
       });
     }
   }

@@ -129,7 +129,7 @@ export interface FrameworkVersionAdmission {
 const VERIFIED_VERSIONS: Readonly<Record<AdmittedFramework, ReadonlySet<string>>> = Object.freeze({
   vite: new Set(["5.4.21", "8.0.16", "8.2.2"]),
   "tanstack-start": new Set(["1.168.26", "1.168.49"]),
-  nextjs: new Set(["15.5.26", "16.3.7"]),
+  nextjs: new Set(["15.5.26", "16.3.8"]),
 });
 
 export function classifyFrameworkVersion(

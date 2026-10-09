@@ -14,8 +14,7 @@ export function isAdmittedNextVersion(version) {
   const patch = Number(match[3]);
   if (![major, minor, patch].every(Number.isSafeInteger)) return false;
   return (
-    (major === 15 && minor === 5 && patch >= 26) ||
-    (major === 16 && minor === 3 && patch >= 6 && patch <= 7)
+    (major === 15 && minor === 5 && patch >= 26) || (major === 16 && minor === 3 && patch === 8)
   );
 }
 
