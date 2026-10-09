@@ -471,9 +471,10 @@ const deletableSecretName = z
   );
 
 const LOCAL_SERVER_INSTRUCTIONS =
+  "Continue an existing app from its reachable workspace and saved project binding. Reuse a matching local CLI/MCP profile or private token source unless the user chooses remote; verify its identity and workspace. connection_request availability alone never selects remote. If remote identity/workspace mismatches, stop the access-link loop. Unreachable local context is an access gap, not deleted credentials; never substitute an unrelated Review/demo account or change the saved source. " +
   "Operate the user's ohmyho.st hosting account: projects, managed or GitHub sources and deployments, databases, domains, mail, usage and budgets. " +
   "Use the existing project source binding first. A local or cloud workspace can contain Git without GitHub. If unbound current files have no relevant GitHub source, ask once whether to deploy directly with ohmyho.st saving versions or set up GitHub; do not require GitHub just because no connection exists. " +
-  "Start by reading the resource skill://ohmyhost/ohmyhost-get-started/SKILL.md and calling identity_get; read project_context_get before acting on a project. " +
+  "Read the resource skill://ohmyhost/ohmyhost-get-started/SKILL.md and verify the chosen access with identity_get; read project_context_get before acting on a project. " +
   "This server is also ohmyho.st support: report a bug, issue or feature request with feedback_submit, give the user the receipt ID and follow up with feedback_status (https://docs.ohmyho.st/support).";
 
 export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDependencies) {
