@@ -48,6 +48,47 @@ const CORPUS_NEXT_PAGE = `export default function Home() {
   return <main>Hello from ohmyho.st</main>;
 }
 `;
+// The config `create-next-app@16.4.0 --yes --no-tailwind` writes: Cache Components with partial
+// prefetching.
+const CREATE_NEXT_APP_CONFIG = `import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* config options here */
+  cacheComponents: true,
+  partialPrefetching: true,
+};
+
+export default nextConfig;
+`;
+// With Tailwind CSS, which --yes selects, create-next-app on its default Turbopack bundler adds this
+// rule instead of a postcss.config.mjs; the Webpack build ignores turbopack.rules.
+const CREATE_NEXT_APP_TAILWIND_RULE = `  turbopack: {
+    rules: {
+      "*.css": {
+        loaders: ["@tailwindcss/turbopack"],
+        as: "*.css",
+      },
+    },
+  },
+`;
+const CREATE_NEXT_APP_POSTCSS_CONFIG = `const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+
+export default config;
+`;
+const CREATE_NEXT_APP_LAYOUT = `import "./globals.css";
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+`;
 const CORPUS_TANSTACK_CONFIG = `import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
@@ -93,6 +134,14 @@ export const FRAMEWORK_ADMISSION_CONFORMANCE_CORPUS: Readonly<{
       viteSource({ declared: "^8.2.0", resolved: "8.3.4" }),
     ),
     corpusCase("TanStack Start 1.168.60 prerendered for the static runtime", tanStackSource()),
+    corpusCase(
+      "create-next-app 16.4 --yes --no-tailwind: Cache Components with partial prefetching",
+      createNextAppSource({ tailwind: false }),
+    ),
+    corpusCase(
+      "create-next-app 16.4 --yes with a postcss.config.mjs added beside its Turbopack rule",
+      createNextAppSource({ tailwind: true, postcss: true }),
+    ),
   ]),
   pending: Object.freeze([
     Object.freeze({
@@ -147,6 +196,11 @@ export const FRAMEWORK_ADMISSION_CONFORMANCE_CORPUS: Readonly<{
         config: CORPUS_NEXT_CONFIG.replace("reactStrictMode", 'basePath: "/docs", reactStrictMode'),
       }),
       { code: "next_base_path_unsupported", path: "next.config.ts" },
+    ),
+    refusedCase(
+      "create-next-app 16.4 --yes: Tailwind CSS only in a Turbopack rule",
+      createNextAppSource({ tailwind: true }),
+      { code: "next_tailwind_turbopack_only", path: "next.config.ts" },
     ),
     refusedCase(
       "Next.js build script with a second step",
@@ -322,6 +376,49 @@ function nextSource(
     ),
     "next.config.ts": options.config ?? CORPUS_NEXT_CONFIG,
     "src/app/page.tsx": CORPUS_NEXT_PAGE,
+  });
+}
+
+/**
+ * The next.config.ts and Tailwind CSS files and packages `create-next-app@16.4.0 --yes` writes, in
+ * an App Router source with the packageManager, lockfile and ohmyhost.yaml ohmyho.st requires;
+ * `tailwind: false` is its --no-tailwind output. On Turbopack, its default bundler, it adds only the
+ * Turbopack rule for Tailwind CSS; `postcss` adds the postcss.config.mjs and @tailwindcss/postcss it
+ * writes for any other bundler.
+ */
+function createNextAppSource(
+  options: Readonly<{ tailwind: boolean; postcss?: boolean }>,
+): Readonly<Record<string, string>> {
+  const [packageManager, lockfile] = CORPUS_MANAGERS.npm;
+  const runtime = { next: "16.4.0", react: "19.3.0", "react-dom": "19.3.0" };
+  const postcss = options.postcss === true;
+  return Object.freeze({
+    "ohmyhost.yaml": corpusConfiguration("npm", ".open-next/assets", "edge"),
+    "package.json": corpusJson({
+      name: "website",
+      version: "0.1.0",
+      private: true,
+      packageManager,
+      scripts: { dev: "next dev", build: "next build", start: "next start" },
+      dependencies: runtime,
+      ...(options.tailwind
+        ? {
+            devDependencies: {
+              ...(postcss ? { "@tailwindcss/postcss": "^4" } : {}),
+              "@tailwindcss/turbopack": "^4",
+              tailwindcss: "^4",
+            },
+          }
+        : {}),
+    }),
+    [lockfile]: corpusLockfile("npm", runtime, runtime),
+    "next.config.ts": options.tailwind
+      ? CREATE_NEXT_APP_CONFIG.replace("};\n", `${CREATE_NEXT_APP_TAILWIND_RULE}};\n`)
+      : CREATE_NEXT_APP_CONFIG,
+    ...(postcss ? { "postcss.config.mjs": CREATE_NEXT_APP_POSTCSS_CONFIG } : {}),
+    "app/globals.css": options.tailwind ? '@import "tailwindcss";\n' : "body {\n  margin: 0;\n}\n",
+    "app/layout.tsx": CREATE_NEXT_APP_LAYOUT,
+    "app/page.tsx": CORPUS_NEXT_PAGE,
   });
 }
 

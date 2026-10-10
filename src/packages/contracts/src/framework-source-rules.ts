@@ -119,6 +119,10 @@ const BUILD_OUTPUTS: Readonly<Partial<Record<FrameworkSourceFramework, string>>>
 });
 const REQUIRED_CONFIG_PATHS: Readonly<Partial<Record<FrameworkSourceFramework, string>>> =
   Object.freeze({ nextjs: "next.config.ts", "tanstack-start": "vite.config.ts" });
+// The PostCSS configuration the Next.js Webpack build reads: package.json "postcss" or one of these
+// files at the application root. It never reads a TypeScript one such as postcss.config.ts.
+const POSTCSS_CONFIG_PATH = /^(?:postcss\.config\.(?:[cm]?js|json)|\.postcssrc\.(?:js|json))$/u;
+const TAILWIND_TURBOPACK_LOADER = "@tailwindcss/turbopack";
 const MAXIMUM_LOCKFILE_LENGTH = 5 * 1024 * 1024;
 const MAXIMUM_PNPM_LOCKFILE_HEAD = 256 * 1024;
 const PNPM_LOCKFILE_BODY = /^(?:packages|snapshots):/mu;
@@ -327,12 +331,15 @@ export function repositorySourceFindings(
 
 /**
  * The Next.js config rules: inspection size, comment and string syntax, the root origin
- * (basePath, assetPrefix), output, cacheComponents and the default export; next.config.js may
- * assign module.exports instead.
+ * (basePath, assetPrefix), output, the "@tailwindcss/turbopack" loader and the default export;
+ * next.config.js may assign module.exports instead. ohmyho.st builds with Webpack, which ignores
+ * Turbopack rules and applies Tailwind CSS only through PostCSS, so that loader is refused unless
+ * `postcss` reports a PostCSS configuration Webpack reads at the application root.
  */
 export function nextConfigFindings(
   text: string,
   path: string,
+  postcss: boolean,
 ): readonly FrameworkConversionDiagnostic[] {
   const lexed = lexFrameworkConfig(text, path);
   if ("finding" in lexed) return Object.freeze([lexed.finding]);
@@ -342,8 +349,11 @@ export function nextConfigFindings(
     findings.push(diagnostic({ code: "next_base_path_unsupported", path }));
   if (hasProperty(tokens, "output", "export") || hasProperty(tokens, "output", "standalone"))
     findings.push(diagnostic({ code: "next_output_unsupported", path }));
-  if (hasProperty(tokens, "cacheComponents", "true"))
-    findings.push(diagnostic({ code: "next_cache_components_unsupported", path }));
+  if (
+    !postcss &&
+    tokens.some(({ kind, value }) => kind === "string" && value === TAILWIND_TURBOPACK_LOADER)
+  )
+    findings.push(diagnostic({ code: "next_tailwind_turbopack_only", path }));
   if (
     !hasExportDefault(tokens) &&
     !(path.slice(path.lastIndexOf("/") + 1) === "next.config.js" && hasModuleExports(tokens))
@@ -619,10 +629,17 @@ function frameworkConfigFindings(
   const { frameworkConfig, framework } = input;
   if (frameworkConfig === null || framework === "functions") return [];
   const { path, text } = frameworkConfig;
-  if (framework === "nextjs") return nextConfigFindings(text, path);
+  if (framework === "nextjs") return nextConfigFindings(text, path, hasPostcssConfiguration(input));
   if (framework === "vite-static") return viteConfigFindings(text, path);
   const mode = input.configuration.runtime.mode;
   return tanStackViteConfigFindings(text, path, mode === "edge" || mode === "static" ? mode : null);
+}
+
+/** Whether package.json or a file at the application root configures PostCSS for Webpack. */
+function hasPostcssConfiguration({ files, manifest }: FrameworkSourceRuleInput): boolean {
+  return (
+    isRecord(ownValue(manifest, "postcss")) || files.some((path) => POSTCSS_CONFIG_PATH.test(path))
+  );
 }
 
 function repositoryConfiguration(text: string | null | undefined): OhmyhostConfig | null {

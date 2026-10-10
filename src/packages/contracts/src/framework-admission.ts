@@ -373,9 +373,9 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
     paths: ["framework_config"],
     template: `"{{path}}" does not follow the TanStack Start plugin contract: import tanstackStart from "@tanstack/react-start/plugin/vite"; on runtime edge also import cloudflare from "@cloudflare/vite-plugin" and call cloudflare({ viteEnvironment: { name: "ssr" } }) before tanstackStart(); on runtime static do not import the Cloudflare plugin. ${PUSH_AND_PLAN}`,
   },
-  next_cache_components_unsupported: {
+  next_tailwind_turbopack_only: {
     paths: ["framework_config"],
-    template: `"{{path}}" sets cacheComponents: true, which ohmyho.st does not support; remove it or set it to false. ${PUSH_AND_PLAN}`,
+    template: `"{{path}}" loads Tailwind CSS through the Turbopack rule "@tailwindcss/turbopack", which the Webpack build on ohmyho.st ignores, and the application root has no PostCSS configuration that Webpack reads, so the site would deploy without its Tailwind classes. Add postcss.config.mjs to the application root with export default { plugins: { "@tailwindcss/postcss": {} } } and remove the Turbopack rule. Use the package manager to add @tailwindcss/postcss to devDependencies at the same version as tailwindcss and to remove @tailwindcss/turbopack, so the lockfile records both. ${PUSH_AND_PLAN}`,
   },
   framework_version_unsupported: {
     paths: ["manifest", "lockfile"],
