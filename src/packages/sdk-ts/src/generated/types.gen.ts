@@ -1485,6 +1485,10 @@ export type OperationFailure = {
    */
   retryable: false;
   suggested_action: string;
+  /**
+   * Present only on auto_deploy_plan_rejected when planning the pushed commit returned a typed refusal. It is the same fixed catalog sentence that the planning 409 problem returns as detail, naming the file, the rule and the required change.
+   */
+  detail?: string;
 };
 
 export type AuditEvent = {
@@ -5839,6 +5843,10 @@ export type PlanDeploymentErrors = {
    * The resource does not exist or is not visible to the authenticated principal.
    */
   404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
   /**
    * The request failed.
    */

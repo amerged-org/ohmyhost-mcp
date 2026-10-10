@@ -70,6 +70,16 @@
       "types": "./dist/framework-build-script.d.ts",
       "import": "./dist/framework-build-script.js"
     },
+    "./framework-source-rules": {
+      "source": "./src/framework-source-rules.ts",
+      "types": "./dist/framework-source-rules.d.ts",
+      "import": "./dist/framework-source-rules.js"
+    },
+    "./framework-admission-corpus": {
+      "source": "./src/framework-admission-corpus.ts",
+      "types": "./dist/framework-admission-corpus.d.ts",
+      "import": "./dist/framework-admission-corpus.js"
+    },
     "./browser-capabilities": {
       "source": "./src/browser-capabilities.ts",
       "types": "./dist/browser-capabilities.d.ts",

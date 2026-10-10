@@ -3290,7 +3290,7 @@ export const applyPaidProjectDomain = <ThrowOnError extends boolean = true>(
 /**
  * Plan a deployment
  *
- * Resolves immutable inputs and estimates effects without provider mutation or billable work. The plan targets Dev unless `environment` is `prod`; a Prod plan builds straight into Prod, except that a project with shared data and a database only reaches Prod through promotion. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority.
+ * Resolves immutable inputs and estimates effects without provider mutation or billable work. The plan targets Dev unless `environment` is `prod`; a Prod plan builds straight into Prod, except that a project with shared data and a database only reaches Prod through promotion. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. A commit the platform does not admit answers 409 with a nonretryable problem code; for framework_conversion_required, detail is a fixed catalog sentence that names the file, the rule and the required change whenever the refusal is typed.
  */
 export const planDeployment = <ThrowOnError extends boolean = true>(
   parameters: {

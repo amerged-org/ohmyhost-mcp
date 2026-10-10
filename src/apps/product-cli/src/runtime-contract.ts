@@ -7,7 +7,10 @@ import {
   parseProjectDataChangePlan as readProjectDataChangePlan,
   type ProjectDataChangePlan,
 } from "@ohmyhost/contracts/project-data-changes";
-import { parseFrameworkConversionDetail } from "@ohmyhost/contracts/framework-admission";
+import {
+  frameworkConversionDiagnosticFromDetail,
+  parseFrameworkConversionDetail,
+} from "@ohmyhost/contracts/framework-admission";
 import {
   parseOperationDeploymentProgress,
   type OperationDeploymentProgress,
@@ -1459,17 +1462,27 @@ export const parseOperation = (value: unknown): PublicOperation => {
   };
 };
 
+/**
+ * The client's own catalog copy of an operation failure. Only a rejected GitHub push carries a
+ * detail, and only an exact catalog sentence naming the refused file; it is rendered again here.
+ */
 function parseOperationFailure(value: unknown): PublicOperationFailure {
-  const input = exactRecord(value, ["code", "message", "retryable", "suggested_action"]);
+  const input = exactRecord(value, ["code", "message", "retryable", "suggested_action", "detail"]);
+  const detail = input["detail"];
+  const diagnostic =
+    detail === undefined || input["code"] !== "auto_deploy_plan_rejected"
+      ? null
+      : frameworkConversionDiagnosticFromDetail(detail);
   if (
     typeof input["code"] !== "string" ||
     !boundedString(input["message"], 1, 512) ||
     input["retryable"] !== false ||
-    !boundedString(input["suggested_action"], 1, 500)
+    !boundedString(input["suggested_action"], 1, 500) ||
+    (detail !== undefined && diagnostic === null)
   )
     throw new ResponseContractError();
-  const safe = publicOperationFailure(input["code"]);
-  if (safe.code !== input["code"]) throw new ResponseContractError();
+  const safe = publicOperationFailure(input["code"], diagnostic);
+  if (safe.code !== input["code"] || safe.detail !== detail) throw new ResponseContractError();
   return safe;
 }
 

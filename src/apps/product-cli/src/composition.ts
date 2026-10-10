@@ -1081,7 +1081,7 @@ const runOfflineInit = async (
       dryRun: command.dryRun,
     });
     // A write that is blocked exits 9 through RepositoryInitBlockedError; a dry run reports the
-    // same blockers, so it must not read as a clean analysis either.
+    // same blockers, so it must not read as a clean analysis either. Pending checks never block.
     const blocked = result.blockers.length > 0;
     io.writeStdout(
       `${JSON.stringify({
@@ -1099,6 +1099,7 @@ const runOfflineInit = async (
         inventory: result.inventory,
         compatibility: result.compatibility,
         blockers: result.blockers,
+        pending: result.pending,
         requirements: result.requirements,
         companion: result.companion,
         // The functions runtime reports its own bindings and packages; dropping it left a

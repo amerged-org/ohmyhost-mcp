@@ -350,10 +350,10 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "Read detail for the file, reason and required change. Run ohmyhost init --dry-run --json at that commit, apply its blockers and the matching ohmyho.st framework Skill, then save or push the corrected version. Plan its commit; repeating the unchanged source cannot fix an admission error.",
+      "Read detail: a catalog sentence names the file, the rule and the required change. Apply it, save or push the corrected version and plan its commit. If detail names no file, run 'ohmyhost init --dry-run --json' at that commit and apply its blockers and the matching ohmyho.st framework Skill; init lists the install, build and server-only checks it cannot run locally under pending. Repeating the unchanged source cannot fix an admission error.",
     title: "Framework conversion required",
     restAction:
-      "Read detail for the file, reason and required change. Run ohmyhost init --dry-run --json at that commit, apply its blockers and the matching ohmyho.st framework Skill, then save or push the corrected version. Plan its commit; repeating the unchanged source cannot fix an admission error.",
+      "Read detail: a catalog sentence names the file, the rule and the required change. Apply it, save or push the corrected version and plan its commit. If detail names no file, run 'ohmyhost init --dry-run --json' at that commit and apply its blockers and the matching ohmyho.st framework Skill; init lists the install, build and server-only checks it cannot run locally under pending. Repeating the unchanged source cannot fix an admission error.",
   },
   repository_configuration_missing: {
     status: 409,

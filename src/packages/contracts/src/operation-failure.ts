@@ -1,3 +1,5 @@
+import { frameworkConversionDetail } from "./framework-admission.js";
+
 const failures = {
   authorization_changed: [
     "Authorization changed before this operation could finish.",
@@ -114,7 +116,7 @@ const failures = {
   ],
   auto_deploy_plan_rejected: [
     "The GitHub push could not be planned for deployment.",
-    "Read project status and the operation's error or deployment diagnostics. Correct the source or configuration named there, push the new commit and plan it before deploying. Replaying this failed operation cannot start a build.",
+    "Read error.detail: it names the file, the rule and the required change. Make that change, commit and push it; the next push is planned again. Without error.detail, plan the pushed commit explicitly with 'ohmyhost plan --project ULID --commit SHA --json' or MCP deployment_plan to read the reason. Replaying this failed operation cannot start a build.",
   ],
   promotion_source_stale: [
     "The Dev deployment changed before promotion could start.",
@@ -131,6 +133,8 @@ export interface PublicOperationFailure {
   readonly message: string;
   readonly retryable: false;
   readonly suggested_action: string;
+  /** The catalog sentence naming the refused file and its fix, only for an auto-deploy rejection. */
+  readonly detail?: string;
 }
 
 export interface OperationReconciliationObservation {
@@ -167,12 +171,26 @@ export function publicOperationReconciliation(
   });
 }
 
-/** Render only reviewed text; never return the internal/provider error message. */
-export function publicOperationFailure(internalCode: string): PublicOperationFailure {
+/**
+ * Render only reviewed text; never return the internal/provider error message. A stored framework
+ * conversion diagnostic of an auto-deploy rejection is re-rendered from the catalog as `detail`.
+ */
+export function publicOperationFailure(
+  internalCode: string,
+  diagnostic?: unknown,
+): PublicOperationFailure {
   const normalized = internalCode.toLowerCase();
   const code = Object.hasOwn(failures, normalized)
     ? (normalized as keyof typeof failures)
     : "operation_failed";
   const [message, suggested_action] = failures[code];
-  return Object.freeze({ code, message, retryable: false, suggested_action });
+  const detail =
+    code === "auto_deploy_plan_rejected" ? frameworkConversionDetail(diagnostic) : null;
+  return Object.freeze({
+    code,
+    message,
+    retryable: false,
+    suggested_action,
+    ...(detail === null ? {} : { detail }),
+  });
 }

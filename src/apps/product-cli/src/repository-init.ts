@@ -7,21 +7,38 @@ import {
   type ApplicationRoot,
 } from "@ohmyhost/contracts/application-root";
 import { parseOhmyhostConfigYaml, type OhmyhostConfig } from "@ohmyhost/contracts";
+import { isAdmittedFrameworkBuildScript } from "@ohmyhost/contracts/framework-build-script";
 import {
-  isAdmittedFrameworkBuildScript,
-  PINNED_BUN_VERSION,
-} from "@ohmyhost/contracts/framework-build-script";
-import {
-  classifyFrameworkVersion,
   FrameworkAdmissionError,
-  managedCustomerAuthAdmissionIssue,
+  frameworkConversionDetail,
   resolveFrameworkConfig,
   resolvePackageManager,
-  type AdmittedFramework,
+  rootFrameworkConversionDiagnostic,
+  type FrameworkConversionDiagnosticCode,
   type FrameworkVersionAdmission,
-  type FrameworkVersionClassification,
+  type FrameworkVersionPackage,
+  type FrameworkVersionStatus,
   type PackageManagerDescriptor,
 } from "@ohmyhost/contracts/framework-admission";
+import {
+  databaseContractCodes,
+  declaredDependencyNames,
+  isDatabaseContractModule,
+  MANAGED_BETTER_AUTH_VERSION,
+  packageManagerDeclaration,
+  parsePackageManifest,
+  repositorySourceFindings,
+  sourceWithoutComments,
+  tanStackViteConfigRuntime,
+  VITE_COMPANION_ENTRY_PATH,
+  viteCompanionRequired,
+  WORKER_MODULE_PATH,
+  workerModuleFindings,
+  type DatabaseContractCode,
+  type FrameworkSourceLockfile,
+  type PackageManifest,
+  type TanStackRuntime,
+} from "@ohmyhost/contracts/framework-source-rules";
 import {
   classifyFrameworkFamily,
   type FrameworkFamilyClassification,
@@ -36,38 +53,40 @@ import cliPackage from "../package.json" with { type: "json" };
 
 const MAXIMUM_PACKAGE_BYTES = 1024 * 1024;
 const MAXIMUM_CONFIGURATION_BYTES = 64 * 1024;
+// The largest source file ohmyho.st inspects; a larger lockfile resolves nothing.
+const MAXIMUM_INSPECTED_FILE_BYTES = 5 * 1024 * 1024;
 const MAXIMUM_REPOSITORY_FILES = 20_000;
-const SUPPORTED_BETTER_AUTH_VERSION = "1.7.1";
 const PROJECT_PATTERN = /^[a-z](?:[a-z0-9-]*[a-z0-9])?$/u;
 const IGNORED_DIRECTORIES = new Set([
   ".git",
   ".next",
+  ".open-next",
   ".supabase",
   ".turbo",
   ".vercel",
+  ".wrangler",
   "coverage",
   "dist",
   "node_modules",
 ]);
+const UTF8 = new TextDecoder("utf-8", { fatal: true });
 
 export type RepositoryFramework = Exclude<FrameworkFamilyClassification, "ambiguous"> | "functions";
-const WORKER_MODULE_PATH = "src/ohmyhost/worker.ts";
 const MAXIMUM_SOURCE_BYTES = 2 * 1024 * 1024;
 const SOURCE_MODULE_PATTERN = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
 const STORAGE_CLIENT_CALL_PATTERN = /\bcreatePrivateStorageClient\s*\(/u;
-// Both database mistakes of 2026-09-18 are visible in the source before anything is built: one read
-// a retired database binding, the other opened a socket driver. Neither can work in a customer Worker, so
-// naming them here costs a customer minutes instead of a deployment that fails its health check.
-const DATABASE_PRIVATE_BINDING_PATTERN =
-  /\bHYPERDRIVE\b|\bconnectionString\b|\bDATABASE_URL\b|postgres(?:ql)?:\/\//u;
-const DATABASE_SOCKET_DRIVER_PATTERN =
-  /\bfrom\s*["'](?:pg|postgres|mysql2|pg-native)["']|\brequire\(\s*["'](?:pg|postgres|pg-native)["']/u;
-// A comment and a type-only import name the client without ever constructing it, and the bare
-// identifier of either reads like client code; drop them before looking for the call itself.
-const INERT_SOURCE_PATTERN = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|\bimport\s+type\b[^;]*;/gu;
+// The catalog names a module only by a path of its grammar; a file name with a space, for example,
+// is not one, so its blocker carries the path beside a sentence that does not quote it.
+const UNNAMED_MODULE_MESSAGES: Readonly<Record<DatabaseContractCode, string>> = Object.freeze({
+  database_binding_private:
+    'The module at path reads a database connection string (DATABASE_URL, HYPERDRIVE, connectionString or a postgres:// URL); none reaches a customer Worker. Call the database with createPrivateDatabaseClient from "@ohmyhost/customer-runtime/database". Commit and push the change, then plan the new commit.',
+  database_driver_unsupported:
+    'The module at path imports a database socket driver (pg, postgres, pg-native or mysql2); customer Workers cannot open sockets. Call the database with createPrivateDatabaseClient from "@ohmyhost/customer-runtime/database". Commit and push the change, then plan the new commit.',
+});
 
+// Only a call constructs the client; a comment or a type-only import never does.
 function callsStorageClient(source: string): boolean {
-  return STORAGE_CLIENT_CALL_PATTERN.test(source.replaceAll(INERT_SOURCE_PATTERN, " "));
+  return STORAGE_CLIENT_CALL_PATTERN.test(sourceWithoutComments(source));
 }
 
 // Storage is reached through a private Service Binding plus the three values and the key that
@@ -82,43 +101,58 @@ const STORAGE_RUNTIME_BINDINGS = Object.freeze([
 // The runtime release is published unchanged as `@amerged/ohmyhost-runtime`; this pinned alias keeps
 // its import name and, unlike the website archive each release removes, stays installable.
 const CUSTOMER_RUNTIME_SOURCE = `npm:@amerged/ohmyhost-runtime@${cliPackage.version}`;
-const SCHEDULED_HANDLER_PATTERN = /\bscheduled\s*(?:\(|:|,|\})/u;
-// The platform imports the module's default export; handlers that are only named exports are
-// never invoked, so init blocks them before a build or a runtime rejection would.
-const DEFAULT_EXPORT_PATTERN = /\bexport\s+default\b/u;
 
-function defaultExportBlocker(modulePath: string): RepositoryInitBlocker {
-  return {
-    code: "worker_module_default_export_required",
-    message: `${modulePath} has no default export. Export its handlers as the default export (export default { fetch, scheduled }); named exports are never invoked.`,
-  };
-}
-type TanStackRuntimeAnalysis = "ambiguous" | "edge" | "static" | null;
+/** A catalog code, which planning answers with the same sentence, or a check only init runs. */
+export type RepositoryInitBlockerCode =
+  | FrameworkConversionDiagnosticCode
+  | "migration_filename_noncanonical"
+  | "migration_sql_not_admitted"
+  | "storage_client_missing";
 
 export interface RepositoryInitBlocker {
-  readonly code:
-    | "build_command_unsupported"
-    | "database_binding_private"
-    | "database_driver_unsupported"
-    | "build_script_missing"
-    | "better_auth_version_unsupported"
-    | "managed_auth_database_required"
-    | "framework_ambiguous"
-    | "framework_unsupported"
-    | "framework_version_unsupported"
-    | "migration_filename_noncanonical"
-    | "migration_sql_not_admitted"
-    | "next_adapter_unconfigured"
-    | "package_manager_ambiguous"
-    | "package_manager_unpinned"
-    | "scheduled_functions_runtime_unsupported"
-    | "scheduled_handler_missing"
-    | "storage_client_missing"
-    | "worker_module_default_export_required"
-    | "worker_module_missing"
-    | "workers_runtime_incompatible";
+  readonly code: RepositoryInitBlockerCode;
+  /** The file to change, relative to the repository root; null when no single file is at fault. */
+  readonly path: string | null;
   readonly message: string;
 }
+
+/** One governed framework package, judged by its lockfile resolution or else its declaration. */
+export interface RepositoryInitFrameworkVersion {
+  readonly package: FrameworkVersionPackage;
+  readonly declared: string;
+  /** The version package-lock.json or pnpm-lock.yaml resolves; null when none resolves it. */
+  readonly resolved: string | null;
+  /** A pending range is admitted; the build checks the version its frozen install installs. */
+  readonly status: FrameworkVersionStatus;
+  /** The lowest admitted release of the judged version's line. */
+  readonly minimum: string;
+}
+
+export type RepositoryInitPendingCode =
+  | "framework_build"
+  | "frozen_install"
+  | "installed_version"
+  | "project_state"
+  | "reachable_runtime_sources";
+
+/** A check only ohmyho.st runs. It never blocks init and never changes its exit code. */
+export interface RepositoryInitPending {
+  readonly code: RepositoryInitPendingCode;
+  readonly message: string;
+}
+
+const PENDING_CHECKS: Readonly<Record<RepositoryInitPendingCode, string>> = Object.freeze({
+  installed_version:
+    "compatibility.frameworks lists a version range that no lockfile ohmyho.st reads (package-lock.json v2/v3 or pnpm-lock.yaml v6/v9) resolves. Planning admits it; after the frozen install, the build checks the installed version against the same security minimum.",
+  frozen_install:
+    "The build installs dependencies from the committed lockfile with the frozen install of the packageManager in package.json, without lifecycle scripts; init installs nothing.",
+  framework_build:
+    "The build itself (scripts.build with the ohmyho.st adapter build, or the Worker bundle of the functions runtime) runs only on ohmyho.st; a clean init does not prove that it succeeds.",
+  reachable_runtime_sources:
+    "Planning walks the runtime sources the build reaches for Workers-incompatible imports, database socket drivers and syntax errors; init does not walk them.",
+  project_state:
+    "Planning also checks the project itself, such as its region against storage.jurisdiction, shared data, the mail sender domain and credits; init runs offline without it.",
+});
 
 export interface RepositoryInitInventory {
   readonly framework: RepositoryFramework;
@@ -126,6 +160,9 @@ export interface RepositoryInitInventory {
     name: "bun" | "npm" | "pnpm" | "unknown" | "yarn";
     version: string | null;
     lockfile: string | null;
+    /** The commands ohmyho.st runs and build.install and build.command name; null when refused. */
+    installCommand: string | null;
+    buildCommand: string | null;
   }>;
   readonly apiRouteCount: number;
   readonly database: Readonly<{
@@ -145,15 +182,15 @@ export interface RepositoryInitInventory {
 }
 
 export interface RepositoryInitRuntimePackages {
-  readonly betterAuth?: "1.7.1";
+  readonly betterAuth?: typeof MANAGED_BETTER_AUTH_VERSION;
   /** Exact install source: an npm alias pinned to the published runtime of this client version. */
   readonly customerRuntime?: string;
 }
 
 export interface RepositoryInitViteCompanion {
   readonly schemaVersion: "ohmyhost.vite-api-companion/v1";
-  readonly sourceEntryPoint: "src/ohmyhost/companion.ts";
-  readonly requiredFiles: readonly ["src/ohmyhost/companion.ts"];
+  readonly sourceEntryPoint: typeof VITE_COMPANION_ENTRY_PATH;
+  readonly requiredFiles: readonly [typeof VITE_COMPANION_ENTRY_PATH];
   readonly missingFiles: readonly string[];
   readonly packages: RepositoryInitRuntimePackages;
   readonly bindings: readonly string[];
@@ -173,20 +210,14 @@ export interface RepositoryInitResult {
   readonly applicationRoot: ApplicationRoot;
   readonly applicationRootSource: "explicit" | "nested" | "repository";
   readonly inventory: RepositoryInitInventory;
-  readonly compatibility: Readonly<{
-    classification: FrameworkVersionClassification;
-    frameworks: readonly Readonly<{
-      framework: AdmittedFramework;
-      version: string;
-      classification: FrameworkVersionAdmission["classification"];
-      reason: FrameworkVersionAdmission["reason"];
-    }>[];
-  }>;
+  readonly compatibility: Readonly<{ frameworks: readonly RepositoryInitFrameworkVersion[] }>;
+  /** Ordered as planning judges the source, so the first blocker is the refusal planning answers. */
   readonly blockers: readonly RepositoryInitBlocker[];
+  readonly pending: readonly RepositoryInitPending[];
   readonly requirements: readonly string[];
   readonly companion: RepositoryInitViteCompanion | null;
   readonly worker: Readonly<{
-    sourceEntryPoint: "src/ohmyhost/worker.ts";
+    sourceEntryPoint: typeof WORKER_MODULE_PATH;
     present: boolean;
     bindings: readonly string[];
     packages: RepositoryInitRuntimePackages;
@@ -244,51 +275,27 @@ export async function initializeRepository(
   const applicationDirectory = resolve(root, selection.applicationRoot);
   const applicationFiles = applicationRelativeFiles(files, selection.applicationRoot);
   const packageJson = await readPackageJson(applicationDirectory);
-  const dependencies = dependencyNames(packageJson);
-  const existingConfigurationYaml = await readExistingConfiguration(
-    root,
-    files,
-    selection.applicationRoot,
-  );
-  const existingConfiguration =
-    existingConfigurationYaml === null ? null : parseOhmyhostConfigYaml(existingConfigurationYaml);
+  const manifest = packageJson.manifest;
+  const dependencies = declaredDependencyNames(manifest);
+  const existing = await readExistingConfiguration(root, files, selection.applicationRoot);
+  const existingConfiguration = existing?.configuration ?? null;
   const framework = detectRepositoryFramework(
     dependencies,
     applicationFiles,
     existingConfiguration,
   );
-  const packageManagerAdmission = packageManagerAdmissionFor(packageJson, applicationFiles);
+  const packageManagerAdmission = packageManagerAdmissionFor(manifest, applicationFiles);
   const packageManager = packageManagerInventory(
     packageManagerAdmission,
-    packageJson,
+    manifest,
     applicationFiles,
   );
-  const frameworkConfigs = frameworkConfigurations(applicationFiles);
-  const compatibility = frameworkCompatibility(packageJson, framework);
-  const nextStandaloneOutput = await detectNextStandaloneOutput(
-    applicationDirectory,
-    framework,
-    frameworkConfigs.next,
-  );
-  const tanStackRuntime = await detectTanStackRuntime(
+  const frameworkConfig = await readFrameworkConfig(
     applicationDirectory,
     applicationFiles,
     framework,
-    packageJson,
-    frameworkConfigs.vite,
   );
-  const project = projectName(input.project, packageJson);
-  const repositoryAdmissionBlockers = repositoryBlockers(
-    packageJson,
-    framework,
-    nextStandaloneOutput,
-    tanStackRuntime,
-    applicationFiles,
-    packageManagerAdmission,
-    frameworkConfigs,
-    compatibility,
-    existingConfiguration,
-  );
+  const project = projectName(input.project, manifest);
   const supabaseMigrationCount = applicationFiles.filter((path) =>
     /^supabase\/migrations\/[^/]+\.sql$/u.test(path),
   ).length;
@@ -359,13 +366,13 @@ export async function initializeRepository(
   // Mail stays an explicit choice: Better Auth or a detected mail package never enables it.
   const targetMail = existingConfiguration?.mail?.enabled === true;
   const targetStorage = r2 || supabaseStorage;
-  const configuredCompanionRequired =
-    existingConfiguration !== null &&
-    (existingConfiguration.database?.enabled === true ||
-      existingConfiguration.auth?.provider === "better-auth" ||
-      existingConfiguration.mail?.enabled === true ||
-      existingConfiguration.storage !== undefined ||
-      (existingConfiguration.functions?.crons.length ?? 0) > 0);
+  // TanStack Start binds storage only on edge, as a Vite app does through its companion.
+  const tanStackRuntime =
+    framework !== "tanstack-start"
+      ? null
+      : targetStorage
+        ? "edge"
+        : proposedTanStackRuntime(frameworkConfig, dependencies);
   const companionRequired =
     framework === "vite" &&
     (existingConfiguration === null
@@ -374,8 +381,8 @@ export async function initializeRepository(
         targetMail ||
         targetStorage ||
         edgeFunctionNames.size > 0 ||
-        applicationFiles.includes("src/ohmyhost/companion.ts")
-      : configuredCompanionRequired);
+        applicationFiles.includes(VITE_COMPANION_ENTRY_PATH)
+      : viteCompanionRequired(existingConfiguration));
   const generatedConfigurationYaml = renderConfiguration({
     project,
     framework,
@@ -392,7 +399,7 @@ export async function initializeRepository(
     tanStackRuntime,
     applicationRoot: selection.applicationRoot,
   });
-  const configurationYaml = existingConfigurationYaml ?? generatedConfigurationYaml;
+  const configurationYaml = existing?.yaml ?? generatedConfigurationYaml;
   const capabilities: RuntimeCapabilities = Object.freeze({
     database: selectedDatabaseProvider !== "none",
     auth: targetBetterAuth,
@@ -404,36 +411,27 @@ export async function initializeRepository(
     : null;
   const companionSourcePresent =
     companion !== null && applicationFiles.includes(companion.sourceEntryPoint);
-  const migrationSqlAdmissionBlockers = await migrationSqlBlockers(
-    applicationDirectory,
-    applicationFiles,
-    existingConfiguration?.database?.migrations,
-    selectedDatabaseProvider,
-  );
-  const blockers = [
-    ...repositoryAdmissionBlockers,
-    ...(await workerModuleBlockers(framework, applicationDirectory, applicationFiles)),
-    ...(await cronBlockers(
-      framework,
-      existingConfiguration,
-      applicationDirectory,
-      applicationFiles,
-    )),
-    ...(selectedDatabaseProvider === "none"
-      ? []
-      : migrationFilenameBlockers(
-          applicationFiles,
-          existingConfiguration?.database?.migrations,
-          selectedDatabaseProvider,
-        )),
-    ...migrationSqlAdmissionBlockers,
-    ...(await storageClientBlockers(existingConfiguration, applicationDirectory, applicationFiles)),
-    ...(await databaseContractBlockers(
-      existingConfiguration,
-      applicationDirectory,
-      applicationFiles,
-    )),
-  ].sort((left, right) => left.code.localeCompare(right.code));
+  // Planning stops at an invalid ohmyhost.yaml, and so does init: nothing else can be judged.
+  const { blockers, versions } =
+    existing !== null && existing.blocker !== null
+      ? { blockers: [existing.blocker], versions: [] }
+      : await judgeSource({
+          framework,
+          config: existingConfiguration,
+          applicationDirectory,
+          files: applicationFiles,
+          applicationRoot: selection.applicationRoot,
+          provider: selectedDatabaseProvider,
+          texts: sourceTexts(files, selection.applicationRoot, configurationYaml, [
+            ["package.json", packageJson.text],
+            ...lockfileTexts(
+              await readResolvingLockfile(applicationDirectory, packageManagerAdmission),
+            ),
+            ...(frameworkConfig === null
+              ? []
+              : [[frameworkConfig.path, frameworkConfig.text] as const]),
+          ]),
+        });
   const requirements = requirementsFor(
     inventory,
     companion !== null && !companionSourcePresent,
@@ -454,8 +452,21 @@ export async function initializeRepository(
     applicationRoot: selection.applicationRoot,
     applicationRootSource: selection.source,
     inventory,
-    compatibility,
+    compatibility: Object.freeze({
+      frameworks: Object.freeze(
+        versions.map((version) =>
+          Object.freeze({
+            package: version.package,
+            declared: version.declared,
+            resolved: version.resolved,
+            status: version.status,
+            minimum: version.minimum,
+          }),
+        ),
+      ),
+    }),
     blockers: Object.freeze(blockers),
+    pending: pendingChecks(versions),
     requirements: Object.freeze(requirements),
     companion,
     worker:
@@ -471,6 +482,47 @@ export async function initializeRepository(
   });
 }
 
+/** What the local source checks read: the application, its files and the parsed configuration. */
+interface SourceCheckContext {
+  readonly framework: RepositoryFramework;
+  readonly config: OhmyhostConfig | null;
+  readonly applicationDirectory: string;
+  /** Every application file, relative to the application root. */
+  readonly files: readonly string[];
+  readonly applicationRoot: ApplicationRoot;
+}
+
+/**
+ * Every blocker of a source with a valid or proposed configuration, in the order planning judges:
+ * migration filenames, the shared source rules, the Worker module handlers and the database
+ * contract; init's own storage client and migration SQL checks come last.
+ */
+async function judgeSource(
+  context: SourceCheckContext &
+    Readonly<{
+      provider: RepositoryInitInventory["database"]["provider"];
+      texts: ReadonlyMap<string, string | null>;
+    }>,
+): Promise<
+  Readonly<{
+    blockers: readonly RepositoryInitBlocker[];
+    versions: readonly FrameworkVersionAdmission[];
+  }>
+> {
+  const source = repositorySourceFindings(context.texts);
+  return {
+    blockers: [
+      ...migrationFilenameBlockers(context, context.provider),
+      ...source.findings.map((finding) => requiredCatalogBlocker(finding, context.applicationRoot)),
+      ...(await workerModuleBlockers(context)),
+      ...(await databaseContractBlockers(context, context.provider)),
+      ...(await storageClientBlockers(context)),
+      ...(await migrationSqlBlockers(context, context.provider)),
+    ],
+    versions: source.versions,
+  };
+}
+
 /** The functions runtime is selected by configuration, or by a Worker module without a framework. */
 function detectRepositoryFramework(
   dependencies: ReadonlySet<string>,
@@ -483,45 +535,75 @@ function detectRepositoryFramework(
   return detected;
 }
 
-/** Declared crons need an edge or functions runtime and a scheduled handler in the Worker module. */
-async function cronBlockers(
-  framework: RepositoryFramework,
-  config: OhmyhostConfig | null,
-  applicationDirectory: string,
+/**
+ * The texts the shared source rules read, keyed by repository path: the configuration init judges
+ * and the given application files. Every other file counts by its path alone.
+ */
+function sourceTexts(
   files: readonly string[],
-): Promise<RepositoryInitBlocker[]> {
-  if ((config?.functions?.crons.length ?? 0) === 0) return [];
+  applicationRoot: ApplicationRoot,
+  configurationYaml: string,
+  applicationTexts: readonly (readonly [string, string | null])[],
+): ReadonlyMap<string, string | null> {
+  const texts = new Map<string, string | null>(files.map((path) => [path, null]));
+  texts.set("ohmyhost.yaml", configurationYaml);
+  for (const [path, text] of applicationTexts)
+    texts.set(repositoryPath(applicationRoot, path), text);
+  return texts;
+}
+
+function lockfileTexts(
+  lockfile: FrameworkSourceLockfile | null,
+): readonly (readonly [string, string])[] {
+  return lockfile === null ? [] : [[lockfile.name, lockfile.text]];
+}
+
+/** The path of an application file relative to the repository root. */
+function repositoryPath(applicationRoot: ApplicationRoot, path: string): string {
+  return applicationRoot === "." ? path : `${applicationRoot}/${path}`;
+}
+
+/** A catalog diagnostic as a blocker: its repository-relative file and the sentence planning uses. */
+function catalogBlocker(
+  diagnostic: unknown,
+  applicationRoot: ApplicationRoot,
+): RepositoryInitBlocker | null {
+  const rooted = rootFrameworkConversionDiagnostic(diagnostic, applicationRoot);
+  const message = frameworkConversionDetail(rooted);
+  return rooted === null || message === null
+    ? null
+    : Object.freeze({ code: rooted.code, path: rooted.path, message });
+}
+
+/** The blocker of a diagnostic whose file always has a catalog path, such as a shared finding. */
+function requiredCatalogBlocker(
+  diagnostic: unknown,
+  applicationRoot: ApplicationRoot,
+): RepositoryInitBlocker {
+  const blocker = catalogBlocker(diagnostic, applicationRoot);
+  if (blocker === null) throw new TypeError("Repository init diagnostic is invalid");
+  return blocker;
+}
+
+/**
+ * The Worker module handlers planning requires, judged by the same shared rule: the functions
+ * runtime serves requests through its module, and declared crons need a scheduled handler in the
+ * module that runs them. The shared source rules name a missing module or an unsupported runtime.
+ */
+async function workerModuleBlockers(context: SourceCheckContext): Promise<RepositoryInitBlocker[]> {
+  const { config, framework, files } = context;
   const mode = config?.runtime.mode;
-  const runtimeSupported =
-    (mode === "edge" &&
+  const scheduled =
+    (config?.functions?.crons.length ?? 0) > 0 &&
+    ((mode === "edge" &&
       (framework === "vite" || framework === "nextjs" || framework === "tanstack-start")) ||
-    (mode === "functions" && framework === "functions");
-  if (!runtimeSupported) {
-    return [
-      {
-        code: "scheduled_functions_runtime_unsupported",
-        message:
-          "functions.crons needs runtime.mode edge (Next.js, TanStack Start, or Vite with src/ohmyhost/companion.ts) or functions (src/ohmyhost/worker.ts) in ohmyhost.yaml. Change runtime.mode, or remove functions.crons.",
-      },
-    ];
-  }
-  const modulePath = framework === "vite" ? "src/ohmyhost/companion.ts" : WORKER_MODULE_PATH;
-  const source = files.includes(modulePath)
-    ? await readFile(resolve(applicationDirectory, modulePath), "utf8")
-    : null;
-  // The functions runtime reports a missing default export through workerModuleBlockers.
-  if (framework !== "functions" && source !== null && !DEFAULT_EXPORT_PATTERN.test(source)) {
-    return [defaultExportBlocker(modulePath)];
-  }
-  if (source === null || !SCHEDULED_HANDLER_PATTERN.test(source)) {
-    return [
-      {
-        code: "scheduled_handler_missing",
-        message: `Keep a scheduled handler in the default export of ${modulePath} to run the declared crons.`,
-      },
-    ];
-  }
-  return [];
+      (mode === "functions" && framework === "functions"));
+  const path = framework === "vite" ? VITE_COMPANION_ENTRY_PATH : WORKER_MODULE_PATH;
+  if ((framework !== "functions" && !scheduled) || !files.includes(path)) return [];
+  const source = await readFile(resolve(context.applicationDirectory, path), "utf8");
+  return workerModuleFindings({ path, source, fetch: framework === "functions", scheduled }).map(
+    (finding) => requiredCatalogBlocker(finding, context.applicationRoot),
+  );
 }
 
 /**
@@ -529,14 +611,12 @@ async function cronBlockers(
  * source never constructs that client deploys green and fails at its first upload, so name it here.
  */
 async function storageClientBlockers(
-  config: OhmyhostConfig | null,
-  applicationDirectory: string,
-  files: readonly string[],
+  context: SourceCheckContext,
 ): Promise<RepositoryInitBlocker[]> {
-  if (config?.storage === undefined) return [];
-  for (const path of files) {
+  if (context.config?.storage === undefined) return [];
+  for (const path of context.files) {
     if (!SOURCE_MODULE_PATTERN.test(path)) continue;
-    const absolute = resolve(applicationDirectory, path);
+    const absolute = resolve(context.applicationDirectory, path);
     const information = await stat(absolute);
     if (!information.isFile() || information.size > MAXIMUM_SOURCE_BYTES) continue;
     if (callsStorageClient(await readFile(absolute, "utf8"))) return [];
@@ -544,6 +624,7 @@ async function storageClientBlockers(
   return [
     {
       code: "storage_client_missing",
+      path: null,
       message:
         'ohmyhost.yaml declares storage, but no application source calls createPrivateStorageClient. Import it from "@ohmyhost/customer-runtime/storage" and build it in server code from OHMYHOST_STORAGE_GATEWAY, OHMYHOST_STORAGE_GATEWAY_URL, OHMYHOST_PROJECT_ID, OHMYHOST_ENVIRONMENT_ID and OHMYHOST_STORAGE_KEY, then reserve an upload, PUT the bytes to the returned signed URL, complete it, and serve reads with createSignedRead. There is no FILES bucket binding.',
     },
@@ -553,57 +634,41 @@ async function storageClientBlockers(
 /**
  * A managed database is reached only through `createPrivateDatabaseClient`. A customer Worker gets
  * no connection string and cannot open a socket, so source that reaches for either builds green,
- * deploys, and fails its health check with nothing to explain it.
+ * deploys, and fails its health check with nothing to explain it. Once the judged configuration
+ * enables the database, init scans every module of the kinds planning judges, reachable or not.
  */
 async function databaseContractBlockers(
-  config: OhmyhostConfig | null,
-  applicationDirectory: string,
-  files: readonly string[],
+  context: SourceCheckContext,
+  provider: RepositoryInitInventory["database"]["provider"],
 ): Promise<RepositoryInitBlocker[]> {
-  if (config?.database === undefined) return [];
+  if (provider === "none") return [];
   const blockers: RepositoryInitBlocker[] = [];
-  for (const path of files) {
-    if (!SOURCE_MODULE_PATTERN.test(path)) continue;
-    const absolute = resolve(applicationDirectory, path);
+  for (const path of context.files) {
+    if (!isDatabaseContractModule(path)) continue;
+    const absolute = resolve(context.applicationDirectory, path);
     const information = await stat(absolute);
     if (!information.isFile() || information.size > MAXIMUM_SOURCE_BYTES) continue;
-    const source = (await readFile(absolute, "utf8")).replaceAll(INERT_SOURCE_PATTERN, " ");
-    if (DATABASE_PRIVATE_BINDING_PATTERN.test(source)) {
-      blockers.push({
-        code: "database_binding_private",
-        message: `${path} reaches for a managed database connection string. HYPERDRIVE is retired; DATABASE_URL and postgres:// URLs never reach a customer Worker. Call the database with createPrivateDatabaseClient from "@ohmyhost/customer-runtime/database".`,
-      });
-    }
-    if (DATABASE_SOCKET_DRIVER_PATTERN.test(source)) {
-      blockers.push({
-        code: "database_driver_unsupported",
-        message: `${path} imports a PostgreSQL socket driver. Outbound connect() is disabled for customer Workers, so the driver can never open a connection. Call the database with createPrivateDatabaseClient from "@ohmyhost/customer-runtime/database".`,
-      });
-    }
+    for (const code of databaseContractCodes(await readFile(absolute, "utf8")))
+      blockers.push(
+        catalogBlocker({ code, path }, context.applicationRoot) ??
+          Object.freeze({
+            code,
+            path: repositoryPath(context.applicationRoot, path),
+            message: UNNAMED_MODULE_MESSAGES[code],
+          }),
+      );
   }
   return blockers;
 }
 
-/** The functions runtime is the customer's module alone; it must export its handlers by default. */
-async function workerModuleBlockers(
-  framework: RepositoryFramework,
-  applicationDirectory: string,
-  files: readonly string[],
-): Promise<RepositoryInitBlocker[]> {
-  if (framework !== "functions" || !files.includes(WORKER_MODULE_PATH)) return [];
-  const source = await readFile(resolve(applicationDirectory, WORKER_MODULE_PATH), "utf8");
-  return DEFAULT_EXPORT_PATTERN.test(source) ? [] : [defaultExportBlocker(WORKER_MODULE_PATH)];
-}
-
 function migrationFilenameBlockers(
-  files: readonly string[],
-  configuredPath: string | undefined,
+  context: SourceCheckContext,
   provider: RepositoryInitInventory["database"]["provider"],
 ): RepositoryInitBlocker[] {
   if (provider !== "postgresql") return [];
-  const root = configuredPath ?? "postgres/migrations";
+  const root = context.config?.database?.migrations ?? "postgres/migrations";
   const prefix = `${root}/`;
-  const invalid = files
+  const invalid = context.files
     .filter((path) => path.startsWith(prefix))
     .map((path) => path.slice(prefix.length))
     .find(
@@ -614,6 +679,7 @@ function migrationFilenameBlockers(
     : [
         {
           code: "migration_filename_noncanonical",
+          path: repositoryPath(context.applicationRoot, `${prefix}${invalid}`),
           message: `Migration file '${invalid}' in ${root} is not named YYYYMMDDHHMMSS_name.sql (14 digits, an underscore, then lowercase letters, digits, _ or -). Every file in that directory must match, README and .gitkeep included: rename or move it, keeping the run order.`,
         },
       ];
@@ -632,15 +698,13 @@ const MIGRATION_REJECTION: Readonly<Record<DatabaseMigrationAdmissionReason, str
 };
 
 async function migrationSqlBlockers(
-  applicationDirectory: string,
-  files: readonly string[],
-  configuredPath: string | undefined,
+  context: SourceCheckContext,
   provider: RepositoryInitInventory["database"]["provider"],
 ): Promise<RepositoryInitBlocker[]> {
   if (provider !== "postgresql") return [];
-  const root = configuredPath ?? "postgres/migrations";
+  const root = context.config?.database?.migrations ?? "postgres/migrations";
   const prefix = `${root}/`;
-  const migrationPaths = files
+  const migrationPaths = context.files
     .filter((path) => path.startsWith(prefix) && path.endsWith(".sql"))
     .map((path) => path.slice(prefix.length));
   if (
@@ -654,7 +718,7 @@ async function migrationSqlBlockers(
     migrationPaths.map(async (path) =>
       Object.freeze({
         path,
-        body: new Uint8Array(await readFile(resolve(applicationDirectory, root, path))),
+        body: new Uint8Array(await readFile(resolve(context.applicationDirectory, root, path))),
       }),
     ),
   );
@@ -666,6 +730,7 @@ async function migrationSqlBlockers(
       if (!(error instanceof DatabaseMigrationAdmissionError)) throw error;
       blockers.push({
         code: "migration_sql_not_admitted",
+        path: repositoryPath(context.applicationRoot, `${prefix}${migration.path}`),
         message: `PostgreSQL migration '${migration.path}' is not admitted (${error.reason}): ${MIGRATION_REJECTION[error.reason]} Migrations are expand-only. Fix the file before its first deployment; never edit a migration a deployment already applied.`,
       });
     }
@@ -679,17 +744,37 @@ async function migrationSqlBlockers(
     return [
       {
         code: "migration_sql_not_admitted",
+        path: null,
         message: `The migration set is not admitted (${error.reason}): ${MIGRATION_REJECTION[error.reason]}`,
       },
     ];
   }
 }
 
+/** The pending checks of one analysis: the fixed list, led by the unresolved versions if any. */
+function pendingChecks(
+  versions: readonly FrameworkVersionAdmission[],
+): readonly RepositoryInitPending[] {
+  const codes: readonly RepositoryInitPendingCode[] = [
+    ...(versions.some(({ status }) => status === "pending") ? ["installed_version" as const] : []),
+    "frozen_install",
+    "framework_build",
+    "reachable_runtime_sources",
+    "project_state",
+  ];
+  return Object.freeze(codes.map((code) => Object.freeze({ code, message: PENDING_CHECKS[code] })));
+}
+
+type ExistingConfiguration = Readonly<
+  | { yaml: string; configuration: OhmyhostConfig; blocker: null }
+  | { yaml: string; configuration: null; blocker: RepositoryInitBlocker }
+>;
+
 async function readExistingConfiguration(
   repositoryRoot: string,
   repositoryFiles: readonly string[],
   applicationRoot: ApplicationRoot,
-) {
+): Promise<ExistingConfiguration | null> {
   if (!repositoryFiles.includes("ohmyhost.yaml")) return null;
   const configurationPath = resolve(repositoryRoot, "ohmyhost.yaml");
   const information = await stat(configurationPath);
@@ -699,16 +784,28 @@ async function readExistingConfiguration(
       "ohmyhost.yaml must be one regular file of at most 64 KiB",
     );
   }
-  const configuration = await readFile(configurationPath, "utf8");
+  const bytes = await readFile(configurationPath);
+  const text = utf8(bytes);
+  const yaml = text ?? new TextDecoder().decode(bytes);
   let parsed;
   try {
-    parsed = parseOhmyhostConfigYaml(configuration);
+    if (text === null) throw new TypeError("ohmyhost.yaml is not valid UTF-8");
+    parsed = parseOhmyhostConfigYaml(text);
   } catch (error) {
-    // The parser names the offending key; dropping it left the agent nothing to fix.
-    throw new RepositoryInitError(
-      "repository_configuration_invalid",
-      error instanceof TypeError ? error.message : "ohmyhost.yaml is invalid",
-    );
+    // Planning refuses a non-UTF-8 or schema-invalid ohmyhost.yaml and points here: the blocker
+    // keeps the reason, such as the offending field the parser names.
+    const reason = (
+      error instanceof TypeError ? error.message : "ohmyhost.yaml is invalid"
+    ).replace(/\.$/u, "");
+    return Object.freeze({
+      yaml,
+      configuration: null,
+      blocker: Object.freeze({
+        code: "repository_configuration_invalid",
+        path: "ohmyhost.yaml",
+        message: `${reason}. Fix that in ohmyhost.yaml and run init again; init never rewrites an existing ohmyhost.yaml, so do not delete it.`,
+      }),
+    });
   }
   if (parsed.applicationRoot !== applicationRoot) {
     throw new RepositoryInitError(
@@ -716,7 +813,7 @@ async function readExistingConfiguration(
       `ohmyhost.yaml sets applicationRoot to '${parsed.applicationRoot}', but init selected '${applicationRoot}'. Run 'ohmyhost init --root ${parsed.applicationRoot} --dry-run --json', or correct applicationRoot.`,
     );
   }
-  return configuration;
+  return Object.freeze({ yaml, configuration: parsed, blocker: null });
 }
 
 interface ApplicationRootSelection {
@@ -836,7 +933,7 @@ async function isApplicationCandidate(
   if (!files.includes("package.json")) return false;
   const packageJson = await tryReadPackageJson(applicationDirectory);
   if (packageJson === null) return false;
-  const framework = detectFramework(dependencyNames(packageJson));
+  const framework = detectFramework(declaredDependencyNames(packageJson.manifest));
   return framework !== "unknown" || files.includes(WORKER_MODULE_PATH);
 }
 
@@ -852,9 +949,9 @@ async function hasDirectApplicationShape(
   }
   const packageJson = await tryReadPackageJson(applicationDirectory);
   if (packageJson === null) return false;
-  const framework = detectFramework(dependencyNames(packageJson));
+  const framework = detectFramework(declaredDependencyNames(packageJson.manifest));
   if (framework === "unknown") return files.includes(WORKER_MODULE_PATH);
-  return hasDirectSafeBuildCommand(packageJson, framework);
+  return hasDirectSafeBuildCommand(packageJson.manifest, framework);
 }
 
 async function isRealDirectory(path: string): Promise<boolean> {
@@ -877,7 +974,7 @@ function applicationRelativeFiles(
     .map((path) => path.slice(prefix.length));
 }
 
-async function tryReadPackageJson(root: string): Promise<Record<string, unknown> | null> {
+async function tryReadPackageJson(root: string): Promise<PackageJson | null> {
   try {
     return await readPackageJson(root);
   } catch {
@@ -886,23 +983,15 @@ async function tryReadPackageJson(root: string): Promise<Record<string, unknown>
 }
 
 function hasDirectSafeBuildCommand(
-  packageJson: Record<string, unknown>,
+  manifest: PackageManifest,
   framework: RepositoryFramework,
 ): boolean {
-  const scripts = packageJson["scripts"];
+  const scripts = manifest["scripts"];
   if (!isRecord(scripts) || typeof scripts["build"] !== "string") return false;
   return (
     (framework === "nextjs" || framework === "vite" || framework === "tanstack-start") &&
     isAdmittedFrameworkBuildScript(framework, scripts["build"])
   );
-}
-
-/** The package.json build-script blocker, quoting at most 200 characters of the rejected script. */
-function buildScriptMessage(framework: RepositoryFramework, command: string): string {
-  const quoted = command.slice(0, 200);
-  if (framework === "nextjs")
-    return `package.json scripts.build must be exactly "next build" or "next build --webpack", not "${quoted}". Move other steps into their own scripts, then commit and push.`;
-  return `package.json scripts.build must be "vite build", optionally joined with && to exactly one "tsc", "tsc -b", "tsc --build" or "tsc --noEmit" stage before or after it, not "${quoted}". Move other steps into their own scripts, then commit and push.`;
 }
 
 async function assertRepositoryRoot(root: string): Promise<void> {
@@ -974,7 +1063,13 @@ async function collectRepositoryFiles(root: string): Promise<string[]> {
   return files.sort();
 }
 
-async function readPackageJson(root: string): Promise<Record<string, unknown>> {
+/** package.json as the shared rules read it: its UTF-8 text and the object it parses to. */
+interface PackageJson {
+  readonly text: string;
+  readonly manifest: PackageManifest;
+}
+
+async function readPackageJson(root: string): Promise<PackageJson> {
   const path = resolve(root, "package.json");
   let information;
   try {
@@ -985,25 +1080,97 @@ async function readPackageJson(root: string): Promise<Record<string, unknown>> {
   if (!information.isFile() || information.size > MAXIMUM_PACKAGE_BYTES) {
     throw new RepositoryInitError("package_manifest_invalid", "package.json is invalid");
   }
-  try {
-    const value = JSON.parse(await readFile(path, "utf8")) as unknown;
-    if (!isRecord(value)) throw new TypeError();
-    return value;
-  } catch {
+  const text = utf8(await readFile(path));
+  const manifest = text === null ? null : parsePackageManifest(text);
+  if (text === null || manifest === null) {
     throw new RepositoryInitError("package_manifest_invalid", "package.json is invalid");
+  }
+  return Object.freeze({ text, manifest });
+}
+
+function utf8(bytes: Uint8Array): string | null {
+  try {
+    return UTF8.decode(bytes);
+  } catch {
+    return null;
   }
 }
 
-function dependencyNames(packageJson: Record<string, unknown>): Set<string> {
-  const names = new Set<string>();
-  for (const field of ["dependencies", "devDependencies", "optionalDependencies"]) {
-    const value = packageJson[field];
-    if (!isRecord(value)) continue;
-    for (const [name, version] of Object.entries(value)) {
-      if (typeof version === "string" && version.length > 0) names.add(name);
-    }
+/** At most the inspection bound of a file's leading bytes, and whether they are the whole file. */
+async function readLeadingBytes(
+  path: string,
+): Promise<Readonly<{ bytes: Uint8Array; complete: boolean }>> {
+  const handle = await open(path, "r");
+  try {
+    const { size } = await handle.stat();
+    const bytes = new Uint8Array(Math.min(size, MAXIMUM_INSPECTED_FILE_BYTES));
+    const { bytesRead } = await handle.read(bytes, 0, bytes.byteLength, 0);
+    return Object.freeze({ bytes: bytes.subarray(0, bytesRead), complete: bytesRead === size });
+  } finally {
+    await handle.close();
   }
-  return names;
+}
+
+/**
+ * The lockfile whose resolution decides the framework versions: package-lock.json or
+ * pnpm-lock.yaml of the admitted package manager. Any other lockfile, a larger one or one that is
+ * not UTF-8 leaves every version to its declaration; lockfile content never blocks.
+ */
+async function readResolvingLockfile(
+  applicationDirectory: string,
+  admission: PackageManagerDescriptor | FrameworkAdmissionError,
+): Promise<FrameworkSourceLockfile | null> {
+  if (
+    admission instanceof FrameworkAdmissionError ||
+    (admission.lockfile !== "package-lock.json" && admission.lockfile !== "pnpm-lock.yaml")
+  )
+    return null;
+  const { bytes, complete } = await readLeadingBytes(
+    resolve(applicationDirectory, admission.lockfile),
+  );
+  const text = complete ? utf8(bytes) : null;
+  return text === null ? null : Object.freeze({ name: admission.lockfile, text });
+}
+
+/** The framework config the shared rules judge: its application-relative path and UTF-8 text. */
+interface FrameworkConfigText {
+  readonly path: string;
+  /** null when the bytes are not UTF-8, which the rules refuse as invalid source. */
+  readonly text: string | null;
+}
+
+async function readFrameworkConfig(
+  applicationDirectory: string,
+  files: readonly string[],
+  framework: RepositoryFramework,
+): Promise<FrameworkConfigText | null> {
+  if (framework !== "nextjs" && framework !== "vite" && framework !== "tanstack-start") return null;
+  let path: string | null;
+  try {
+    path = resolveFrameworkConfig(framework === "nextjs" ? "next.config" : "vite.config", files);
+  } catch (error) {
+    // The shared rules name the ambiguous variants; none of them is judged.
+    if (error instanceof FrameworkAdmissionError) return null;
+    throw error;
+  }
+  if (path === null) return null;
+  const { bytes, complete } = await readLeadingBytes(resolve(applicationDirectory, path));
+  // A config beyond the inspection bound is refused by its size alone, which its leading text has.
+  return Object.freeze({ path, text: complete ? utf8(bytes) : new TextDecoder().decode(bytes) });
+}
+
+/**
+ * The TanStack Start runtime init proposes: the one whose plugin contract the Vite config follows,
+ * otherwise edge when package.json declares the Cloudflare Vite plugin and static without it. The
+ * shared rules then name what the config still lacks for that runtime.
+ */
+function proposedTanStackRuntime(
+  config: FrameworkConfigText | null,
+  dependencies: ReadonlySet<string>,
+): TanStackRuntime {
+  const followed =
+    config === null || config.text === null ? null : tanStackViteConfigRuntime(config.text);
+  return followed ?? (dependencies.has("@cloudflare/vite-plugin") ? "edge" : "static");
 }
 
 function detectFramework(dependencies: ReadonlySet<string>): RepositoryFramework {
@@ -1012,17 +1179,11 @@ function detectFramework(dependencies: ReadonlySet<string>): RepositoryFramework
 }
 
 function packageManagerAdmissionFor(
-  packageJson: Record<string, unknown>,
+  manifest: PackageManifest,
   files: readonly string[],
 ): PackageManagerDescriptor | FrameworkAdmissionError {
   try {
-    return resolvePackageManager({
-      packageManager:
-        typeof packageJson["packageManager"] === "string"
-          ? packageJson["packageManager"]
-          : undefined,
-      files,
-    });
+    return resolvePackageManager({ packageManager: packageManagerDeclaration(manifest), files });
   } catch (error) {
     if (error instanceof FrameworkAdmissionError) return error;
     throw error;
@@ -1031,7 +1192,7 @@ function packageManagerAdmissionFor(
 
 function packageManagerInventory(
   admission: PackageManagerDescriptor | FrameworkAdmissionError,
-  packageJson: Record<string, unknown>,
+  manifest: PackageManifest,
   files: readonly string[],
 ): RepositoryInitInventory["packageManager"] {
   if (!(admission instanceof FrameworkAdmissionError)) {
@@ -1039,11 +1200,13 @@ function packageManagerInventory(
       name: admission.manager,
       version: admission.version,
       lockfile: admission.lockfile,
+      installCommand: admission.installCommand,
+      buildCommand: admission.buildCommand,
     };
   }
-  const declaration = packageJson["packageManager"];
+  const declaration = packageManagerDeclaration(manifest);
   const match =
-    typeof declaration === "string" ? /^(bun|npm|pnpm|yarn)@([^\s]+)$/u.exec(declaration) : null;
+    declaration === undefined ? null : /^(bun|npm|pnpm|yarn)@([^\s]+)$/u.exec(declaration);
   const lockfile = APPLICATION_LOCKFILES.find((candidate) => files.includes(candidate)) ?? null;
   const inferredName =
     lockfile === "package-lock.json"
@@ -1059,81 +1222,13 @@ function packageManagerInventory(
     name: match === null ? inferredName : (match[1] as "bun" | "npm" | "pnpm" | "yarn"),
     version: match?.[2] ?? null,
     lockfile,
+    installCommand: null,
+    buildCommand: null,
   };
 }
 
-interface FrameworkConfigurations {
-  readonly next: string | null;
-  readonly openNext: string | null;
-  readonly vite: string | null;
-  readonly ambiguous: readonly ("next" | "open-next" | "vite")[];
-}
-
-function frameworkConfigurations(files: readonly string[]): FrameworkConfigurations {
-  const ambiguous: ("next" | "open-next" | "vite")[] = [];
-  const resolve = (basename: "next.config" | "open-next.config" | "vite.config") => {
-    try {
-      return resolveFrameworkConfig(basename, files);
-    } catch (error) {
-      if (!(error instanceof FrameworkAdmissionError) || error.reason !== "ambiguous_config") {
-        throw error;
-      }
-      ambiguous.push(basename.slice(0, -".config".length) as "next" | "open-next" | "vite");
-      return null;
-    }
-  };
-  return Object.freeze({
-    next: resolve("next.config"),
-    openNext: resolve("open-next.config"),
-    vite: resolve("vite.config"),
-    ambiguous: Object.freeze(ambiguous),
-  });
-}
-
-/** The package.json dependency that carries each admitted framework's version. */
-const FRAMEWORK_PACKAGE: Readonly<Record<AdmittedFramework, string>> = {
-  nextjs: "next",
-  "tanstack-start": "@tanstack/react-start",
-  vite: "vite",
-};
-
-function frameworkCompatibility(
-  packageJson: Record<string, unknown>,
-  framework: RepositoryFramework,
-): RepositoryInitResult["compatibility"] {
-  const targets: readonly Readonly<{ framework: AdmittedFramework; packageName: string }>[] =
-    framework === "tanstack-start"
-      ? [
-          { framework: "tanstack-start", packageName: FRAMEWORK_PACKAGE["tanstack-start"] },
-          { framework: "vite", packageName: FRAMEWORK_PACKAGE.vite },
-        ]
-      : framework === "nextjs"
-        ? [{ framework: "nextjs", packageName: FRAMEWORK_PACKAGE.nextjs }]
-        : framework === "vite"
-          ? [{ framework: "vite", packageName: FRAMEWORK_PACKAGE.vite }]
-          : [];
-  const frameworks = targets.map(({ framework: targetFramework, packageName }) => {
-    const version = dependencyVersion(packageJson, packageName) ?? "";
-    return Object.freeze({
-      framework: targetFramework,
-      version,
-      ...classifyFrameworkVersion(targetFramework, version),
-    });
-  });
-  const classification: FrameworkVersionClassification = frameworks.some(
-    (entry) => entry.classification === "unsupported",
-  )
-    ? "unsupported"
-    : frameworks.some((entry) => entry.classification === "experimental")
-      ? "experimental"
-      : frameworks.length > 0 || framework === "functions"
-        ? "verified"
-        : "unsupported";
-  return Object.freeze({ classification, frameworks: Object.freeze(frameworks) });
-}
-
-function projectName(explicit: string | undefined, packageJson: Record<string, unknown>): string {
-  const packageName = packageJson["name"];
+function projectName(explicit: string | undefined, manifest: PackageManifest): string {
+  const packageName = manifest["name"];
   const inferred =
     typeof packageName === "string"
       ? (packageName.split("/").at(-1) ?? "")
@@ -1151,173 +1246,6 @@ function projectName(explicit: string | undefined, packageJson: Record<string, u
   return value;
 }
 
-function repositoryBlockers(
-  packageJson: Record<string, unknown>,
-  framework: RepositoryFramework,
-  nextStandaloneOutput: boolean,
-  tanStackRuntime: TanStackRuntimeAnalysis,
-  files: readonly string[],
-  packageManagerAdmission: PackageManagerDescriptor | FrameworkAdmissionError,
-  frameworkConfigs: FrameworkConfigurations,
-  compatibility: RepositoryInitResult["compatibility"],
-  existingConfiguration: OhmyhostConfig | null,
-): RepositoryInitBlocker[] {
-  const blockers: RepositoryInitBlocker[] = [];
-  if (
-    framework !== "nextjs" &&
-    existingConfiguration !== null &&
-    "command" in existingConfiguration.build &&
-    existingConfiguration.build.ssg_cache_max_mib !== undefined
-  ) {
-    blockers.push({
-      code: "framework_unsupported",
-      message:
-        "build.ssg_cache_max_mib is supported only by Next.js; remove it from this application's configuration.",
-    });
-  }
-  if (framework === "unknown") {
-    blockers.push({
-      code: "framework_unsupported",
-      message:
-        "Declare exactly one supported Vite, TanStack Start, or Next.js framework, or add src/ohmyhost/worker.ts for the functions runtime.",
-    });
-  }
-  if (framework === "functions" && !files.includes(WORKER_MODULE_PATH)) {
-    blockers.push({
-      code: "worker_module_missing",
-      message: `The functions runtime needs ${WORKER_MODULE_PATH} exporting fetch and optional scheduled handlers.`,
-    });
-  }
-  if (tanStackRuntime === "ambiguous") {
-    blockers.push({
-      code: "framework_ambiguous",
-      message:
-        'TanStack Start needs one vite.config.js, .mjs or .ts that selects a mode. Static: tanstackStart({ prerender: { enabled: true } }) from "@tanstack/react-start/plugin/vite" and no "@cloudflare/vite-plugin". Server: cloudflare({ viteEnvironment: { name: "ssr" } }) from "@cloudflare/vite-plugin" listed before tanstackStart() in plugins, with @cloudflare/vite-plugin, @tanstack/react-router, @tanstack/react-start, react, react-dom, @vitejs/plugin-react and vite in package.json.',
-    });
-  }
-  const relevantAmbiguousConfigs = frameworkConfigs.ambiguous.filter((config) =>
-    framework === "nextjs" ? config === "next" || config === "open-next" : config === "vite",
-  );
-  for (const config of relevantAmbiguousConfigs) {
-    blockers.push({
-      code: "framework_ambiguous",
-      message: `Keep exactly one supported ${config}.config.js, ${config}.config.mjs, or ${config}.config.ts file.`,
-    });
-  }
-  if (
-    packageManagerAdmission instanceof FrameworkAdmissionError &&
-    packageManagerAdmission.reason === "ambiguous_lockfile"
-  ) {
-    blockers.push({
-      code: "package_manager_ambiguous",
-      message: "Keep exactly one supported lockfile in the application root.",
-    });
-  } else if (packageManagerAdmission instanceof FrameworkAdmissionError) {
-    blockers.push({
-      code: "package_manager_unpinned",
-      message:
-        packageManagerAdmission.reason === "package_manager_version_unsupported"
-          ? `This build image runs Bun ${PINNED_BUN_VERSION}; pin packageManager to bun@${PINNED_BUN_VERSION} and commit its matching lockfile. Repeating the unchanged version cannot work.`
-          : "Declare one exact npm, pnpm, Yarn, or Bun packageManager version and commit its matching lockfile.",
-    });
-  } else if (
-    existingConfiguration !== null &&
-    (existingConfiguration.build.install !== packageManagerAdmission.installCommand ||
-      ("command" in existingConfiguration.build &&
-        existingConfiguration.build.command !== packageManagerAdmission.buildCommand))
-  ) {
-    blockers.push({
-      code: "build_command_unsupported",
-      message: `ohmyhost.yaml build.install must be exactly "${packageManagerAdmission.installCommand}"${
-        "command" in existingConfiguration.build
-          ? ` and build.command "${packageManagerAdmission.buildCommand}"`
-          : ""
-      } for the packageManager in package.json. Set them, then commit and push.`,
-    });
-  }
-  if (compatibility.classification === "unsupported" && compatibility.frameworks.length > 0) {
-    const unsupported = compatibility.frameworks
-      .filter((entry) => entry.classification === "unsupported")
-      .map((entry) => `${FRAMEWORK_PACKAGE[entry.framework]}@${entry.version || "missing"}`)
-      .join(", ");
-    blockers.push({
-      code: "framework_version_unsupported",
-      message: `${unsupported} is outside the versions ohmyho.st builds: next 15.5.26+ (15.5.x) or 16.3.8, vite 5.4.0–8.2.2, @tanstack/react-start 1.168.26–1.168.49, as an exact version or a ^ or ~ range whose base version is inside. Pin a version in that range in package.json, update the lockfile, commit and push.`,
-    });
-  }
-  const scripts = packageJson["scripts"];
-  const scriptRecord = isRecord(scripts) ? scripts : {};
-  if (framework === "functions") {
-    // The functions runtime installs dependencies and bundles the Worker module itself.
-  } else if (
-    !isRecord(scripts) ||
-    typeof scripts["build"] !== "string" ||
-    scripts["build"].length === 0
-  ) {
-    blockers.push({ code: "build_script_missing", message: "Declare a non-empty build script." });
-  } else if (!hasDirectSafeBuildCommand(packageJson, framework)) {
-    blockers.push({
-      code: "build_command_unsupported",
-      message: buildScriptMessage(framework, scripts["build"]),
-    });
-  }
-  const betterAuthVersion = dependencyVersion(packageJson, "better-auth");
-  const managedAuthIssue = managedCustomerAuthAdmissionIssue(existingConfiguration);
-  if (managedAuthIssue !== null) blockers.push(managedAuthIssue);
-  if (
-    existingConfiguration?.auth?.provider === "better-auth" &&
-    betterAuthVersion !== null &&
-    betterAuthVersion !== SUPPORTED_BETTER_AUTH_VERSION
-  ) {
-    blockers.push({
-      code: "better_auth_version_unsupported",
-      message: "Pin better-auth to exactly 1.7.1 before enabling portable customer auth.",
-    });
-  }
-  if (framework === "nextjs") {
-    const dependencies = isRecord(packageJson["dependencies"]) ? packageJson["dependencies"] : {};
-    const nextBuild =
-      scriptRecord["build"] === "next build" || scriptRecord["build"] === "next build --webpack";
-    const nextPackageConfigured =
-      nextBuild &&
-      compatibility.frameworks[0]?.classification !== "unsupported" &&
-      exactVersion(dependencies["react"]) &&
-      exactVersion(dependencies["react-dom"]) &&
-      frameworkConfigs.next !== null;
-    const nextConfigured =
-      nextPackageConfigured && frameworkConfigs.ambiguous.every((config) => config !== "open-next");
-    if (nextStandaloneOutput) {
-      blockers.push({
-        code: "workers_runtime_incompatible",
-        message:
-          "Next.js output: standalone does not function on Workers. Remove the output setting from the Next.js config, commit the change, then create a new plan.",
-      });
-    }
-    if (!nextConfigured) {
-      blockers.push({
-        code: "next_adapter_unconfigured",
-        message:
-          'Next.js needs scripts.build exactly "next build" or "next build --webpack", react and react-dom at exact versions such as "19.1.0" (no ^ or ~), next within 15.5.26+ (15.5.x) or 16.3.8, and exactly one next.config.js, .mjs or .ts, with at most one open-next.config file. ohmyho.st adds the OpenNext build itself; do not make it the build script.',
-      });
-    }
-  }
-  return blockers.sort((left, right) => left.code.localeCompare(right.code));
-}
-
-function exactVersion(value: unknown): boolean {
-  return typeof value === "string" && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(value);
-}
-
-function dependencyVersion(packageJson: Record<string, unknown>, name: string): string | null {
-  for (const field of ["dependencies", "devDependencies", "optionalDependencies"]) {
-    const dependencies = packageJson[field];
-    if (!isRecord(dependencies)) continue;
-    const version = dependencies[name];
-    if (typeof version === "string" && version.length > 0) return version;
-  }
-  return null;
-}
-
 function renderConfiguration(input: {
   readonly project: string;
   readonly framework: RepositoryFramework;
@@ -1329,7 +1257,7 @@ function renderConfiguration(input: {
   readonly storageEnabled: boolean;
   readonly storageJurisdiction: "us" | "eu";
   readonly viteCompanionRequired: boolean;
-  readonly tanStackRuntime: TanStackRuntimeAnalysis;
+  readonly tanStackRuntime: TanStackRuntime | null;
   readonly applicationRoot: ApplicationRoot;
 }): string {
   const descriptor = packageManagerDescriptorFromInventory(input.packageManager);
@@ -1399,208 +1327,10 @@ function packageManagerDescriptorFromInventory(
   }
 }
 
-async function detectNextStandaloneOutput(
-  root: string,
-  framework: RepositoryFramework,
-  nextConfigPath: string | null,
-): Promise<boolean> {
-  if (framework !== "nextjs" || nextConfigPath === null) return false;
-  const path = resolve(root, nextConfigPath);
-  const information = await stat(path);
-  if (!information.isFile() || information.size > MAXIMUM_CONFIGURATION_BYTES) return false;
-  return declaresStandaloneOutput(await readFile(path, "utf8"));
-}
-
-function declaresStandaloneOutput(source: string): boolean {
-  const tokens = sourceTokens(source);
-  return tokens.some(
-    (token, index) =>
-      token === "output" && tokens[index + 1] === ":" && tokens[index + 2] === "standalone",
-  );
-}
-
-function sourceTokens(source: string): readonly string[] {
-  const tokens: string[] = [];
-  let index = 0;
-  while (index < source.length) {
-    const character = source[index];
-    const next = source[index + 1];
-    if (character === "/" && next === "/") {
-      const end = source.indexOf("\n", index + 2);
-      index = end === -1 ? source.length : end + 1;
-      continue;
-    }
-    if (character === "/" && next === "*") {
-      const end = source.indexOf("*/", index + 2);
-      if (end === -1) return Object.freeze([]);
-      index = end + 2;
-      continue;
-    }
-    if (character === "'" || character === '"' || character === "`") {
-      let value = "";
-      index += 1;
-      while (index < source.length && source[index] !== character) {
-        if (source[index] === "\\" && source[index + 1] !== undefined) index += 1;
-        value += source[index] ?? "";
-        index += 1;
-      }
-      if (source[index] !== character) return Object.freeze([]);
-      tokens.push(value);
-      index += 1;
-      continue;
-    }
-    if (character !== undefined && /[A-Za-z_$]/u.test(character)) {
-      const start = index;
-      index += 1;
-      while (/[A-Za-z0-9_$]/u.test(source[index] ?? "")) index += 1;
-      tokens.push(source.slice(start, index));
-      continue;
-    }
-    if (character !== undefined && "{}[]():,.".includes(character)) tokens.push(character);
-    index += 1;
-  }
-  return Object.freeze(tokens);
-}
-
 function databaseMigrationPath(provider: RepositoryInitInventory["database"]["provider"]) {
   if (provider === "supabase") return "postgres/migrations";
   if (provider === "postgresql") return "postgres/migrations";
   return null;
-}
-
-async function detectTanStackRuntime(
-  root: string,
-  files: readonly string[],
-  framework: RepositoryFramework,
-  packageJson: Record<string, unknown>,
-  viteConfigPath: string | null,
-): Promise<TanStackRuntimeAnalysis> {
-  if (framework !== "tanstack-start") return null;
-  if (viteConfigPath === null) return "ambiguous";
-  const path = resolve(root, viteConfigPath);
-  const information = await stat(path);
-  if (!information.isFile() || information.size > MAXIMUM_PACKAGE_BYTES) return "ambiguous";
-  const source = await readFile(path, "utf8");
-  const tokens = sourceTokens(source);
-  if (isCompleteTanStackStatic(tokens)) return "static";
-  if (isCompleteTanStackEdgePackage(packageJson) && isCompleteTanStackEdgeConfig(tokens)) {
-    return "edge";
-  }
-  return "ambiguous";
-}
-
-function isCompleteTanStackStatic(tokens: readonly string[]): boolean {
-  return (
-    hasNamedSourceImport(tokens, "tanstackStart", "@tanstack/react-start/plugin/vite") &&
-    !hasSourceModuleImport(tokens, "@cloudflare/vite-plugin") &&
-    hasNestedObjectValue(tokens, "tanstackStart", "prerender", "enabled", "true")
-  );
-}
-
-function isCompleteTanStackEdgePackage(packageJson: Record<string, unknown>): boolean {
-  return (
-    dependencyVersion(packageJson, "@cloudflare/vite-plugin") !== null &&
-    ["@tanstack/react-router", "@tanstack/react-start", "react", "react-dom"].every(
-      (name) => dependencyVersion(packageJson, name) !== null,
-    ) &&
-    ["@vitejs/plugin-react", "vite"].every((name) => dependencyVersion(packageJson, name) !== null)
-  );
-}
-
-function isCompleteTanStackEdgeConfig(tokens: readonly string[]): boolean {
-  const cloudflareCall = sourceCallIndex(tokens, "cloudflare");
-  const tanStackCall = sourceCallIndex(tokens, "tanstackStart");
-  return (
-    hasNamedSourceImport(tokens, "cloudflare", "@cloudflare/vite-plugin") &&
-    hasNamedSourceImport(tokens, "tanstackStart", "@tanstack/react-start/plugin/vite") &&
-    cloudflareCall !== -1 &&
-    tanStackCall !== -1 &&
-    cloudflareCall < tanStackCall &&
-    hasNestedObjectValue(tokens, "cloudflare", "viteEnvironment", "name", "ssr")
-  );
-}
-
-function hasNamedSourceImport(
-  tokens: readonly string[],
-  name: string,
-  moduleName: string,
-): boolean {
-  for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index] !== "import") continue;
-    const fromIndex = tokens.findIndex((token, candidate) => candidate > index && token === "from");
-    if (fromIndex === -1) return false;
-    if (tokens[fromIndex + 1] === moduleName && tokens.slice(index + 1, fromIndex).includes(name)) {
-      return true;
-    }
-    index = fromIndex;
-  }
-  return false;
-}
-
-function hasSourceModuleImport(tokens: readonly string[], moduleName: string): boolean {
-  return tokens.some((token, index) => token === "from" && tokens[index + 1] === moduleName);
-}
-
-function sourceCallIndex(tokens: readonly string[], name: string): number {
-  return tokens.findIndex((token, index) => token === name && tokens[index + 1] === "(");
-}
-
-function hasNestedObjectValue(
-  tokens: readonly string[],
-  call: string,
-  outerProperty: string,
-  innerProperty: string,
-  expectedValue: string,
-): boolean {
-  const callIndex = sourceCallIndex(tokens, call);
-  if (callIndex === -1 || tokens[callIndex + 2] !== "{") return false;
-  const callEnd = matchingSourceDelimiter(tokens, callIndex + 2, "{", "}");
-  const outer = directSourceObjectProperty(tokens, callIndex + 2, callEnd, outerProperty);
-  if (outer === null || outer.value !== "object") return false;
-  return (
-    directSourceObjectProperty(tokens, outer.start, outer.end, innerProperty)?.value ===
-    expectedValue
-  );
-}
-
-function directSourceObjectProperty(
-  tokens: readonly string[],
-  start: number,
-  end: number,
-  name: string,
-): Readonly<{ start: number; end: number; value: string }> | null {
-  let depth = 0;
-  for (let index = start + 1; index < end; index += 1) {
-    const value = tokens[index];
-    if (value === "{" || value === "[" || value === "(") depth += 1;
-    if (value === "}" || value === "]" || value === ")") depth -= 1;
-    if (depth !== 0 || value !== name || tokens[index + 1] !== ":") continue;
-    if (tokens[index + 2] === "{") {
-      const candidateEnd = matchingSourceDelimiter(tokens, index + 2, "{", "}");
-      return Object.freeze({ start: index + 2, end: candidateEnd, value: "object" });
-    }
-    return Object.freeze({
-      start: index + 2,
-      end: index + 2,
-      value: tokens[index + 2] ?? "",
-    });
-  }
-  return null;
-}
-
-function matchingSourceDelimiter(
-  tokens: readonly string[],
-  start: number,
-  open: string,
-  close: string,
-): number {
-  let depth = 0;
-  for (let index = start; index < tokens.length; index += 1) {
-    if (tokens[index] === open) depth += 1;
-    if (tokens[index] === close) depth -= 1;
-    if (depth === 0) return index;
-  }
-  return -1;
 }
 
 function requirementsFor(
@@ -1660,7 +1390,7 @@ function runtimeContract(capabilities: RuntimeCapabilities): Readonly<{
       ].sort(),
     ),
     packages: Object.freeze({
-      ...(capabilities.auth ? { betterAuth: "1.7.1" as const } : {}),
+      ...(capabilities.auth ? { betterAuth: MANAGED_BETTER_AUTH_VERSION } : {}),
       // A database project was told to install pg, which cannot open a socket from a Worker at all,
       // and was never offered the package that actually holds the client it needs.
       ...(capabilities.database || capabilities.storage || capabilities.mail
@@ -1674,7 +1404,7 @@ function viteCompanionScaffold(
   files: readonly string[],
   capabilities: RuntimeCapabilities,
 ): RepositoryInitViteCompanion {
-  const sourceEntryPoint = "src/ohmyhost/companion.ts" as const;
+  const sourceEntryPoint = VITE_COMPANION_ENTRY_PATH;
   const contract = runtimeContract(capabilities);
   return Object.freeze({
     schemaVersion: "ohmyhost.vite-api-companion/v1" as const,
@@ -1706,7 +1436,7 @@ async function createConfiguration(root: string, configuration: string): Promise
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
