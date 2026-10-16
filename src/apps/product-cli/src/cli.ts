@@ -399,7 +399,7 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost project handle set --project ULID --handle HANDLE --if-match ETAG --idempotency-key KEY --json (moves the project to a free address; the old one stops working and anyone may claim it)",
   "database compute set":
     "ohmyhost database compute set --project ULID --environment dev|prod --profile standard|performance --idempotency-key KEY --yes [--wait] --json\n" +
-    "  standard: Free 0.25 CU/1 GB/60s idle, Paid 0.5 CU/2 GB/60s idle. performance: Paid 1 CU/4 GB/300s idle, 2.5x database compute credits per equal active minute; longer idle time also consumes credits.",
+    "  standard: Free 0.25 CU/1 GB, Paid 0.5 CU/2 GB. performance: Paid 1 CU/4 GB, 2.5x database compute credits per equal active minute. All profiles use the provider-default idle suspension.",
   "database compute get":
     "ohmyhost database compute get --project ULID [--environment dev|prod] --json",
   "database write":

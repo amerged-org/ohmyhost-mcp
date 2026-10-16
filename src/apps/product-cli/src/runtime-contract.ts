@@ -63,7 +63,9 @@ export interface SafeProblem {
 
 export interface PublicCurrentIdentity {
   readonly actor_id: string;
+  readonly email: string | null;
   readonly organization_ids: readonly string[];
+  readonly organizations: readonly { readonly id: string; readonly name: string }[];
 }
 
 /** One workspace the signed-in user belongs to, with the provider identity a selection needs. */
@@ -635,8 +637,10 @@ export function parseProjectCreditBudget(value: unknown): ProjectCreditBudget {
 }
 
 export const parseCurrentIdentity = (value: unknown): PublicCurrentIdentity => {
-  const input = exactRecord(value, ["actor_id", "organization_ids"]);
+  const input = exactRecord(value, ["actor_id", "email", "organization_ids", "organizations"]);
+  const email = input["email"];
   const organizationIds = input["organization_ids"];
+  const organizations = input["organizations"];
   if (
     typeof input["actor_id"] !== "string" ||
     input["actor_id"].length === 0 ||
@@ -645,12 +649,32 @@ export const parseCurrentIdentity = (value: unknown): PublicCurrentIdentity => {
       const codePoint = character.codePointAt(0) ?? 0;
       return codePoint <= 31 || codePoint === 127;
     }) ||
+    (email !== null &&
+      (!boundedString(email, 3, 254) ||
+        !/^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/u.test(email) ||
+        /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(email))) ||
     !Array.isArray(organizationIds) ||
     organizationIds.some((organizationId) => !isUlid(organizationId)) ||
-    new Set(organizationIds).size !== organizationIds.length
+    new Set(organizationIds).size !== organizationIds.length ||
+    !Array.isArray(organizations) ||
+    organizations.length !== organizationIds.length
   ) {
     throw new ResponseContractError();
   }
+  organizations.forEach((organization: unknown, index) => {
+    const entry = exactRecord(organization, ["id", "name"]);
+    if (
+      entry["id"] !== organizationIds[index] ||
+      !boundedString(entry["name"], 1, 128) ||
+      entry["name"].trim() !== entry["name"] ||
+      [...entry["name"]].some((character) => {
+        const codePoint = character.codePointAt(0) ?? 0;
+        return codePoint <= 31 || codePoint === 127;
+      })
+    ) {
+      throw new ResponseContractError();
+    }
+  });
   return input as unknown as PublicCurrentIdentity;
 };
 

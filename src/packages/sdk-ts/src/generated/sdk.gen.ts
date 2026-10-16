@@ -945,7 +945,7 @@ export const completeCloudflareDnsAuthorization = <ThrowOnError extends boolean 
 /**
  * Get the current authenticated identity
  *
- * Returns the stable ohmyhost actor and internal organization identifiers derived from the bearer credential.
+ * Returns the stable ohmyhost actor, the current user's or API-key owner's email, and the credential's organization scope with current display names. Machine-to-machine credentials have a null email. Organizations match organization_ids in the same order.
  */
 export const getCurrentIdentity = <ThrowOnError extends boolean = true>(
   parameters?: {

@@ -522,7 +522,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_compute_set",
-    "Select standard or performance compute for an existing database: Free 0.25 CU/1 GB/60-second idle suspension, Paid 0.5 CU/2 GB/60-second idle suspension. First read database_compute_get and explain actual size, metered compute cost, possible brief connection interruption and that shared data changes both Dev and Prod. Require the user's decision before confirm=true. SQL data is preserved. Poll the returned operation every 60 seconds; never submit a second change while it runs. Performance requires active Paid access and selects 1 CU/4 GB/300-second idle suspension at 2.5x Paid-standard compute credits per equal active minute; the longer idle window also consumes more active time. This affects only database compute. Read organization_credits_get for the published rate and active meter first. A successful choice is remembered per physical database; automatic Free downgrades preserve it, and an explicit standard choice clears it. Mixed/uncertain transition hours waive the premium; never multiply raw CU usage again.",
+    "Select standard or performance compute for an existing database: Free 0.25 CU/1 GB, Paid 0.5 CU/2 GB. All profiles use provider-default idle suspension (suspend_timeout_seconds=0). First read database_compute_get and explain actual size, metered compute cost, possible brief connection interruption and that shared data changes both Dev and Prod. Require the user's decision before confirm=true. SQL data is preserved. Poll the returned operation every 60 seconds; never submit a second change while it runs. Performance requires active Paid access and selects 1 CU/4 GB at 2.5x Paid-standard compute credits per equal active minute. This affects only database compute. Read organization_credits_get for the published rate and active meter first. A successful choice is remembered per physical database; automatic Free downgrades preserve it, and an explicit standard choice clears it. Mixed/uncertain transition hours waive the premium; never multiply raw CU usage again.",
     z.object({
       project_id: identifier,
       environment: z.enum(["dev", "prod"]),
@@ -1119,7 +1119,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "identity_get",
-    "Get the ohmyho.st customer/agent identity this call acts as: user, organization and, in context, the saved login or OHMYHOST_TOKEN that supplied it. Compare it with the user and organization the customer named before any change. This does not authenticate the hosted application's end users or provision a customer AuthKit tenant; application authentication is the customer's chosen integration.",
+    "Get the ohmyho.st customer/agent identity this call acts as: user and account email, scoped organization IDs and names and, in context, the saved login or OHMYHOST_TOKEN that supplied it. Compare it with the user and organization the customer named before any change. This does not authenticate the hosted application's end users or provision a customer AuthKit tenant; application authentication is the customer's chosen integration.",
     z.object({}),
     (client, _input, signal) => client.getCurrentIdentity(signal),
   );
@@ -2072,7 +2072,12 @@ function registerManagedSourceTools(
         apiOrigin:
           client.productApiOrigin ??
           resolveProductCliEnvironment(dependencies.environment).apiOrigin,
-        identity: { actor_id: current.actor_id, organization_ids: current.organization_ids },
+        identity: {
+          actor_id: current.actor_id,
+          email: current.email,
+          organization_ids: current.organization_ids,
+          organizations: current.organizations,
+        },
         projectId: input.project_id,
         request,
         explicitExpectedCommit: input.expected_commit_sha !== undefined,
@@ -2120,7 +2125,12 @@ function registerManagedSourceTools(
         apiOrigin:
           client.productApiOrigin ??
           resolveProductCliEnvironment(dependencies.environment).apiOrigin,
-        identity: { actor_id: current.actor_id, organization_ids: current.organization_ids },
+        identity: {
+          actor_id: current.actor_id,
+          email: current.email,
+          organization_ids: current.organization_ids,
+          organizations: current.organizations,
+        },
         projectId: input.project_id,
         operationId: input.operation_id,
         api: port(client),
@@ -2235,7 +2245,9 @@ async function handoverAccount(
   const report = await client.getCurrentIdentity(signal);
   const identity = parseCurrentIdentity({
     actor_id: report.actor_id,
+    email: report.email,
     organization_ids: report.organization_ids,
+    organizations: report.organizations,
   });
   const userId = identity.actor_id.startsWith("user:") ? identity.actor_id.slice(5) : "";
   const [organizationId, ...others] = identity.organization_ids;

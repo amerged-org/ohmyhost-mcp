@@ -1148,11 +1148,25 @@ export type OrganizationAccount = {
 };
 
 /**
- * Minimal customer-visible identity and organization scope for authenticated agent clients.
+ * Customer-visible current account and credential organization scope for authenticated agent clients.
  */
 export type CurrentIdentity = {
   actor_id: string;
+  /**
+   * Email of the current user or user API-key owner; null for machine-to-machine credentials.
+   */
+  email: string | null;
   organization_ids: Array<Ulid>;
+  /**
+   * Current names for exactly the organization_ids scope, in the same order.
+   */
+  organizations: Array<{
+    id: Ulid;
+    /**
+     * Current organization display name without surrounding whitespace or ASCII control characters.
+     */
+    name: string;
+  }>;
 };
 
 export type Project = {
