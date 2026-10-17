@@ -1,7 +1,7 @@
 export const PINNED_BUN_VERSION = "1.2.22";
 
 /**
- * @typedef {"next" | "vite" | "@tanstack/react-start"} FrameworkVersionPackage
+ * @typedef {"next" | "vite" | "astro" | "@astrojs/cloudflare" | "@tanstack/react-start"} FrameworkVersionPackage
  * @typedef {Readonly<{
  *   floors: readonly string[];
  *   denied: readonly (readonly [string, string | null])[];
@@ -22,6 +22,11 @@ export const PINNED_BUN_VERSION = "1.2.22";
  * @type {FrameworkVersionPolicy}
  */
 export const FRAMEWORK_VERSION_POLICY = Object.freeze({
+  astro: Object.freeze({ floors: Object.freeze(["7.4.0"]), denied: Object.freeze([]) }),
+  "@astrojs/cloudflare": Object.freeze({
+    floors: Object.freeze(["14.4.0"]),
+    denied: Object.freeze([]),
+  }),
   next: Object.freeze({ floors: Object.freeze(["15.5.27", "16.3.8"]), denied: Object.freeze([]) }),
   vite: Object.freeze({ floors: Object.freeze(["5.4.6"]), denied: Object.freeze([]) }),
   "@tanstack/react-start": Object.freeze({
@@ -164,12 +169,13 @@ const TYPESCRIPT_BUILD_STAGE = /^tsc(?:[ \t]+(?:--noEmit|-b|--build))?$/u;
 
 /**
  * The same source is consumed by local admission, framework adapters and the build sandbox.
- * @param {"nextjs" | "tanstack-start" | "vite"} framework
+ * @param {"astro" | "nextjs" | "tanstack-start" | "vite"} framework
  * @param {unknown} script
  * @returns {boolean}
  */
 export function isAdmittedFrameworkBuildScript(framework, script) {
   if (typeof script !== "string") return false;
+  if (framework === "astro") return script === "astro build";
   if (framework === "nextjs") return script === "next build" || script === "next build --webpack";
   if (framework !== "vite" && framework !== "tanstack-start") return false;
   const stages = script.trim().split(/[ \t]*&&[ \t]*/u);

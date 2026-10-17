@@ -40,7 +40,12 @@ export const WORKER_MODULE_PATH = "src/ohmyhost/worker.ts" as const;
 /** The Worker module of a Vite application with a server runtime. */
 export const VITE_COMPANION_ENTRY_PATH = "src/ohmyhost/companion.ts" as const;
 
-export type FrameworkSourceFramework = "functions" | "nextjs" | "tanstack-start" | "vite-static";
+export type FrameworkSourceFramework =
+  | "astro"
+  | "functions"
+  | "nextjs"
+  | "tanstack-start"
+  | "vite-static";
 export type PackageManifest = Readonly<Record<string, unknown>>;
 /**
  * Where package.json may declare a dependency: `runtime` only in dependencies, `build` also in
@@ -91,6 +96,7 @@ const DEPENDENCY_FIELDS = Object.freeze({
 // Next.js and TanStack Start load their runtime packages in the server bundle, so package.json
 // declares them in dependencies; Vite and its plugins only build, so devDependencies suffice.
 const REQUIRED_DEPENDENCIES = Object.freeze({
+  astro: Object.freeze([["astro", "build"]] as const),
   nextjs: Object.freeze([
     ["next", "runtime"],
     ["react", "runtime"],
@@ -109,6 +115,7 @@ const REQUIRED_DEPENDENCIES = Object.freeze({
 } satisfies Record<FrameworkSourceFramework, readonly (readonly [string, DependencyPlacement])[]>);
 const TANSTACK_EDGE_DEPENDENCY = Object.freeze([CLOUDFLARE_PLUGIN, "build"] as const);
 const BUILD_SCRIPT_FRAMEWORKS = Object.freeze({
+  astro: "astro",
   nextjs: "nextjs",
   "vite-static": "vite",
   "tanstack-start": "tanstack-start",
@@ -118,7 +125,11 @@ const BUILD_OUTPUTS: Readonly<Partial<Record<FrameworkSourceFramework, string>>>
   "tanstack-start": "dist/client",
 });
 const REQUIRED_CONFIG_PATHS: Readonly<Partial<Record<FrameworkSourceFramework, string>>> =
-  Object.freeze({ nextjs: "next.config.ts", "tanstack-start": "vite.config.ts" });
+  Object.freeze({
+    astro: "astro.config.mjs",
+    nextjs: "next.config.ts",
+    "tanstack-start": "vite.config.ts",
+  });
 // The PostCSS configuration the Next.js Webpack build reads: package.json "postcss" or one of these
 // files at the application root. It never reads a TypeScript one such as postcss.config.ts.
 const POSTCSS_CONFIG_PATH = /^(?:postcss\.config\.(?:[cm]?js|json)|\.postcssrc\.(?:js|json))$/u;
@@ -214,7 +225,10 @@ export function frameworkVersionAdmissions(
 ): readonly FrameworkVersionAdmission[] {
   const admissions: FrameworkVersionAdmission[] = [];
   let locked: ((packageName: string) => string | null) | undefined;
-  for (const [name, placement] of REQUIRED_DEPENDENCIES[framework]) {
+  for (const [name, placement] of framework === "astro" &&
+  declaredDependency(manifest, "@astrojs/cloudflare", "build") !== null
+    ? [...REQUIRED_DEPENDENCIES.astro, ["@astrojs/cloudflare", "build"] as const]
+    : REQUIRED_DEPENDENCIES[framework]) {
     if (!isFrameworkVersionPackage(name)) continue;
     const declared = declaredDependency(manifest, name, placement);
     if (declared === null) continue;
@@ -504,7 +518,7 @@ export function sourceWithoutComments(source: string): string {
  * extensions planning reads, without TypeScript declaration files, which never run.
  */
 export function isDatabaseContractModule(path: string): boolean {
-  return /\.(?:ts|tsx|js|jsx|mjs|mts)$/u.test(path) && !/\.d\.[cm]?ts$/u.test(path);
+  return /\.(?:astro|ts|tsx|js|jsx|mjs|mts)$/u.test(path) && !/\.d\.[cm]?ts$/u.test(path);
 }
 
 function manifestFindings(
@@ -524,9 +538,11 @@ function manifestFindings(
       diagnostic({ code: "build_script_unsupported", path: PACKAGE_MANIFEST, framework }),
     );
   const required =
-    framework === "tanstack-start" && configuration.runtime.mode === "edge"
-      ? [...REQUIRED_DEPENDENCIES[framework], TANSTACK_EDGE_DEPENDENCY]
-      : REQUIRED_DEPENDENCIES[framework];
+    framework === "astro" && configuration.runtime.mode === "edge"
+      ? [...REQUIRED_DEPENDENCIES.astro, ["@astrojs/cloudflare", "build"] as const]
+      : framework === "tanstack-start" && configuration.runtime.mode === "edge"
+        ? [...REQUIRED_DEPENDENCIES[framework], TANSTACK_EDGE_DEPENDENCY]
+        : REQUIRED_DEPENDENCIES[framework];
   for (const [name, placement] of required)
     if (declaredDependency(manifest, name, placement) === null)
       findings.push(
@@ -567,7 +583,12 @@ function configurationFindings(input: FrameworkSourceRuleInput): FrameworkConver
     );
   if (build !== null && framework !== "nextjs" && build.ssg_cache_max_mib !== undefined)
     findings.push(diagnostic({ code: "build_option_unsupported", path: REPOSITORY_CONFIG }));
-  const output = BUILD_OUTPUTS[framework];
+  const output =
+    framework === "astro"
+      ? configuration.runtime.mode === "edge"
+        ? "dist/client"
+        : "dist"
+      : BUILD_OUTPUTS[framework];
   if (build !== null && output !== undefined && build.output !== output)
     findings.push(
       diagnostic({ code: "build_output_unsupported", path: REPOSITORY_CONFIG, framework }),
@@ -592,6 +613,7 @@ function configurationFindings(input: FrameworkSourceRuleInput): FrameworkConver
     (framework === "functions" ||
       (crons &&
         (framework === "nextjs" ||
+          (framework === "astro" && configuration.runtime.mode === "edge") ||
           (framework === "tanstack-start" && configuration.runtime.mode === "edge")))) &&
     !files.includes(WORKER_MODULE_PATH)
   )
@@ -607,6 +629,16 @@ function runtimeModeAdmitted(
   crons: boolean,
 ): boolean {
   const mode = configuration.runtime.mode;
+  if (framework === "astro")
+    return (
+      mode === "edge" ||
+      (mode === "static" &&
+        !crons &&
+        configuration.storage === undefined &&
+        configuration.database?.enabled !== true &&
+        configuration.mail?.enabled !== true &&
+        configuration.auth?.provider !== "better-auth")
+    );
   if (framework === "nextjs") return mode === "edge";
   if (framework === "vite-static")
     return mode === (viteCompanionRequired(configuration) ? "edge" : "static");
@@ -629,6 +661,8 @@ function frameworkConfigFindings(
   const { frameworkConfig, framework } = input;
   if (frameworkConfig === null || framework === "functions") return [];
   const { path, text } = frameworkConfig;
+  if (framework === "astro")
+    return astroConfigFindings(text, path, input.configuration.runtime.mode);
   if (framework === "nextjs") return nextConfigFindings(text, path, hasPostcssConfiguration(input));
   if (framework === "vite-static") return viteConfigFindings(text, path);
   const mode = input.configuration.runtime.mode;
@@ -660,7 +694,14 @@ function frameworkConfigPath(
 ): string | null {
   if (framework === "functions") return null;
   const path = admitted(findings, () =>
-    resolveFrameworkConfig(framework === "nextjs" ? "next.config" : "vite.config", files),
+    resolveFrameworkConfig(
+      framework === "astro"
+        ? "astro.config"
+        : framework === "nextjs"
+          ? "next.config"
+          : "vite.config",
+      files,
+    ),
   );
   if (framework === "nextjs")
     admitted(findings, () => resolveFrameworkConfig("open-next.config", files));
@@ -1115,4 +1156,32 @@ function hasModuleImport(tokens: readonly ConfigToken[], moduleName: string): bo
       tokens[index + 1]?.kind === "string" &&
       tokens[index + 1]?.value === moduleName,
   );
+}
+
+/** Astro's build validates executable config; admission rejects known incompatible contracts. */
+function astroConfigFindings(
+  text: string,
+  path: string,
+  mode: string,
+): readonly FrameworkConversionDiagnostic[] {
+  const lexed = lexFrameworkConfig(text, path);
+  if ("finding" in lexed) return [lexed.finding];
+  const tokens = lexed.tokens;
+  const hasPropertyKey = (items: readonly ConfigToken[], name: string) =>
+    items.some((token, index) => token.value === name && items[index + 1]?.value === ":");
+  const invalid =
+    hasNonRootProperty(tokens, ["base"], ["", "/"]) ||
+    ["srcDir", "outDir", "serverEntry", "client", "server", "assetsPrefix"].some((name) =>
+      hasPropertyKey(tokens, name),
+    ) ||
+    (mode === "edge"
+      ? !text.includes("@astrojs/cloudflare") ||
+        !hasProperty(tokens, "output", "server") ||
+        !hasProperty(tokens, "session", "false") ||
+        !hasProperty(tokens, "imageService", "passthrough") ||
+        hasPropertyKey(tokens, "cache")
+      : text.includes("@astrojs/cloudflare") ||
+        hasPropertyKey(tokens, "adapter") ||
+        hasProperty(tokens, "output", "server"));
+  return invalid ? [diagnostic({ code: "astro_config_unsupported", path })] : [];
 }

@@ -19,7 +19,11 @@ export type LockfileName =
   | "package-lock.json"
   | "pnpm-lock.yaml"
   | "yarn.lock";
-export type FrameworkConfigBasename = "next.config" | "open-next.config" | "vite.config";
+export type FrameworkConfigBasename =
+  | "astro.config"
+  | "next.config"
+  | "open-next.config"
+  | "vite.config";
 
 export type FrameworkAdmissionReason =
   | "ambiguous_config"
@@ -311,11 +315,15 @@ interface DetailDefinition {
 }
 
 const FRAMEWORK_VERSION_PACKAGES = Object.freeze([
+  "astro",
+  "@astrojs/cloudflare",
   "next",
   "vite",
   "@tanstack/react-start",
 ] as const satisfies readonly FrameworkVersionPackage[]);
 const FRAMEWORK_DEPENDENCY_PACKAGES = Object.freeze([
+  "astro",
+  "@astrojs/cloudflare",
   "next",
   "react",
   "react-dom",
@@ -326,7 +334,12 @@ const FRAMEWORK_DEPENDENCY_PACKAGES = Object.freeze([
   "@cloudflare/vite-plugin",
 ] as const);
 const REACT_PACKAGES = Object.freeze(["react", "react-dom"] as const);
-const BUILD_FRAMEWORKS = Object.freeze(["nextjs", "vite-static", "tanstack-start"] as const);
+const BUILD_FRAMEWORKS = Object.freeze([
+  "astro",
+  "nextjs",
+  "vite-static",
+  "tanstack-start",
+] as const);
 
 const PUSH_AND_PLAN = "Commit and push the change, then plan the new commit.";
 const VITE_BUILD_SCRIPT =
@@ -335,6 +348,16 @@ const VITE_BUILD_SCRIPT =
 // Each sentence names the file, the rule and the exact change. Render and parse both derive from
 // the template, so a client maps a detail back to exactly one typed diagnostic.
 const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
+  astro_template_import_unsupported: {
+    paths: ["module"],
+    template:
+      '"{{path}}" uses a dynamic import, import.meta or require in an Astro template. Move server imports into frontmatter and dynamic browser imports into a normal statically imported browser module, then commit and push the change and plan the new commit.',
+  },
+  astro_config_unsupported: {
+    paths: ["framework_config"],
+    template:
+      '"{{path}}" must use the standard Astro output directories and root base. For edge use output: "server", @astrojs/cloudflare with imageService: "passthrough", and session: false. Static hosting must omit a server adapter. Additional Cloudflare bindings, custom sessions and provider cache are not supported. Commit and push the change, then plan the new commit.',
+  },
   managed_auth_database_required: {
     paths: ["repository_config"],
     template: managedCustomerAuthDatabaseMessage("{{path}}"),
@@ -417,6 +440,7 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
             'exactly "next build" or "next build --webpack"; ohmyho.st adds the OpenNext build itself',
           "vite-static": VITE_BUILD_SCRIPT,
           "tanstack-start": VITE_BUILD_SCRIPT,
+          astro: 'exactly "astro build"',
         },
       },
     },
@@ -435,12 +459,12 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
   },
   framework_unsupported: {
     paths: ["manifest"],
-    template: `"{{path}}" declares none of next, vite or @tanstack/react-start. Add the app's framework to dependencies, or set runtime.mode: functions in ohmyhost.yaml and add src/ohmyhost/worker.ts. ${PUSH_AND_PLAN}`,
+    template: `"{{path}}" declares none of astro, next, vite or @tanstack/react-start. Add the app's framework to dependencies, or set runtime.mode: functions in ohmyhost.yaml and add src/ohmyhost/worker.ts. ${PUSH_AND_PLAN}`,
   },
   framework_ambiguous: {
     paths: ["manifest"],
     template:
-      '"{{path}}" declares next together with vite or @tanstack/react-start, so ohmyho.st cannot choose one framework. Remove the packages of the framework this application does not use, commit and push the change, then plan the new commit.',
+      '"{{path}}" declares competing application framework packages, so ohmyho.st cannot choose one framework. Remove the packages of the framework this application does not use, commit and push the change, then plan the new commit.',
   },
   lockfile_missing: {
     paths: ["manifest"],
@@ -487,6 +511,7 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
           "vite-static":
             "runtime.mode: edge with src/ohmyhost/companion.ts when database, auth, mail, storage or functions.crons is set, and static otherwise",
           "tanstack-start": "runtime.mode: edge, or static without functions.crons and storage",
+          astro: "runtime.mode: static for prerendered sites, or edge with the Cloudflare adapter",
         },
       },
     },
@@ -502,6 +527,7 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
           nextjs: ".open-next/assets",
           "vite-static": "dist",
           "tanstack-start": "dist/client",
+          astro: "dist for static, or dist/client for edge",
         },
       },
     },
@@ -585,8 +611,8 @@ const DETAIL_DEFINITIONS: Readonly<Record<FrameworkConversionDiagnosticCode, Det
 const PLACEHOLDER = /\{\{([a-z]+)\}\}/gu;
 const PATH_PATTERN = "[A-Za-z0-9_@()[\\]./${}-]{1,240}";
 const SAFE_PATH = new RegExp(`^${PATH_PATTERN}$`, "u");
-const MODULE_PATH = /^[A-Za-z0-9_@()[\]./${}-]+\.(?:[cm]?[jt]sx?)$/u;
-const FRAMEWORK_CONFIG_NAME = /^(?:next|open-next|vite)\.config\.(?:js|mjs|ts)$/u;
+const MODULE_PATH = /^[A-Za-z0-9_@()[\]./${}-]+\.(?:astro|[cm]?[jt]sx?)$/u;
+const FRAMEWORK_CONFIG_NAME = /^(?:astro|next|open-next|vite)\.config\.(?:js|mjs|ts)$/u;
 // The public problem detail bound; every rendered sentence stays far below it.
 const MAXIMUM_DETAIL_LENGTH = 2_000;
 const DETAIL_PATTERNS = Object.freeze(

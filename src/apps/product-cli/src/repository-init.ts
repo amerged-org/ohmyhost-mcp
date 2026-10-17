@@ -310,8 +310,12 @@ export async function initializeRepository(
       return match?.[1] === undefined || match[1].startsWith("_") ? [] : [match[1]];
     }),
   );
-  const apiRouteCount = applicationFiles.filter((path) =>
-    /^(?:src\/)?app\/api\/.+\/route\.(?:js|jsx|ts|tsx)$/u.test(path),
+  const apiRouteCount = applicationFiles.filter(
+    (path) =>
+      /^(?:src\/)?app\/api\/.+\/route\.(?:js|jsx|ts|tsx)$/u.test(path) ||
+      (framework === "astro" &&
+        /^src\/pages\/.+\.(?:js|ts)$/u.test(path) &&
+        !path.endsWith(".d.ts")),
   ).length;
   const supabase = dependencies.has("@supabase/supabase-js") || dependencies.has("@supabase/ssr");
   const configuredDatabase = existingConfiguration?.database?.enabled === true;
@@ -368,11 +372,15 @@ export async function initializeRepository(
   const targetStorage = r2 || supabaseStorage;
   // TanStack Start binds storage only on edge, as a Vite app does through its companion.
   const tanStackRuntime =
-    framework !== "tanstack-start"
+    framework !== "tanstack-start" && framework !== "astro"
       ? null
       : targetStorage
         ? "edge"
-        : proposedTanStackRuntime(frameworkConfig, dependencies);
+        : framework === "astro"
+          ? dependencies.has("@astrojs/cloudflare")
+            ? "edge"
+            : "static"
+          : proposedTanStackRuntime(frameworkConfig, dependencies);
   const companionRequired =
     framework === "vite" &&
     (existingConfiguration === null
@@ -390,7 +398,11 @@ export async function initializeRepository(
     databaseProvider,
     hasHealthcheck:
       applicationFiles.includes("src/app/api/health/route.ts") ||
-      applicationFiles.includes("app/api/health/route.ts"),
+      applicationFiles.includes("app/api/health/route.ts") ||
+      (framework === "astro" &&
+        applicationFiles.some((path) =>
+          /^src\/pages\/api\/health(?:\/index)?\.(?:js|ts)$/u.test(path),
+        )),
     mailEnabled: targetMail,
     betterAuthEnabled: targetBetterAuth,
     storageEnabled: targetStorage,
@@ -596,7 +608,10 @@ async function workerModuleBlockers(context: SourceCheckContext): Promise<Reposi
   const scheduled =
     (config?.functions?.crons.length ?? 0) > 0 &&
     ((mode === "edge" &&
-      (framework === "vite" || framework === "nextjs" || framework === "tanstack-start")) ||
+      (framework === "astro" ||
+        framework === "vite" ||
+        framework === "nextjs" ||
+        framework === "tanstack-start")) ||
       (mode === "functions" && framework === "functions"));
   const path = framework === "vite" ? VITE_COMPANION_ENTRY_PATH : WORKER_MODULE_PATH;
   if ((framework !== "functions" && !scheduled) || !files.includes(path)) return [];
@@ -989,7 +1004,10 @@ function hasDirectSafeBuildCommand(
   const scripts = manifest["scripts"];
   if (!isRecord(scripts) || typeof scripts["build"] !== "string") return false;
   return (
-    (framework === "nextjs" || framework === "vite" || framework === "tanstack-start") &&
+    (framework === "astro" ||
+      framework === "nextjs" ||
+      framework === "vite" ||
+      framework === "tanstack-start") &&
     isAdmittedFrameworkBuildScript(framework, scripts["build"])
   );
 }
@@ -1144,10 +1162,23 @@ async function readFrameworkConfig(
   files: readonly string[],
   framework: RepositoryFramework,
 ): Promise<FrameworkConfigText | null> {
-  if (framework !== "nextjs" && framework !== "vite" && framework !== "tanstack-start") return null;
+  if (
+    framework !== "astro" &&
+    framework !== "nextjs" &&
+    framework !== "vite" &&
+    framework !== "tanstack-start"
+  )
+    return null;
   let path: string | null;
   try {
-    path = resolveFrameworkConfig(framework === "nextjs" ? "next.config" : "vite.config", files);
+    path = resolveFrameworkConfig(
+      framework === "astro"
+        ? "astro.config"
+        : framework === "nextjs"
+          ? "next.config"
+          : "vite.config",
+      files,
+    );
   } catch (error) {
     // The shared rules name the ambiguous variants; none of them is judged.
     if (error instanceof FrameworkAdmissionError) return null;
@@ -1266,7 +1297,11 @@ function renderConfiguration(input: {
 
   let output = "dist";
   if (input.framework === "nextjs") output = ".open-next/assets";
-  else if (input.framework === "tanstack-start") output = "dist/client";
+  else if (
+    input.framework === "tanstack-start" ||
+    (input.framework === "astro" && input.tanStackRuntime === "edge")
+  )
+    output = "dist/client";
 
   let mode = "auto";
   if (input.framework === "functions") mode = "functions";
