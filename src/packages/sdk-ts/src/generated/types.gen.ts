@@ -1485,6 +1485,7 @@ export type OperationFailure = {
     | "database_compute_rejected"
     | "database_migration_failed"
     | "insufficient_organization_credits"
+    | "project_budget_exceeded"
     | "paid_plan_required"
     | "runtime_candidate_failed"
     | "runtime_candidate_rejected"

@@ -90,6 +90,10 @@ const failures = {
     "The organization does not have sufficient available credits for this operation.",
     "Ask the organization owner to top up credits, then create a new deployment plan. Preserve existing data; do not buy a second subscription or repeatedly reconcile this terminal operation.",
   ],
+  project_budget_exceeded: [
+    "The project's Stop budget prevents this deployment.",
+    "This project's Stop budget for the current UTC month was reached; no build started. Read 'ohmyhost budget get --project ULID --json'. Ask the organization Owner to change the limit or mode only if they want to allow more spending; otherwise wait for the next UTC month. Then plan and deploy again or send a new push. Replaying this terminal operation cannot start a build.",
+  ],
   paid_plan_required: [
     "Transactional mail requires an active Paid plan for this organization.",
     "Ask the organization Owner to activate Paid through billing checkout; top-ups and signup credits do not activate it. Then plan the same deployment or promotion again. If the app should send no mail, instead set mail.enabled to false in ohmyhost.yaml, save or push the corrected version and plan its commit. Replaying this operation cannot enable mail. Do not reset the database.",
