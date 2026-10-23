@@ -2,7 +2,7 @@
 
 These components retain their original licences.
 
-## @modelcontextprotocol/core 2.0.0
+## @modelcontextprotocol/core 2.3.0
 
 ### LICENSE
 
@@ -224,7 +224,7 @@ CC-BY-4.0. See https://creativecommons.org/licenses/by/4.0/legalcode for
 the full license text.
 
 
-## @modelcontextprotocol/server 2.0.0
+## @modelcontextprotocol/server 2.3.0
 
 ### LICENSE
 

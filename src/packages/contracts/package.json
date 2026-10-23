@@ -5,6 +5,11 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./shared-mail": {
+      "source": "./src/shared-mail.ts",
+      "types": "./dist/shared-mail.d.ts",
+      "import": "./dist/shared-mail.js"
+    },
     "./mcp-source-codec": {
       "source": "./src/mcp-source-codec.ts",
       "types": "./dist/mcp-source-codec.d.ts",

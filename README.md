@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.36; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.37; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.36 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.37 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -38,6 +38,13 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 
 ## Tools
 
+- `application_domain_identity_authorization_revoke`: Revoke the current application identity DNS grant with explicit confirmation.
+- `application_domain_identity_authorization_status`: Read the selected project application-domain identity DNS authorization status.
+- `application_domain_identity_authorize`: Request exact-purpose Cloudflare consent to write this project hostname ownership challenge at the current revision.
+- `application_domain_identity_declare`: Declare the intended customer application hostname before deployment.
+- `application_domain_identity_get`: Read the project intended application hostname, current revision and ownership proof.
+- `application_domain_identity_revoke`: Revoke only the selected current application-domain proof with explicit confirmation.
+- `application_domain_identity_verify`: Verify the exact current project and hostname TXT challenge independently of deployment.
 - `billing_checkout_create`: Owner-only: create or resume a hosted Checkout.
 - `billing_checkout_get`: Owner-only: observe the original checkout and reconcile confirmed credits/refunds, without another purchase.
 - `billing_portal_create`: Owner-only: return a short-lived Stripe portal URL to the human for invoices, payment methods or cancellation at period end.
@@ -69,6 +76,9 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `github_connect`: Owner or Admin: connect GitHub once for this workspace.
 - `github_status`: Read this workspace's GitHub connection.
 - `identity_get`: Get the ohmyho.st customer/agent identity this call acts as: user and account email, scoped organization IDs and names and, in context, the saved login or OHMYHOST_TOKEN that supplied it.
+- `mail_binding_detach`: Detach only this project send binding with current revision and explicit confirmation.
+- `mail_binding_get`: Read the Prod sender binding and per-project From addresses, default From and default Reply-To.
+- `mail_binding_set`: Attach a verified workspace sender or update its project settings.
 - `mail_domain_delete`: Retire the project's mail domain while the project stays active; use its Prod environment ID.
 - `mail_domain_set`: Configure the project's one production mail domain using its Prod environment ID.
 - `mail_domain_status`: Read separate sending and receiving readiness and exact DNS records for the project’s production mail domain.
@@ -135,6 +145,13 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `token_create`: Create your own non-expiring API token after interactive login and save it to the selected private env file.
 - `token_revoke`: Revoke one of your own API tokens after explicit confirmation and interactive login.
 - `tokens_list`: List your token metadata after interactive login.
+- `workspace_mail_domain_create`: Create one workspace-owned transactional sender domain.
+- `workspace_mail_domain_dns_authorize`: Request human Cloudflare consent for this selected workspace sender, zone and revision.
+- `workspace_mail_domain_dns_revoke`: Revoke the selected workspace sender DNS grant at its current revision with explicit confirmation.
+- `workspace_mail_domain_dns_status`: Read exact workspace sender DNS authorization status.
+- `workspace_mail_domain_get`: Read sender verification, lifecycle, revision and DNS records for one authorized workspace resource.
+- `workspace_mail_domain_retire`: Retire an explicitly selected workspace sender only after every send and inbound reference is detached and provider effects settle.
+- `workspace_mail_domains_list`: List only workspace sender domains this account and connected client may read.
 
 The full descriptions and input schemas are in the [tool catalog](https://ohmyho.st/mcp-tools.json).
 
@@ -147,7 +164,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.36 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.37 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

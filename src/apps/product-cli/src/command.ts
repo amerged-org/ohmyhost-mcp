@@ -3,7 +3,7 @@ import {
   isProjectDataChangeKind,
   type ProjectDataChangeKind,
 } from "@ohmyhost/contracts/project-data-changes";
-import type { ManagedMailCommand } from "@ohmyhost/sdk-ts";
+import type { ManagedMailCommand, SharedMailCommand } from "@ohmyhost/sdk-ts";
 import { USER_API_KEY_ID } from "@ohmyhost/contracts/user-api-keys";
 import { WORKOS_USER_API_KEY_PATTERN } from "@ohmyhost/workos-auth-contracts/user-api-keys";
 import { isProfileName, isProfileUserId } from "./profile-store.js";
@@ -537,6 +537,12 @@ export type ProductCliCommand =
       readonly credentialStore: "native";
     }
   | {
+      readonly kind: "shared-mail";
+      readonly request: SharedMailCommand;
+      readonly label: SharedMailCommandLabel;
+      readonly credentialStore: "native";
+    }
+  | {
       readonly kind: "managed-mail";
       readonly request: ManagedMailCommand;
       readonly label:
@@ -902,7 +908,27 @@ export type RecognizedCommandLabel =
   | "mail messages retry"
   | "mail domain set"
   | "mail domain status"
-  | "mail domain delete";
+  | "mail domain delete"
+  | SharedMailCommandLabel;
+
+export type SharedMailCommandLabel =
+  | "mail workspace list"
+  | "mail workspace create"
+  | "mail workspace status"
+  | "mail workspace retire"
+  | "mail workspace dns-authorize"
+  | "mail workspace dns-status"
+  | "mail workspace dns-revoke"
+  | "mail binding get"
+  | "mail binding set"
+  | "mail binding detach"
+  | "mail identity get"
+  | "mail identity declare"
+  | "mail identity verify"
+  | "mail identity revoke"
+  | "mail identity authorize"
+  | "mail identity authorization-status"
+  | "mail identity authorization-revoke";
 
 export const recognizedCommandLabel = (argv: readonly string[]): RecognizedCommandLabel => {
   const values = [...argv];
@@ -1052,6 +1078,11 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     }
     if (value === "function" && values[0] === "runs") return "function runs";
     if (value === "mail") {
+      if (["workspace", "binding", "identity"].includes(values[0] ?? "")) {
+        const candidate = `mail ${values[0]} ${values[1]}`;
+        if (SHARED_MAIL_LABELS.includes(candidate as SharedMailCommandLabel))
+          return candidate as SharedMailCommandLabel;
+      }
       if (values[0] === "setup") return "mail setup";
       if (values[0] === "status") return "mail status";
       if (values[0] === "webhook") {
@@ -2328,6 +2359,10 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
     }
     throw new InvalidCommandError();
   }
+  if (first === "mail" && ["workspace", "binding", "identity"].includes(values[0] ?? "")) {
+    if (wait || follow || stdin) throw new InvalidCommandError();
+    return parseSharedMailCommand(values, yes);
+  }
   if (first === "mail") {
     const area = values.shift();
     const sub =
@@ -2538,3 +2573,194 @@ const validPaidHostname = (value: string): boolean =>
   !value.endsWith(".omh.st") &&
   value !== "ohmyho.st" &&
   !value.endsWith(".ohmyho.st");
+
+const SHARED_MAIL_LABELS: readonly SharedMailCommandLabel[] = [
+  "mail workspace list",
+  "mail workspace create",
+  "mail workspace status",
+  "mail workspace retire",
+  "mail workspace dns-authorize",
+  "mail workspace dns-status",
+  "mail workspace dns-revoke",
+  "mail binding get",
+  "mail binding set",
+  "mail binding detach",
+  "mail identity get",
+  "mail identity declare",
+  "mail identity verify",
+  "mail identity revoke",
+  "mail identity authorize",
+  "mail identity authorization-status",
+  "mail identity authorization-revoke",
+];
+
+/** New workspace sender operations stay separate from the exact legacy project mail contract. */
+function parseSharedMailCommand(values: string[], yes: boolean): ProductCliCommand {
+  const area = values.shift(),
+    operation = values.shift();
+  const label = `mail ${area} ${operation}` as SharedMailCommandLabel;
+  if (!SHARED_MAIL_LABELS.includes(label)) throw new InvalidCommandError();
+  const destructive =
+    operation === "retire" ||
+    operation === "detach" ||
+    operation === "revoke" ||
+    operation === "dns-revoke" ||
+    operation === "authorization-revoke";
+  if (yes !== destructive) throw new InvalidCommandError();
+  const allowed = area === "workspace" ? ["--organization"] : ["--project"];
+  const writing = [
+    "create",
+    "retire",
+    "dns-authorize",
+    "dns-revoke",
+    "set",
+    "detach",
+    "declare",
+    "verify",
+    "revoke",
+    "authorize",
+    "authorization-revoke",
+  ].includes(operation ?? "");
+  if (area === "workspace" && operation !== "list" && operation !== "create")
+    allowed.push("--mail-domain");
+  if (area === "binding") allowed.push("--environment");
+  if (operation === "create") allowed.push("--domain", "--sending");
+  if (area === "binding" && operation === "set")
+    allowed.push(
+      "--mail-domain",
+      "--sending",
+      "--sender-addresses",
+      "--default-from",
+      "--reply-to",
+    );
+  if (operation === "declare") allowed.push("--hostname");
+  if (operation === "authorize" || operation === "dns-authorize") allowed.push("--zone");
+  if (writing) allowed.push("--idempotency-key");
+  if (writing && operation !== "create" && operation !== "declare")
+    allowed.push("--expected-revision");
+  const options = parseOptionalOptions(values, allowed);
+  const required = (key: keyof typeof options) => {
+    const value = options[key];
+    if (!value) throw new InvalidCommandError();
+    return value;
+  };
+  const revision = () => {
+    const value = required("--expected-revision");
+    if (!/^(?:0|[1-9][0-9]*)$/u.test(value) || !Number.isSafeInteger(Number(value)))
+      throw new InvalidCommandError();
+    return Number(value);
+  };
+  const sending = () => {
+    const value = required("--sending");
+    if (value !== "true" && value !== "false") throw new InvalidCommandError();
+    return value === "true";
+  };
+  const idempotencyKey = () => required("--idempotency-key");
+  let request: SharedMailCommand;
+  if (area === "workspace") {
+    const scope = { organizationId: required("--organization") };
+    if (operation === "list") request = { ...scope, action: "domains_list" };
+    else if (operation === "create") {
+      const enabled = sending();
+      if (!enabled) throw new InvalidCommandError();
+      request = {
+        ...scope,
+        action: "domain_create",
+        domain: required("--domain"),
+        sending: enabled,
+        idempotencyKey: idempotencyKey(),
+      };
+    } else {
+      const target = { ...scope, mailDomainId: required("--mail-domain") };
+      if (operation === "status") request = { ...target, action: "domain_get" };
+      else if (operation === "dns-status") request = { ...target, action: "domain_dns_status" };
+      else if (operation === "dns-revoke")
+        request = {
+          ...target,
+          action: "domain_dns_revoke",
+          expectedRevision: revision(),
+          idempotencyKey: idempotencyKey(),
+        };
+      else if (operation === "retire")
+        request = {
+          ...target,
+          action: "domain_retire",
+          expectedRevision: revision(),
+          idempotencyKey: idempotencyKey(),
+        };
+      else
+        request = {
+          ...target,
+          action: "domain_dns_authorize",
+          expectedRevision: revision(),
+          zone: required("--zone"),
+          idempotencyKey: idempotencyKey(),
+        };
+    }
+  } else if (area === "binding") {
+    const scope = { projectId: required("--project"), environmentId: required("--environment") };
+    if (operation === "get") request = { ...scope, action: "binding_get" };
+    else if (operation === "detach")
+      request = {
+        ...scope,
+        action: "binding_detach",
+        expectedRevision: revision(),
+        idempotencyKey: idempotencyKey(),
+      };
+    else {
+      const senderAddresses = required("--sender-addresses").split(",");
+      if (
+        senderAddresses.length > 32 ||
+        senderAddresses.some((address) => !address || address.trim() !== address) ||
+        new Set(senderAddresses).size !== senderAddresses.length
+      )
+        throw new InvalidCommandError();
+      request = {
+        ...scope,
+        action: "binding_set",
+        mailDomainId: required("--mail-domain"),
+        sending: sending(),
+        senderAddresses,
+        defaultFrom: required("--default-from"),
+        defaultReplyTo: options["--reply-to"] ?? null,
+        expectedRevision: revision(),
+        idempotencyKey: idempotencyKey(),
+      };
+    }
+  } else {
+    const scope = { projectId: required("--project") };
+    if (operation === "get") request = { ...scope, action: "identity_get" };
+    else if (operation === "authorization-status")
+      request = { ...scope, action: "identity_authorization_status" };
+    else if (operation === "authorization-revoke")
+      request = {
+        ...scope,
+        action: "identity_authorization_revoke",
+        expectedRevision: revision(),
+        idempotencyKey: idempotencyKey(),
+      };
+    else if (operation === "declare")
+      request = {
+        ...scope,
+        action: "identity_declare",
+        hostname: required("--hostname"),
+        idempotencyKey: idempotencyKey(),
+      };
+    else if (operation === "authorize")
+      request = {
+        ...scope,
+        action: "identity_authorize",
+        zone: required("--zone"),
+        expectedRevision: revision(),
+        idempotencyKey: idempotencyKey(),
+      };
+    else
+      request = {
+        ...scope,
+        action: operation === "verify" ? "identity_verify" : "identity_revoke",
+        expectedRevision: revision(),
+        idempotencyKey: idempotencyKey(),
+      };
+  }
+  return { kind: "shared-mail", request, label, credentialStore: "native" };
+}

@@ -4,7 +4,7 @@ import {
   formatMcpSourceFileResponse,
   McpSourceChangesInputError,
 } from "@ohmyhost/contracts/mcp-source-codec";
-import type { ManagedMailCommand } from "@ohmyhost/sdk-ts";
+import type { ManagedMailCommand, SharedMailCommand } from "@ohmyhost/sdk-ts";
 import {
   parseManagedSourceRequest,
   isManagedSourcePath,
@@ -289,6 +289,7 @@ export interface LocalMcpProductClient {
   getDeployment(input: DeploymentGetInput): Promise<Deployment>;
   getOperation(operationId: string): Promise<Operation>;
   reconcileOperation(input: OperationReconcileInput): Promise<ProviderReconciliationAttempt>;
+  sharedMail?(input: SharedMailCommand): Promise<unknown>;
   managedMail?(input: ManagedMailCommand): Promise<unknown>;
   listOperationEvents(
     operationId: string,
@@ -1547,6 +1548,371 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
         }),
       ),
     mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "workspace_mail_domain_dns_revoke",
+    "Revoke the selected workspace sender DNS grant at its current revision with explicit confirmation. This does not retire the sender or remove existing DNS records.",
+    z
+      .object({
+        organization_id: identifier,
+        mail_domain_id: identifier,
+        expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        idempotency_key: idempotencyKey,
+        confirmed: z.literal(true),
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "domain_dns_revoke",
+        organizationId: input.organization_id,
+        mailDomainId: input.mail_domain_id,
+        expectedRevision: input.expected_revision,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "application_domain_identity_authorization_revoke",
+    "Revoke the current application identity DNS grant with explicit confirmation. The application hostname and its verified proof remain unchanged; no website routing or DNS records are removed.",
+    z
+      .object({
+        project_id: identifier,
+        expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        idempotency_key: idempotencyKey,
+        confirmed: z.literal(true),
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "identity_authorization_revoke",
+        projectId: input.project_id,
+        expectedRevision: input.expected_revision,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "workspace_mail_domains_list",
+    "List only workspace sender domains this account and connected client may read. Project edit consent alone grants no sender-domain access.",
+    z.object({ organization_id: identifier }).strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({ action: "domains_list", organizationId: input.organization_id });
+    },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "workspace_mail_domain_create",
+    "Create one workspace-owned transactional sender domain. Requires explicit workspace mail administration. This creates no mailbox and preserves existing MX records.",
+    z
+      .object({
+        organization_id: identifier,
+        domain: z.string().min(1).max(253),
+        sending: z.literal(true),
+        idempotency_key: idempotencyKey,
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "domain_create",
+        organizationId: input.organization_id,
+        domain: input.domain,
+        sending: input.sending,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "workspace_mail_domain_get",
+    "Read sender verification, lifecycle, revision and DNS records for one authorized workspace resource.",
+    z.object({ organization_id: identifier, mail_domain_id: identifier }).strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "domain_get",
+        organizationId: input.organization_id,
+        mailDomainId: input.mail_domain_id,
+      });
+    },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "workspace_mail_domain_retire",
+    "Retire an explicitly selected workspace sender only after every send and inbound reference is detached and provider effects settle. Requires current revision and explicit confirmation. Retain the same request key after uncertainty.",
+    z
+      .object({
+        organization_id: identifier,
+        mail_domain_id: identifier,
+        expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        idempotency_key: idempotencyKey,
+        confirmed: z.literal(true),
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "domain_retire",
+        organizationId: input.organization_id,
+        mailDomainId: input.mail_domain_id,
+        expectedRevision: input.expected_revision,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "workspace_mail_domain_dns_authorize",
+    "Request human Cloudflare consent for this selected workspace sender, zone and revision. No provider credentials are accepted. Open the returned link for the human; never approve it automatically.",
+    z
+      .object({
+        organization_id: identifier,
+        mail_domain_id: identifier,
+        expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        zone: z.string().min(1).max(253),
+        idempotency_key: idempotencyKey,
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "domain_dns_authorize",
+        organizationId: input.organization_id,
+        mailDomainId: input.mail_domain_id,
+        expectedRevision: input.expected_revision,
+        zone: input.zone,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "workspace_mail_domain_dns_status",
+    "Read exact workspace sender DNS authorization status. An existing verified resource needs no new DNS grant merely to attach a same-domain project.",
+    z.object({ organization_id: identifier, mail_domain_id: identifier }).strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "domain_dns_status",
+        organizationId: input.organization_id,
+        mailDomainId: input.mail_domain_id,
+      });
+    },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "mail_binding_get",
+    "Read the Prod sender binding and per-project From addresses, default From and default Reply-To. Dev uses this logical project sender identity.",
+    z.object({ project_id: identifier, environment_id: identifier }).strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "binding_get",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+      });
+    },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "mail_binding_set",
+    "Attach a verified workspace sender or update its project settings. Requires target project edit and explicit sender use permission. The verified application and sender must share the registrable main domain. Set exact From addresses; no per-prefix DNS is needed. Reply-To may name an external existing mailbox and a per-message value overrides the default. Attaching changes no sender DNS and grants no receiving access.",
+    z
+      .object({
+        project_id: identifier,
+        environment_id: identifier,
+        mail_domain_id: identifier,
+        sending: z.boolean(),
+        sender_addresses: z.array(z.email().max(320)).min(1).max(32),
+        default_from: z.email().max(320),
+        default_reply_to: z.email().max(320).nullable(),
+        expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        idempotency_key: idempotencyKey,
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "binding_set",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        mailDomainId: input.mail_domain_id,
+        sending: input.sending,
+        senderAddresses: input.sender_addresses,
+        defaultFrom: input.default_from,
+        defaultReplyTo: input.default_reply_to,
+        expectedRevision: input.expected_revision,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "mail_binding_detach",
+    "Detach only this project send binding with current revision and explicit confirmation. Sibling senders, provider verification and the exclusive inbound owner remain intact.",
+    z
+      .object({
+        project_id: identifier,
+        environment_id: identifier,
+        expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        idempotency_key: idempotencyKey,
+        confirmed: z.literal(true),
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "binding_detach",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        expectedRevision: input.expected_revision,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "application_domain_identity_get",
+    "Read the project intended application hostname, current revision and ownership proof. An awaiting deployment declaration or technical OMH hostname alone is not verified customer-domain identity.",
+    z.object({ project_id: identifier }).strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({ action: "identity_get", projectId: input.project_id });
+    },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "application_domain_identity_declare",
+    "Declare the intended customer application hostname before deployment. Returns a project-bound TXT ownership challenge. This does not route website traffic or prove ownership; verify the challenge before attaching a shared sender.",
+    z
+      .object({
+        project_id: identifier,
+        hostname: z.string().min(1).max(253),
+        idempotency_key: idempotencyKey,
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "identity_declare",
+        projectId: input.project_id,
+        hostname: input.hostname,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "application_domain_identity_verify",
+    "Verify the exact current project and hostname TXT challenge independently of deployment. Read the resulting proof before attaching a same-main-domain workspace sender.",
+    z
+      .object({
+        project_id: identifier,
+        expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        idempotency_key: idempotencyKey,
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "identity_verify",
+        projectId: input.project_id,
+        expectedRevision: input.expected_revision,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "application_domain_identity_revoke",
+    "Revoke only the selected current application-domain proof with explicit confirmation. This does not delete or retarget the website. Sender reuse requires a current eligible identity.",
+    z
+      .object({
+        project_id: identifier,
+        expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        idempotency_key: idempotencyKey,
+        confirmed: z.literal(true),
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "identity_revoke",
+        projectId: input.project_id,
+        expectedRevision: input.expected_revision,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "application_domain_identity_authorize",
+    "Request exact-purpose Cloudflare consent to write this project hostname ownership challenge at the current revision. Open the private authorization URL for the human; never approve it automatically. Manual DNS remains available.",
+    z
+      .object({
+        project_id: identifier,
+        expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        zone: z.string().min(1).max(253),
+        idempotency_key: idempotencyKey,
+      })
+      .strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "identity_authorize",
+        projectId: input.project_id,
+        expectedRevision: input.expected_revision,
+        zone: input.zone,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "application_domain_identity_authorization_status",
+    "Read the selected project application-domain identity DNS authorization status. Zone visibility or consent alone is not ownership proof; run verification.",
+    z.object({ project_id: identifier }).strict(),
+    async (client, input) => {
+      if (!client.sharedMail) throw new Error("Shared mail unavailable");
+      return client.sharedMail({
+        action: "identity_authorization_status",
+        projectId: input.project_id,
+      });
+    },
   );
   registerProductTool(
     server,

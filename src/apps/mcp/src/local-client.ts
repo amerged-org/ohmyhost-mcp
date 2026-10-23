@@ -1,4 +1,9 @@
-import { executeManagedMail, type ManagedMailCommand } from "@ohmyhost/sdk-ts";
+import {
+  executeManagedMail,
+  executeSharedMail,
+  type ManagedMailCommand,
+  type SharedMailCommand,
+} from "@ohmyhost/sdk-ts";
 import {
   assertProjectDatabaseAccess,
   assertProjectDatabaseAccessCredential,
@@ -838,6 +843,10 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
       { client: this.#client },
     );
   }
+  public sharedMail(input: SharedMailCommand) {
+    return executeSharedMail(this.#client, input);
+  }
+
   public managedMail(input: ManagedMailCommand) {
     return executeManagedMail(this.#client, input);
   }

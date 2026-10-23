@@ -6,3 +6,5 @@ export {
 } from "./generated/client/index.js";
 export * from "./generated/index.js";
 export * from "./managed-mail.js";
+
+export * from "./shared-mail.js";

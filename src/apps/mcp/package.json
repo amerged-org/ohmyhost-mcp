@@ -1,6 +1,6 @@
 {
   "name": "@ohmyhost/mcp",
-  "version": "0.1.36",
+  "version": "0.1.37",
   "private": true,
   "ohmyhost": {
     "deployment": "production",
@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@ohmyhost/contracts": "workspace:*",
-    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/server": "2.3.0",
     "@ohmyhost/agent-skills": "workspace:*",
     "@ohmyhost/product-cli": "workspace:*",
     "@ohmyhost/sdk-ts": "workspace:*",

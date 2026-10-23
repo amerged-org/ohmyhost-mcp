@@ -4,6 +4,90 @@ export type ClientOptions = {
   baseUrl: "https://app.ohmyho.st" | "https://dev.app.ohmyho.st" | (string & {});
 };
 
+export type WorkspaceMailDomain = {
+  domain_id: Ulid;
+  organization_id: Ulid;
+  domain: string;
+  registrable_domain: string;
+  revision: number;
+  status: "active" | "retiring" | "retired";
+  sending: "disabled" | "pending" | "ready" | "failed";
+  receiving: "disabled" | "pending" | "ready" | "failed";
+  configured_at: string;
+  observed_at: string | null;
+  dns_records: Array<ManagedMailDnsRecord>;
+  bindings_count: number;
+};
+
+export type WorkspaceMailDomainPage = {
+  items: Array<WorkspaceMailDomain>;
+};
+
+export type CreateWorkspaceMailDomainRequest = {
+  domain: string;
+  sending: true;
+};
+
+export type MailRevisionRequest = {
+  expected_revision: number;
+};
+
+export type SharedMailDnsAuthorizationRequest = {
+  expected_revision: number;
+  zone: string;
+};
+
+export type ProjectMailDomainBindingRequest = {
+  mail_domain_id: Ulid;
+  sending: boolean;
+  sender_addresses: Array<string>;
+  default_from: string;
+  default_reply_to: string | null;
+  expected_revision: number;
+};
+
+export type ApplicationDomainIdentitySummary = {
+  hostname: string;
+  registrable_domain: string;
+  revision: number;
+  status: "pending" | "verified" | "expired" | "revoked";
+};
+
+export type ProjectMailDomainBinding = {
+  mail_domain_id: Ulid;
+  organization_id: Ulid;
+  project_id: Ulid;
+  environment_id: Ulid;
+  revision: number;
+  sending: boolean;
+  sender_addresses: Array<string>;
+  default_from: string | null;
+  default_reply_to: string | null;
+  legacy: boolean;
+  status: "active" | "detached" | "suspended";
+  application_domain_identity: ApplicationDomainIdentitySummary | null;
+};
+
+export type ApplicationDomainIdentityRequest = {
+  hostname: string;
+};
+
+export type ApplicationDomainIdentity = {
+  organization_id: Ulid;
+  project_id: Ulid;
+  hostname: string;
+  registrable_domain: string;
+  status: "pending" | "verified" | "expired" | "revoked";
+  revision: number;
+  challenge: {
+    type: "TXT";
+    name: string;
+    value: string;
+  };
+  verified_at: string | null;
+  expires_at: string;
+};
+
 export type ManagedMailDomainRequest = {
   domain: string;
   sending: boolean;
@@ -1704,6 +1788,1129 @@ export type ProjectFilter = Ulid;
  * Restricts the page to one visible operation.
  */
 export type OperationFilter = Ulid;
+
+export type ListWorkspaceMailDomainsData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/mail-domains";
+};
+
+export type ListWorkspaceMailDomainsErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListWorkspaceMailDomainsError =
+  ListWorkspaceMailDomainsErrors[keyof ListWorkspaceMailDomainsErrors];
+
+export type ListWorkspaceMailDomainsResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: WorkspaceMailDomainPage;
+};
+
+export type ListWorkspaceMailDomainsResponse =
+  ListWorkspaceMailDomainsResponses[keyof ListWorkspaceMailDomainsResponses];
+
+export type CreateWorkspaceMailDomainData = {
+  body: CreateWorkspaceMailDomainRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    organization_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/mail-domains";
+};
+
+export type CreateWorkspaceMailDomainErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateWorkspaceMailDomainError =
+  CreateWorkspaceMailDomainErrors[keyof CreateWorkspaceMailDomainErrors];
+
+export type CreateWorkspaceMailDomainResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: WorkspaceMailDomain;
+};
+
+export type CreateWorkspaceMailDomainResponse =
+  CreateWorkspaceMailDomainResponses[keyof CreateWorkspaceMailDomainResponses];
+
+export type RetireWorkspaceMailDomainData = {
+  body: MailRevisionRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    organization_id: Ulid;
+    mail_domain_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}";
+};
+
+export type RetireWorkspaceMailDomainErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RetireWorkspaceMailDomainError =
+  RetireWorkspaceMailDomainErrors[keyof RetireWorkspaceMailDomainErrors];
+
+export type RetireWorkspaceMailDomainResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: WorkspaceMailDomain;
+};
+
+export type RetireWorkspaceMailDomainResponse =
+  RetireWorkspaceMailDomainResponses[keyof RetireWorkspaceMailDomainResponses];
+
+export type GetWorkspaceMailDomainData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+    mail_domain_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}";
+};
+
+export type GetWorkspaceMailDomainErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetWorkspaceMailDomainError =
+  GetWorkspaceMailDomainErrors[keyof GetWorkspaceMailDomainErrors];
+
+export type GetWorkspaceMailDomainResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: WorkspaceMailDomain;
+};
+
+export type GetWorkspaceMailDomainResponse =
+  GetWorkspaceMailDomainResponses[keyof GetWorkspaceMailDomainResponses];
+
+export type RevokeWorkspaceMailDomainDnsAuthorizationData = {
+  body: MailRevisionRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    organization_id: Ulid;
+    mail_domain_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}/dns-authorization";
+};
+
+export type RevokeWorkspaceMailDomainDnsAuthorizationErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RevokeWorkspaceMailDomainDnsAuthorizationError =
+  RevokeWorkspaceMailDomainDnsAuthorizationErrors[keyof RevokeWorkspaceMailDomainDnsAuthorizationErrors];
+
+export type RevokeWorkspaceMailDomainDnsAuthorizationResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: CloudflareDnsAuthorizationStatus;
+};
+
+export type RevokeWorkspaceMailDomainDnsAuthorizationResponse =
+  RevokeWorkspaceMailDomainDnsAuthorizationResponses[keyof RevokeWorkspaceMailDomainDnsAuthorizationResponses];
+
+export type GetWorkspaceMailDomainDnsAuthorizationData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+    mail_domain_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}/dns-authorization";
+};
+
+export type GetWorkspaceMailDomainDnsAuthorizationErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetWorkspaceMailDomainDnsAuthorizationError =
+  GetWorkspaceMailDomainDnsAuthorizationErrors[keyof GetWorkspaceMailDomainDnsAuthorizationErrors];
+
+export type GetWorkspaceMailDomainDnsAuthorizationResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: CloudflareDnsAuthorizationStatus;
+};
+
+export type GetWorkspaceMailDomainDnsAuthorizationResponse =
+  GetWorkspaceMailDomainDnsAuthorizationResponses[keyof GetWorkspaceMailDomainDnsAuthorizationResponses];
+
+export type AuthorizeWorkspaceMailDomainDnsData = {
+  body: SharedMailDnsAuthorizationRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    organization_id: Ulid;
+    mail_domain_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}/dns-authorization";
+};
+
+export type AuthorizeWorkspaceMailDomainDnsErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type AuthorizeWorkspaceMailDomainDnsError =
+  AuthorizeWorkspaceMailDomainDnsErrors[keyof AuthorizeWorkspaceMailDomainDnsErrors];
+
+export type AuthorizeWorkspaceMailDomainDnsResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: CloudflareDnsAuthorization;
+};
+
+export type AuthorizeWorkspaceMailDomainDnsResponse =
+  AuthorizeWorkspaceMailDomainDnsResponses[keyof AuthorizeWorkspaceMailDomainDnsResponses];
+
+export type DetachProjectMailDomainBindingData = {
+  body: MailRevisionRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    project_id: Ulid;
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain-binding";
+};
+
+export type DetachProjectMailDomainBindingErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DetachProjectMailDomainBindingError =
+  DetachProjectMailDomainBindingErrors[keyof DetachProjectMailDomainBindingErrors];
+
+export type DetachProjectMailDomainBindingResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: ProjectMailDomainBinding;
+};
+
+export type DetachProjectMailDomainBindingResponse =
+  DetachProjectMailDomainBindingResponses[keyof DetachProjectMailDomainBindingResponses];
+
+export type GetProjectMailDomainBindingData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    project_id: Ulid;
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain-binding";
+};
+
+export type GetProjectMailDomainBindingErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetProjectMailDomainBindingError =
+  GetProjectMailDomainBindingErrors[keyof GetProjectMailDomainBindingErrors];
+
+export type GetProjectMailDomainBindingResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: ProjectMailDomainBinding;
+};
+
+export type GetProjectMailDomainBindingResponse =
+  GetProjectMailDomainBindingResponses[keyof GetProjectMailDomainBindingResponses];
+
+export type PutProjectMailDomainBindingData = {
+  body: ProjectMailDomainBindingRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    project_id: Ulid;
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain-binding";
+};
+
+export type PutProjectMailDomainBindingErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type PutProjectMailDomainBindingError =
+  PutProjectMailDomainBindingErrors[keyof PutProjectMailDomainBindingErrors];
+
+export type PutProjectMailDomainBindingResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: ProjectMailDomainBinding;
+};
+
+export type PutProjectMailDomainBindingResponse =
+  PutProjectMailDomainBindingResponses[keyof PutProjectMailDomainBindingResponses];
+
+export type RevokeApplicationDomainIdentityData = {
+  body: MailRevisionRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/application-domain-identity";
+};
+
+export type RevokeApplicationDomainIdentityErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RevokeApplicationDomainIdentityError =
+  RevokeApplicationDomainIdentityErrors[keyof RevokeApplicationDomainIdentityErrors];
+
+export type RevokeApplicationDomainIdentityResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: ApplicationDomainIdentity;
+};
+
+export type RevokeApplicationDomainIdentityResponse =
+  RevokeApplicationDomainIdentityResponses[keyof RevokeApplicationDomainIdentityResponses];
+
+export type GetApplicationDomainIdentityData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/application-domain-identity";
+};
+
+export type GetApplicationDomainIdentityErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetApplicationDomainIdentityError =
+  GetApplicationDomainIdentityErrors[keyof GetApplicationDomainIdentityErrors];
+
+export type GetApplicationDomainIdentityResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: ApplicationDomainIdentity;
+};
+
+export type GetApplicationDomainIdentityResponse =
+  GetApplicationDomainIdentityResponses[keyof GetApplicationDomainIdentityResponses];
+
+export type DeclareApplicationDomainIdentityData = {
+  body: ApplicationDomainIdentityRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/application-domain-identity";
+};
+
+export type DeclareApplicationDomainIdentityErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DeclareApplicationDomainIdentityError =
+  DeclareApplicationDomainIdentityErrors[keyof DeclareApplicationDomainIdentityErrors];
+
+export type DeclareApplicationDomainIdentityResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: ApplicationDomainIdentity;
+};
+
+export type DeclareApplicationDomainIdentityResponse =
+  DeclareApplicationDomainIdentityResponses[keyof DeclareApplicationDomainIdentityResponses];
+
+export type VerifyApplicationDomainIdentityData = {
+  body: MailRevisionRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/application-domain-identity/verify";
+};
+
+export type VerifyApplicationDomainIdentityErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type VerifyApplicationDomainIdentityError =
+  VerifyApplicationDomainIdentityErrors[keyof VerifyApplicationDomainIdentityErrors];
+
+export type VerifyApplicationDomainIdentityResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: ApplicationDomainIdentity;
+};
+
+export type VerifyApplicationDomainIdentityResponse =
+  VerifyApplicationDomainIdentityResponses[keyof VerifyApplicationDomainIdentityResponses];
+
+export type RevokeApplicationDomainIdentityDnsAuthorizationData = {
+  body: MailRevisionRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/application-domain-identity/dns-authorization";
+};
+
+export type RevokeApplicationDomainIdentityDnsAuthorizationErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RevokeApplicationDomainIdentityDnsAuthorizationError =
+  RevokeApplicationDomainIdentityDnsAuthorizationErrors[keyof RevokeApplicationDomainIdentityDnsAuthorizationErrors];
+
+export type RevokeApplicationDomainIdentityDnsAuthorizationResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: CloudflareDnsAuthorizationStatus;
+};
+
+export type RevokeApplicationDomainIdentityDnsAuthorizationResponse =
+  RevokeApplicationDomainIdentityDnsAuthorizationResponses[keyof RevokeApplicationDomainIdentityDnsAuthorizationResponses];
+
+export type GetApplicationDomainIdentityDnsAuthorizationData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/application-domain-identity/dns-authorization";
+};
+
+export type GetApplicationDomainIdentityDnsAuthorizationErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetApplicationDomainIdentityDnsAuthorizationError =
+  GetApplicationDomainIdentityDnsAuthorizationErrors[keyof GetApplicationDomainIdentityDnsAuthorizationErrors];
+
+export type GetApplicationDomainIdentityDnsAuthorizationResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: CloudflareDnsAuthorizationStatus;
+};
+
+export type GetApplicationDomainIdentityDnsAuthorizationResponse =
+  GetApplicationDomainIdentityDnsAuthorizationResponses[keyof GetApplicationDomainIdentityDnsAuthorizationResponses];
+
+export type AuthorizeApplicationDomainIdentityDnsData = {
+  body: SharedMailDnsAuthorizationRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/application-domain-identity/dns-authorization";
+};
+
+export type AuthorizeApplicationDomainIdentityDnsErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type AuthorizeApplicationDomainIdentityDnsError =
+  AuthorizeApplicationDomainIdentityDnsErrors[keyof AuthorizeApplicationDomainIdentityDnsErrors];
+
+export type AuthorizeApplicationDomainIdentityDnsResponses = {
+  /**
+   * Authorized exact resource result.
+   */
+  200: CloudflareDnsAuthorization;
+};
+
+export type AuthorizeApplicationDomainIdentityDnsResponse =
+  AuthorizeApplicationDomainIdentityDnsResponses[keyof AuthorizeApplicationDomainIdentityDnsResponses];
 
 export type GetAccountProfileData = {
   body?: never;

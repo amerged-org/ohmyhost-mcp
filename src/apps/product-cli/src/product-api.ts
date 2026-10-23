@@ -1,4 +1,9 @@
-import { executeManagedMail, type ManagedMailCommand } from "@ohmyhost/sdk-ts";
+import {
+  executeManagedMail,
+  executeSharedMail,
+  type ManagedMailCommand,
+  type SharedMailCommand,
+} from "@ohmyhost/sdk-ts";
 import type {
   ProjectDataChangeKind,
   ProjectDataChangePlan,
@@ -434,6 +439,7 @@ export interface ProductApi {
     readonly name: string;
     readonly idempotencyKey: string;
   }): Promise<DeleteEnvironmentSecretResult>;
+  sharedMail?(input: SharedMailCommand): Promise<unknown>;
   managedMail?(input: ManagedMailCommand): Promise<unknown>;
 }
 
@@ -1235,6 +1241,10 @@ export class GeneratedSdkProductApi implements ProductApi {
       },
       { client: this.#client },
     );
+  }
+
+  public sharedMail(input: SharedMailCommand) {
+    return executeSharedMail(this.#client, input);
   }
 
   public managedMail(input: ManagedMailCommand) {

@@ -528,6 +528,8 @@ const readTokenIdentity = async (input: {
 /** The organization a command names explicitly; `organization use` names its target instead. */
 const commandOrganizationId = (command: ProductCliCommand): string | undefined => {
   if (command.kind === "organization-use" || command.kind === "login") return undefined;
+  if (command.kind === "shared-mail" && "organizationId" in command.request)
+    return command.request.organizationId;
   if (command.kind === "feedback-submit") return command.report.organization_id;
   return "organizationId" in command && typeof command.organizationId === "string"
     ? command.organizationId
@@ -535,6 +537,8 @@ const commandOrganizationId = (command: ProductCliCommand): string | undefined =
 };
 
 const commandProjectId = (command: ProductCliCommand): string | undefined => {
+  if (command.kind === "shared-mail")
+    return "projectId" in command.request ? command.request.projectId : undefined;
   if (command.kind === "managed-mail") return command.request.projectId;
   return "projectId" in command && typeof command.projectId === "string"
     ? command.projectId

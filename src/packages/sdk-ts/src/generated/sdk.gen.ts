@@ -11,8 +11,13 @@ import {
   type TDataShape,
 } from "./client/index.js";
 import type {
+  ApplicationDomainIdentityRequest,
   ApplyPaidProjectDomainErrors,
   ApplyPaidProjectDomainResponses,
+  AuthorizeApplicationDomainIdentityDnsErrors,
+  AuthorizeApplicationDomainIdentityDnsResponses,
+  AuthorizeWorkspaceMailDomainDnsErrors,
+  AuthorizeWorkspaceMailDomainDnsResponses,
   ChangeDatabaseComputeErrors,
   ChangeDatabaseComputeResponses,
   ChangeManagedSourceErrors,
@@ -66,6 +71,11 @@ import type {
   CreateProjectResponses,
   CreateUserApiKeyErrors,
   CreateUserApiKeyResponses,
+  CreateWorkspaceMailDomainErrors,
+  CreateWorkspaceMailDomainRequest,
+  CreateWorkspaceMailDomainResponses,
+  DeclareApplicationDomainIdentityErrors,
+  DeclareApplicationDomainIdentityResponses,
   DeleteEnvironmentSecretErrors,
   DeleteEnvironmentSecretResponses,
   DeleteManagedMailDomainErrors,
@@ -74,6 +84,8 @@ import type {
   DeletePaidProjectDomainResponses,
   DeleteProjectErrors,
   DeleteProjectResponses,
+  DetachProjectMailDomainBindingErrors,
+  DetachProjectMailDomainBindingResponses,
   DiffManagedSourceErrors,
   DiffManagedSourceResponses,
   DisableManagedMailReceivingErrors,
@@ -83,6 +95,10 @@ import type {
   FeedbackSubmission,
   GetAccountProfileErrors,
   GetAccountProfileResponses,
+  GetApplicationDomainIdentityDnsAuthorizationErrors,
+  GetApplicationDomainIdentityDnsAuthorizationResponses,
+  GetApplicationDomainIdentityErrors,
+  GetApplicationDomainIdentityResponses,
   GetBillingCheckoutErrors,
   GetBillingCheckoutResponses,
   GetBillingRechargeErrors,
@@ -132,6 +148,8 @@ import type {
   GetProjectExportResponses,
   GetProjectHandleAvailabilityErrors,
   GetProjectHandleAvailabilityResponses,
+  GetProjectMailDomainBindingErrors,
+  GetProjectMailDomainBindingResponses,
   GetProjectPoweredByFlagErrors,
   GetProjectPoweredByFlagResponses,
   GetProjectResponses,
@@ -143,6 +161,10 @@ import type {
   GetProjectStatusResponses,
   GetPublicDeploymentStatsErrors,
   GetPublicDeploymentStatsResponses,
+  GetWorkspaceMailDomainDnsAuthorizationErrors,
+  GetWorkspaceMailDomainDnsAuthorizationResponses,
+  GetWorkspaceMailDomainErrors,
+  GetWorkspaceMailDomainResponses,
   InitializeManagedSourceErrors,
   InitializeManagedSourceResponses,
   LinkProjectSourceErrors,
@@ -168,6 +190,9 @@ import type {
   ListProjectsResponses,
   ListUserApiKeysErrors,
   ListUserApiKeysResponses,
+  ListWorkspaceMailDomainsErrors,
+  ListWorkspaceMailDomainsResponses,
+  MailRevisionRequest,
   ManagedMailDomainRequest,
   ManagedMailWebhookRequest,
   ManagedSourceBlobRequest,
@@ -198,6 +223,7 @@ import type {
   ProjectDatabaseQueryRequest,
   ProjectDatabaseWriteRequest,
   ProjectDataChangeRequest,
+  ProjectMailDomainBindingRequest,
   PromoteDeploymentErrors,
   PromoteDeploymentResponses,
   PutEnvironmentSecretErrors,
@@ -205,6 +231,8 @@ import type {
   PutEnvironmentSecretResponses,
   PutManagedSourceBlobErrors,
   PutManagedSourceBlobResponses,
+  PutProjectMailDomainBindingErrors,
+  PutProjectMailDomainBindingResponses,
   QueryProjectDatabaseErrors,
   QueryProjectDatabaseResponses,
   ReconcileOperationErrors,
@@ -215,8 +243,14 @@ import type {
   RegisterFeatureInterestResponses,
   RestoreManagedSourceErrors,
   RestoreManagedSourceResponses,
+  RetireWorkspaceMailDomainErrors,
+  RetireWorkspaceMailDomainResponses,
   RetryManagedMailMessageErrors,
   RetryManagedMailMessageResponses,
+  RevokeApplicationDomainIdentityDnsAuthorizationErrors,
+  RevokeApplicationDomainIdentityDnsAuthorizationResponses,
+  RevokeApplicationDomainIdentityErrors,
+  RevokeApplicationDomainIdentityResponses,
   RevokeCurrentSessionErrors,
   RevokeCurrentSessionResponses,
   RevokeProjectDatabaseAccessErrors,
@@ -225,6 +259,8 @@ import type {
   RevokeProjectDevShareLinkResponses,
   RevokeUserApiKeyErrors,
   RevokeUserApiKeyResponses,
+  RevokeWorkspaceMailDomainDnsAuthorizationErrors,
+  RevokeWorkspaceMailDomainDnsAuthorizationResponses,
   RollbackDeploymentErrors,
   RollbackDeploymentResponses,
   RotateProjectDevShareLinkErrors,
@@ -240,6 +276,7 @@ import type {
   SetProjectNotesResponses,
   SetProjectPoweredByFlagErrors,
   SetProjectPoweredByFlagResponses,
+  SharedMailDnsAuthorizationRequest,
   StreamDeploymentLogsErrors,
   StreamDeploymentLogsResponse,
   StreamDeploymentLogsResponses,
@@ -254,6 +291,8 @@ import type {
   SwitchManagedSourceResponses,
   Ulid,
   UserApiKeyId,
+  VerifyApplicationDomainIdentityErrors,
+  VerifyApplicationDomainIdentityResponses,
   VerifyManagedMailWebhookErrors,
   VerifyManagedMailWebhookResponses,
   WriteProjectDatabaseErrors,
@@ -276,6 +315,837 @@ export type Options<
    * used to access values that aren't defined as part of the SDK function.
    */
   meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
+};
+
+/**
+ * List authorized workspace sending domains
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const listWorkspaceMailDomains = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    organization_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ListWorkspaceMailDomainsResponses,
+  ListWorkspaceMailDomainsErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "organization_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    ListWorkspaceMailDomainsResponses,
+    ListWorkspaceMailDomainsErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/mail-domains",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Create a workspace sending domain
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const createWorkspaceMailDomain = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    organization_id: Ulid;
+    createWorkspaceMailDomainRequest: CreateWorkspaceMailDomainRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateWorkspaceMailDomainResponses,
+  CreateWorkspaceMailDomainErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "organization_id" },
+          { key: "createWorkspaceMailDomainRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateWorkspaceMailDomainResponses,
+    CreateWorkspaceMailDomainErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/mail-domains",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Retire an unused workspace mail domain
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const retireWorkspaceMailDomain = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    organization_id: Ulid;
+    mail_domain_id: Ulid;
+    mailRevisionRequest: MailRevisionRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RetireWorkspaceMailDomainResponses,
+  RetireWorkspaceMailDomainErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "organization_id" },
+          { in: "path", key: "mail_domain_id" },
+          { key: "mailRevisionRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    RetireWorkspaceMailDomainResponses,
+    RetireWorkspaceMailDomainErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read one authorized workspace sending domain
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const getWorkspaceMailDomain = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    organization_id: Ulid;
+    mail_domain_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetWorkspaceMailDomainResponses,
+  GetWorkspaceMailDomainErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "organization_id" },
+          { in: "path", key: "mail_domain_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetWorkspaceMailDomainResponses,
+    GetWorkspaceMailDomainErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Revoke workspace mail DNS management without changing sending
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const revokeWorkspaceMailDomainDnsAuthorization = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    organization_id: Ulid;
+    mail_domain_id: Ulid;
+    mailRevisionRequest: MailRevisionRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RevokeWorkspaceMailDomainDnsAuthorizationResponses,
+  RevokeWorkspaceMailDomainDnsAuthorizationErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "organization_id" },
+          { in: "path", key: "mail_domain_id" },
+          { key: "mailRevisionRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    RevokeWorkspaceMailDomainDnsAuthorizationResponses,
+    RevokeWorkspaceMailDomainDnsAuthorizationErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}/dns-authorization",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read sender-domain DNS authorization
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const getWorkspaceMailDomainDnsAuthorization = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    organization_id: Ulid;
+    mail_domain_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetWorkspaceMailDomainDnsAuthorizationResponses,
+  GetWorkspaceMailDomainDnsAuthorizationErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "organization_id" },
+          { in: "path", key: "mail_domain_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetWorkspaceMailDomainDnsAuthorizationResponses,
+    GetWorkspaceMailDomainDnsAuthorizationErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}/dns-authorization",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Authorize exact sender-domain DNS management
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const authorizeWorkspaceMailDomainDns = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    organization_id: Ulid;
+    mail_domain_id: Ulid;
+    sharedMailDnsAuthorizationRequest: SharedMailDnsAuthorizationRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  AuthorizeWorkspaceMailDomainDnsResponses,
+  AuthorizeWorkspaceMailDomainDnsErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "organization_id" },
+          { in: "path", key: "mail_domain_id" },
+          { key: "sharedMailDnsAuthorizationRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    AuthorizeWorkspaceMailDomainDnsResponses,
+    AuthorizeWorkspaceMailDomainDnsErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}/dns-authorization",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Detach only the selected project sender
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const detachProjectMailDomainBinding = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    mailRevisionRequest: MailRevisionRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  DetachProjectMailDomainBindingResponses,
+  DetachProjectMailDomainBindingErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { key: "mailRevisionRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    DetachProjectMailDomainBindingResponses,
+    DetachProjectMailDomainBindingErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain-binding",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read project sender settings
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const getProjectMailDomainBinding = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetProjectMailDomainBindingResponses,
+  GetProjectMailDomainBindingErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetProjectMailDomainBindingResponses,
+    GetProjectMailDomainBindingErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain-binding",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Attach or update a same-main-domain sender
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const putProjectMailDomainBinding = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    projectMailDomainBindingRequest: ProjectMailDomainBindingRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  PutProjectMailDomainBindingResponses,
+  PutProjectMailDomainBindingErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { key: "projectMailDomainBindingRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).put<
+    PutProjectMailDomainBindingResponses,
+    PutProjectMailDomainBindingErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain-binding",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Revoke application domain proof and dependent shared sends
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const revokeApplicationDomainIdentity = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    mailRevisionRequest: MailRevisionRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RevokeApplicationDomainIdentityResponses,
+  RevokeApplicationDomainIdentityErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "mailRevisionRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    RevokeApplicationDomainIdentityResponses,
+    RevokeApplicationDomainIdentityErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/application-domain-identity",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read the intended application domain proof
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const getApplicationDomainIdentity = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetApplicationDomainIdentityResponses,
+  GetApplicationDomainIdentityErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetApplicationDomainIdentityResponses,
+    GetApplicationDomainIdentityErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/application-domain-identity",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Declare an intended application domain without switching traffic
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const declareApplicationDomainIdentity = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    applicationDomainIdentityRequest: ApplicationDomainIdentityRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  DeclareApplicationDomainIdentityResponses,
+  DeclareApplicationDomainIdentityErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "applicationDomainIdentityRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).put<
+    DeclareApplicationDomainIdentityResponses,
+    DeclareApplicationDomainIdentityErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/application-domain-identity",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Verify the current application DNS challenge
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const verifyApplicationDomainIdentity = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    mailRevisionRequest: MailRevisionRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  VerifyApplicationDomainIdentityResponses,
+  VerifyApplicationDomainIdentityErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "mailRevisionRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    VerifyApplicationDomainIdentityResponses,
+    VerifyApplicationDomainIdentityErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/application-domain-identity/verify",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Revoke application proof DNS management without switching traffic
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const revokeApplicationDomainIdentityDnsAuthorization = <
+  ThrowOnError extends boolean = true,
+>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    mailRevisionRequest: MailRevisionRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RevokeApplicationDomainIdentityDnsAuthorizationResponses,
+  RevokeApplicationDomainIdentityDnsAuthorizationErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "mailRevisionRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    RevokeApplicationDomainIdentityDnsAuthorizationResponses,
+    RevokeApplicationDomainIdentityDnsAuthorizationErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/application-domain-identity/dns-authorization",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read application proof DNS authorization
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const getApplicationDomainIdentityDnsAuthorization = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetApplicationDomainIdentityDnsAuthorizationResponses,
+  GetApplicationDomainIdentityDnsAuthorizationErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetApplicationDomainIdentityDnsAuthorizationResponses,
+    GetApplicationDomainIdentityDnsAuthorizationErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/application-domain-identity/dns-authorization",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Authorize only the frozen application TXT challenge
+ *
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ */
+export const authorizeApplicationDomainIdentityDns = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    sharedMailDnsAuthorizationRequest: SharedMailDnsAuthorizationRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  AuthorizeApplicationDomainIdentityDnsResponses,
+  AuthorizeApplicationDomainIdentityDnsErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "sharedMailDnsAuthorizationRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    AuthorizeApplicationDomainIdentityDnsResponses,
+    AuthorizeApplicationDomainIdentityDnsErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/application-domain-identity/dns-authorization",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
 };
 
 /**

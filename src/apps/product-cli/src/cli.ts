@@ -470,6 +470,37 @@ const HELP_USAGE = Object.freeze({
     "printf '%s' \"$SECRET_VALUE\" | ohmyhost secret set NAME --project ULID --environment ENVIRONMENT_ULID --idempotency-key KEY [--profile-user USER_ID --profile-organization ULID | --token-user USER_ID --token-organization ULID] --stdin [--wait] --json (with --profile-user and --profile-organization the saved login that runs it must belong to that user and organization; with --token-user and --token-organization it runs only with an OHMYHOST_TOKEN of that user and organization, never with a saved login)",
   "secret delete":
     "ohmyhost secret delete NAME --project ULID --environment ENVIRONMENT_ULID --idempotency-key KEY [--wait] --json",
+  "mail workspace list": "ohmyhost mail workspace list --organization ULID --json",
+  "mail workspace create":
+    "ohmyhost mail workspace create --organization ULID --domain DOMAIN --sending true --idempotency-key KEY --json",
+  "mail workspace status":
+    "ohmyhost mail workspace status --organization ULID --mail-domain ULID --json",
+  "mail workspace retire":
+    "ohmyhost mail workspace retire --organization ULID --mail-domain ULID --expected-revision N --idempotency-key KEY --yes --json",
+  "mail workspace dns-authorize":
+    "ohmyhost mail workspace dns-authorize --organization ULID --mail-domain ULID --expected-revision N --zone DOMAIN --idempotency-key KEY --json",
+  "mail workspace dns-revoke":
+    "ohmyhost mail workspace dns-revoke --organization ULID --mail-domain ULID --expected-revision N --idempotency-key KEY --yes --json",
+  "mail workspace dns-status":
+    "ohmyhost mail workspace dns-status --organization ULID --mail-domain ULID --json",
+  "mail binding get": "ohmyhost mail binding get --project ULID --environment PROD_ULID --json",
+  "mail binding set":
+    "ohmyhost mail binding set --project ULID --environment PROD_ULID --mail-domain ULID --sending true --sender-addresses contact@mail.example.com,contracts@mail.example.com --default-from contracts@mail.example.com [--reply-to owner@example.com] --expected-revision N --idempotency-key KEY --json",
+  "mail binding detach":
+    "ohmyhost mail binding detach --project ULID --environment PROD_ULID --expected-revision N --idempotency-key KEY --yes --json",
+  "mail identity get": "ohmyhost mail identity get --project ULID --json",
+  "mail identity declare":
+    "ohmyhost mail identity declare --project ULID --hostname sign.example.com --idempotency-key KEY --json",
+  "mail identity verify":
+    "ohmyhost mail identity verify --project ULID --expected-revision N --idempotency-key KEY --json",
+  "mail identity revoke":
+    "ohmyhost mail identity revoke --project ULID --expected-revision N --idempotency-key KEY --yes --json",
+  "mail identity authorize":
+    "ohmyhost mail identity authorize --project ULID --expected-revision N --zone example.com --idempotency-key KEY --json",
+  "mail identity authorization-revoke":
+    "ohmyhost mail identity authorization-revoke --project ULID --expected-revision N --idempotency-key KEY --yes --json",
+  "mail identity authorization-status":
+    "ohmyhost mail identity authorization-status --project ULID --json",
   "mail setup":
     "ohmyhost mail setup --project ULID --environment ULID --domain DOMAIN --sending true --receiving false --idempotency-key KEY --json",
   "mail status": "ohmyhost mail status --project ULID --environment ULID --json",
@@ -1114,6 +1145,11 @@ export class ProductCli {
       if (command.kind === "secret-list") return await this.listEnvironmentSecrets(command, signal);
       if (command.kind === "function-runs") return await this.listFunctionRuns(command, signal);
       if (command.kind === "secret-set") return await this.putEnvironmentSecret(command, signal);
+      if (command.kind === "shared-mail") {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        if (!api.sharedMail) throw new Error("Shared mail unavailable");
+        return success(command.label, { mail: await api.sharedMail(command.request) });
+      }
       if (command.kind === "managed-mail") {
         const api = await this.authenticatedApi(command.credentialStore, signal);
         if (!api.managedMail) throw new Error("Mail unavailable");
@@ -3120,7 +3156,7 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "function-runs") return "function runs";
   if (command.kind === "secret-set") return "secret set";
   if (command.kind === "secret-delete") return "secret delete";
-  if (command.kind === "managed-mail") return command.label;
+  if (command.kind === "shared-mail" || command.kind === "managed-mail") return command.label;
   if (command.kind === "profile-list") return "profile list";
   return command.kind;
 };

@@ -313,14 +313,14 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "Use the sender domain already configured for this project, or retire it with 'ohmyhost mail domain delete' (repeat while the removal is pending) and then set up the new domain; a domain registered to another project cannot be set up.",
+      "Read the workspace sender resource and project binding. Reuse requires explicit domain-use authority, target-project editing and a current verified application identity with the same registrable main domain. Read the current revision before changing settings. Detach a shared project binding explicitly; legacy domain deletion cannot retire a resource used by another project.",
     title: "Mail domain conflict",
   },
   mail_domain_required: {
     status: 409,
     retryable: false,
     action:
-      "This app declares mail.enabled. Configure the project's own sender domain with 'ohmyhost mail setup' using its Prod environment ID, or set mail.enabled to false if the app sends no mail, then plan again.",
+      "This app declares mail.enabled. Configure a sender with 'ohmyhost mail setup' or explicitly attach an authorized workspace sender using the project's Prod environment ID. Reuse first requires proof of the intended application hostname with the same registrable main domain; declare and verify that identity before mail-gated deployment. Then plan again.",
     title: "Mail domain required",
   },
   storage_jurisdiction_conflict: {
