@@ -15,8 +15,15 @@ export const PINNED_BUN_VERSION = "1.2.22";
  * upper bound: later patches, minors and majors reach the real build, which reports adapter failures.
  * Denied ranges are half-open [introduced, fixed); a null fix denies every later release.
  *
- * next: GHSA-4jqv-mc3x-m676 and GHSA-mcj8-r9mp-w47p (fixed in 15.5.27 and 16.3.8); GHSA-cjq9-62q9-8jv4,
- *   GHSA-f87g-xv8r-7p7x, GHSA-3w37-wq28-93x7, GHSA-h694-7cp9-m8p3 and GHSA-39w2-rjm5-chcv (16.3.8).
+ * next: GHSA-2464-fhr4-w9xw (critical, remote code execution through the Image Optimization API with
+ *   SVG and sharp before 0.35.5) and GHSA-p3m5-59mp-jv5r (high, denial of service through Server
+ *   Actions), both fixed in 15.5.28 and 16.4.1; GHSA-673q-mjm6-r5xr (critical, remote code execution
+ *   through `use cache` functions that return typed arrays, Next.js 16 only, fixed in 16.4.1).
+ *   There is no 15.x floor: the pinned OpenNext has refused Next.js 15 since 21 October 2026, so every 15.x
+ *   release is refused with the minimum 16.4.1 instead of sending a customer to 15.5.28 and a failing build.
+ *   Earlier floors: GHSA-4jqv-mc3x-m676 and GHSA-mcj8-r9mp-w47p (fixed in 15.5.27 and 16.3.8);
+ *   GHSA-cjq9-62q9-8jv4, GHSA-f87g-xv8r-7p7x, GHSA-3w37-wq28-93x7, GHSA-h694-7cp9-m8p3 and
+ *   GHSA-39w2-rjm5-chcv (16.3.8).
  * @tanstack/react-start: GHSA-qx66-fv34-fjm8 (fixed in 1.168.60).
  * vite: GHSA-64vr-g452-qvp3 (fixed in 5.4.6), the only advisory affecting `vite build` output.
  * @type {FrameworkVersionPolicy}
@@ -27,7 +34,7 @@ export const FRAMEWORK_VERSION_POLICY = Object.freeze({
     floors: Object.freeze(["14.4.0"]),
     denied: Object.freeze([]),
   }),
-  next: Object.freeze({ floors: Object.freeze(["15.5.27", "16.3.8"]), denied: Object.freeze([]) }),
+  next: Object.freeze({ floors: Object.freeze(["16.4.1"]), denied: Object.freeze([]) }),
   vite: Object.freeze({ floors: Object.freeze(["5.4.6"]), denied: Object.freeze([]) }),
   "@tanstack/react-start": Object.freeze({
     floors: Object.freeze(["1.168.60"]),

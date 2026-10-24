@@ -1,6 +1,6 @@
 {
   "name": "@ohmyhost/sdk-ts",
-  "version": "0.1.37",
+  "version": "0.1.38",
   "private": true,
   "type": "module",
   "exports": {
@@ -14,7 +14,7 @@
     "build": "tsc --project tsconfig.build.json",
     "check": "pnpm --dir ../.. sdk-ts:check",
     "generate": "pnpm --dir ../.. sdk-ts:generate",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "typecheck": "tsc --project tsconfig.json --noEmit --incremental --tsBuildInfoFile typecheck.tsbuildinfo",
     "test": "pnpm run check && vitest run --root ../.. packages/sdk-ts"
   },
   "license": "Apache-2.0"

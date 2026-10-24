@@ -150,7 +150,7 @@
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "typecheck": "tsc --project tsconfig.json --noEmit --incremental --tsBuildInfoFile typecheck.tsbuildinfo",
     "test": "vitest run --root ../.. packages/contracts/test",
     "validate": "pnpm run typecheck && pnpm run test"
   },

@@ -14,7 +14,7 @@
     "build": "node scripts/generate-skill-resources.mjs && tsc --project tsconfig.build.json",
     "generate:check": "node scripts/generate-skill-resources.mjs --check",
     "test": "node scripts/generate-skill-resources.mjs --check && vitest run --root ../.. packages/agent-skills/test",
-    "typecheck": "tsc --project tsconfig.json --noEmit"
+    "typecheck": "tsc --project tsconfig.json --noEmit --incremental --tsBuildInfoFile typecheck.tsbuildinfo"
   },
   "devDependencies": {
     "@ohmyhost/customer-runtime": "workspace:*",

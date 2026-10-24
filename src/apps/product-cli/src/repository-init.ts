@@ -75,6 +75,8 @@ export type RepositoryFramework = Exclude<FrameworkFamilyClassification, "ambigu
 const MAXIMUM_SOURCE_BYTES = 2 * 1024 * 1024;
 const SOURCE_MODULE_PATTERN = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
 const STORAGE_CLIENT_CALL_PATTERN = /\bcreatePrivateStorageClient\s*\(/u;
+const GATEWAY_BINDING_NAME = /^OHMYHOST_(?:MAIL|STORAGE)_GATEWAY$/u;
+const GATEWAY_WORD_TOKEN = /[\p{ID_Start}_$][\p{ID_Continue}$]*/uy;
 // The catalog names a module only by a path of its grammar; a file name with a space, for example,
 // is not one, so its blocker carries the path beside a sentence that does not quote it.
 const UNNAMED_MODULE_MESSAGES: Readonly<Record<DatabaseContractCode, string>> = Object.freeze({
@@ -89,14 +91,18 @@ function callsStorageClient(source: string): boolean {
   return STORAGE_CLIENT_CALL_PATTERN.test(sourceWithoutComments(source));
 }
 
-// Storage is reached through a private Service Binding plus the three values and the key that
-// `createPrivateStorageClient` reads. No raw bucket binding is handed to customer code.
+// Global fetch reaches the private storage gateway using these values and its environment key.
+// No raw bucket binding is handed to customer code.
 const STORAGE_RUNTIME_BINDINGS = Object.freeze([
   "OHMYHOST_ENVIRONMENT_ID",
   "OHMYHOST_PROJECT_ID",
-  "OHMYHOST_STORAGE_GATEWAY",
   "OHMYHOST_STORAGE_GATEWAY_URL",
   "OHMYHOST_STORAGE_KEY",
+]);
+const MAIL_RUNTIME_BINDINGS = Object.freeze([
+  "OHMYHOST_MAIL_GATEWAY_URL",
+  "OHMYHOST_MAIL_KEY",
+  "OHMYHOST_PROJECT_ID",
 ]);
 // The runtime release is published unchanged as `@amerged/ohmyhost-runtime`; this pinned alias keeps
 // its import name and, unlike the website archive each release removes, stays installable.
@@ -105,6 +111,7 @@ const CUSTOMER_RUNTIME_SOURCE = `npm:@amerged/ohmyhost-runtime@${cliPackage.vers
 /** A catalog code, which planning answers with the same sentence, or a check only init runs. */
 export type RepositoryInitBlockerCode =
   | FrameworkConversionDiagnosticCode
+  | "gateway_binding_unsupported"
   | "migration_filename_noncanonical"
   | "migration_sql_not_admitted"
   | "storage_client_missing";
@@ -507,7 +514,7 @@ interface SourceCheckContext {
 /**
  * Every blocker of a source with a valid or proposed configuration, in the order planning judges:
  * migration filenames, the shared source rules, the Worker module handlers and the database
- * contract; init's own storage client and migration SQL checks come last.
+ * contract; init's own gateway binding, storage client and migration SQL checks come last.
  */
 async function judgeSource(
   context: SourceCheckContext &
@@ -528,6 +535,7 @@ async function judgeSource(
       ...source.findings.map((finding) => requiredCatalogBlocker(finding, context.applicationRoot)),
       ...(await workerModuleBlockers(context)),
       ...(await databaseContractBlockers(context, context.provider)),
+      ...(await gatewayBindingBlockers(context)),
       ...(await storageClientBlockers(context)),
       ...(await migrationSqlBlockers(context, context.provider)),
     ],
@@ -621,6 +629,168 @@ async function workerModuleBlockers(context: SourceCheckContext): Promise<Reposi
   );
 }
 
+/** Keep literal text inert, but scan executable template interpolations as ordinary code. */
+function gatewaySourceTokens(source: string): readonly string[] {
+  const tokens: string[] = [];
+  let cursor = 0;
+  const quoted = (quote: string) => {
+    const start = cursor++;
+    while (cursor < source.length) {
+      const character = source[cursor++];
+      if (character === "\\") cursor++;
+      else if (character === quote) break;
+    }
+    tokens.push(source.slice(start, cursor));
+  };
+  const code = (interpolation: boolean): void => {
+    let braces = 0;
+    while (cursor < source.length) {
+      const character = source[cursor] as string;
+      if (interpolation && character === "}" && braces === 0) {
+        cursor++;
+        return;
+      }
+      if (character === '"' || character === "'") {
+        quoted(character);
+        continue;
+      }
+      if (character === "`") {
+        cursor++;
+        while (cursor < source.length) {
+          const literal = source[cursor++];
+          if (literal === "\\") cursor++;
+          else if (literal === "`") break;
+          else if (literal === "$" && source[cursor] === "{") {
+            cursor++;
+            tokens.push("(");
+            code(true);
+            tokens.push(")");
+          }
+        }
+        continue;
+      }
+      if (/\s/u.test(character)) {
+        cursor++;
+        continue;
+      }
+      if (character === "{") braces++;
+      if (character === "}") braces--;
+      GATEWAY_WORD_TOKEN.lastIndex = cursor;
+      const word = GATEWAY_WORD_TOKEN.exec(source)?.[0];
+      const token =
+        word ??
+        (["?.", "=>"].includes(source.slice(cursor, cursor + 2))
+          ? source.slice(cursor, cursor + 2)
+          : character);
+      tokens.push(token);
+      cursor += token.length;
+    }
+  };
+  code(false);
+  return tokens;
+}
+
+/** Static value accesses only: declarations, literal messages and object-literal keys are inert. */
+function usesGatewayBinding(source: string): boolean {
+  const tokens = gatewaySourceTokens(sourceWithoutComments(source));
+  const objects: boolean[] = [];
+  let declaration: "type" | "interface" | "annotation" | undefined;
+  let declarationDepth = 0;
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index] as string;
+    const previous = tokens[index - 1];
+    const next = tokens[index + 1];
+    if (declaration !== undefined) {
+      if (
+        declarationDepth === 0 &&
+        (token === ";" || /^(?:export|const|let|var|function|class|type|interface)$/u.test(token))
+      ) {
+        declaration = undefined;
+        if (token === ";") continue;
+      } else {
+        if (token === "{" || token === "(" || token === "[") declarationDepth++;
+        if (token === "}" || token === ")" || token === "]") {
+          declarationDepth--;
+          if (declaration !== "type" && declarationDepth === 0) declaration = undefined;
+        }
+        continue;
+      }
+    }
+    if (
+      (token === "type" || token === "interface") &&
+      next !== undefined &&
+      /^[\p{ID_Start}_$][\p{ID_Continue}$]*$/u.test(next) &&
+      previous !== "." &&
+      previous !== "?."
+    ) {
+      declaration = token;
+      continue;
+    }
+    // An inline variable type is not an object binding pattern; resume at its initializer.
+    if (token === "{" && previous === ":" && /^(?:const|let|var)$/u.test(tokens[index - 3] ?? "")) {
+      declaration = "annotation";
+      declarationDepth = 1;
+      continue;
+    }
+    if (token === "{") objects.push(false);
+    if (token === "}") {
+      const gateway = objects.pop();
+      let after = index + 1;
+      if (tokens[after] === ":") {
+        after++;
+        while (after < tokens.length && !/^(?:=|;|\{|\})$/u.test(tokens[after] as string)) after++;
+      }
+      if (gateway && tokens[after] === "=") return true;
+    }
+    const quoted = token.startsWith('"') || token.startsWith("'");
+    const name = quoted ? token.slice(1, -1) : token;
+    if (!GATEWAY_BINDING_NAME.test(name)) continue;
+    if (!quoted && (previous === "." || previous === "?.")) return true;
+    const receiver = tokens[index - (tokens[index - 2] === "?." ? 3 : 2)] ?? "";
+    if (
+      quoted &&
+      previous === "[" &&
+      next === "]" &&
+      (/^[\p{ID_Start}_$][\p{ID_Continue}$]*$/u.test(receiver) ||
+        receiver === ")" ||
+        receiver === "]") &&
+      !/^(?:return|throw|yield|case|new|typeof|void|delete|await|in|of)$/u.test(receiver)
+    )
+      return true;
+    if (
+      objects.length > 0 &&
+      (previous === "{" || previous === ",") &&
+      (next === ":" || next === "," || next === "}" || next === "=")
+    )
+      objects[objects.length - 1] = true;
+  }
+  return false;
+}
+
+/**
+ * Init names legacy mail/storage bindings before a customer builds code whose gateway calls the
+ * egress policy cannot serve. This local guidance does not change planning's admission policy.
+ */
+async function gatewayBindingBlockers(
+  context: SourceCheckContext,
+): Promise<RepositoryInitBlocker[]> {
+  const blockers: RepositoryInitBlocker[] = [];
+  for (const path of context.files) {
+    if (!SOURCE_MODULE_PATTERN.test(path) || /\.d\.[cm]?ts$/u.test(path)) continue;
+    const absolute = resolve(context.applicationDirectory, path);
+    const information = await stat(absolute);
+    if (!information.isFile() || information.size > MAXIMUM_SOURCE_BYTES) continue;
+    if (!usesGatewayBinding(await readFile(absolute, "utf8"))) continue;
+    blockers.push({
+      code: "gateway_binding_unsupported",
+      path: repositoryPath(context.applicationRoot, path),
+      message:
+        "Mail and storage gateway Service Bindings are unsupported. In server code, create the client from its OHMYHOST_MAIL_GATEWAY_URL or OHMYHOST_STORAGE_GATEWAY_URL, environment key and project ID, plus the environment ID for storage. Use the global fetch with fetch: (request) => fetch(request), and capabilityFetch: (request) => fetch(request) for storage signed URLs.",
+    });
+  }
+  return blockers;
+}
+
 /**
  * Declared storage is reached only through the private gateway client. A storage-enabled app whose
  * source never constructs that client deploys green and fails at its first upload, so name it here.
@@ -641,7 +811,7 @@ async function storageClientBlockers(
       code: "storage_client_missing",
       path: null,
       message:
-        'ohmyhost.yaml declares storage, but no application source calls createPrivateStorageClient. Import it from "@ohmyhost/customer-runtime/storage" and build it in server code from OHMYHOST_STORAGE_GATEWAY, OHMYHOST_STORAGE_GATEWAY_URL, OHMYHOST_PROJECT_ID, OHMYHOST_ENVIRONMENT_ID and OHMYHOST_STORAGE_KEY, then reserve an upload, PUT the bytes to the returned signed URL, complete it, and serve reads with createSignedRead. There is no FILES bucket binding.',
+        'ohmyhost.yaml declares storage, but no application source calls createPrivateStorageClient. Import it from "@ohmyhost/customer-runtime/storage" and build it in server code from OHMYHOST_STORAGE_GATEWAY_URL, OHMYHOST_PROJECT_ID, OHMYHOST_ENVIRONMENT_ID and OHMYHOST_STORAGE_KEY, with the global fetch as fetch: (request) => fetch(request) and capabilityFetch: (request) => fetch(request). Reserve an upload, PUT the bytes to the returned signed URL, complete it, and serve reads with createSignedRead. There is no FILES bucket binding.',
     },
   ];
 }
@@ -1418,10 +1588,12 @@ function runtimeContract(capabilities: RuntimeCapabilities): Readonly<{
   return Object.freeze({
     bindings: Object.freeze(
       [
-        ...(capabilities.auth ? ["BETTER_AUTH_SECRET"] : []),
-        ...(capabilities.storage ? STORAGE_RUNTIME_BINDINGS : []),
-        ...(capabilities.database ? ["OHMYHOST_DATABASE"] : []),
-        ...(capabilities.mail ? ["OHMYHOST_MAIL_KEY"] : []),
+        ...new Set([
+          ...(capabilities.auth ? ["BETTER_AUTH_SECRET"] : []),
+          ...(capabilities.storage ? STORAGE_RUNTIME_BINDINGS : []),
+          ...(capabilities.database ? ["OHMYHOST_DATABASE"] : []),
+          ...(capabilities.mail ? MAIL_RUNTIME_BINDINGS : []),
+        ]),
       ].sort(),
     ),
     packages: Object.freeze({
