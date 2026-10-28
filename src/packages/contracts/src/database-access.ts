@@ -93,13 +93,12 @@ export interface ProjectDatabaseAccessRequest {
   readonly ttl_seconds: number;
   readonly label: string | null;
 }
-export interface ProjectDatabaseAccess {
+export interface ProjectDatabaseAccessFields {
   readonly access_id: string;
   readonly environment: DatabaseEnvironment;
   readonly mode: DatabaseAccessMode;
   readonly role_name: string;
   readonly host: string;
-  readonly database: "neondb";
   readonly label: string | null;
   readonly state: "active" | "expired" | "revoked";
   readonly issued_at: string;
@@ -113,10 +112,25 @@ export interface ProjectDatabaseAccess {
     | "data_change"
     | null;
 }
-export interface ProjectDatabaseAccessCredential extends ProjectDatabaseAccess {
+export type ProjectDatabaseAccess = ProjectDatabaseAccessFields &
+  (
+    | {
+        readonly database: "neondb";
+        readonly provider?: never;
+        readonly transport?: never;
+        readonly websocket_url?: never;
+      }
+    | {
+        readonly provider: "pgcf";
+        readonly transport: "wss";
+        readonly websocket_url: string;
+        readonly database: string;
+      }
+  );
+export type ProjectDatabaseAccessCredential = ProjectDatabaseAccess & {
   readonly connection_uri: string;
   readonly psql_command: string;
-}
+};
 export interface ProjectDatabaseAccessPage {
   readonly items: readonly ProjectDatabaseAccess[];
 }
@@ -163,17 +177,27 @@ export function parseProjectDatabaseAccessRequest(value: unknown): ProjectDataba
 export function assertProjectDatabaseAccess(
   value: unknown,
 ): asserts value is ProjectDatabaseAccess {
-  if (!record(value) || !exact(value, ACCESS_KEYS)) throw new TypeError("Invalid database access");
+  if (!record(value) || !exact(value, accessKeys(value)))
+    throw new TypeError("Invalid database access");
   assertAccessFields(value);
 }
 export function assertProjectDatabaseAccessCredential(
   value: unknown,
 ): asserts value is ProjectDatabaseAccessCredential {
-  if (!record(value) || !exact(value, [...ACCESS_KEYS, "connection_uri", "psql_command"]))
+  if (!record(value) || !exact(value, [...accessKeys(value), "connection_uri", "psql_command"]))
     throw new TypeError("Invalid database access credential");
   assertAccessFields(value);
   const uri = value["connection_uri"];
-  if (typeof uri !== "string" || value["psql_command"] !== `psql '${uri}'`)
+  if (
+    typeof uri !== "string" ||
+    (value["provider"] === "pgcf"
+      ? typeof value["psql_command"] !== "string" ||
+        !new RegExp(
+          `^ohmyhost database psql --project [0-7][0-9A-HJKMNP-TV-Z]{25} --environment ${value["environment"]} --mode ${value["mode"]}$`,
+          "u",
+        ).test(value["psql_command"])
+      : value["psql_command"] !== `psql '${uri}'`)
+  )
     throw new TypeError("Invalid database access credential");
   let parsed: URL;
   try {
@@ -182,13 +206,20 @@ export function assertProjectDatabaseAccessCredential(
     throw new TypeError("Invalid database access credential");
   }
   if (
-    parsed.protocol !== "postgresql:" ||
+    (value["provider"] === "pgcf"
+      ? !["postgres:", "postgresql:"].includes(parsed.protocol)
+      : parsed.protocol !== "postgresql:") ||
     decodeURIComponent(parsed.username) !== value["role_name"] ||
     parsed.password === "" ||
     parsed.hostname !== value["host"] ||
-    parsed.host !== value["host"] ||
-    decodeURIComponent(parsed.pathname.slice(1)) !== "neondb" ||
-    parsed.search !== "?sslmode=require"
+    (value["provider"] === "pgcf"
+      ? parsed.port !== "" && parsed.port !== "5432"
+      : parsed.host !== value["host"]) ||
+    decodeURIComponent(parsed.pathname.slice(1)) !== value["database"] ||
+    parsed.hash !== "" ||
+    (value["provider"] === "pgcf"
+      ? !["", "?sslmode=require", "?sslmode=verify-full"].includes(parsed.search)
+      : parsed.search !== "?sslmode=require")
   )
     throw new TypeError("Invalid database access credential");
 }
@@ -204,6 +235,11 @@ export function assertProjectDatabaseAccessPage(
     throw new TypeError("Invalid database access page");
   for (const item of value["items"]) assertProjectDatabaseAccess(item);
 }
+function accessKeys(value: Record<string, unknown>): readonly string[] {
+  return value["provider"] === "pgcf"
+    ? [...ACCESS_KEYS, "provider", "transport", "websocket_url"]
+    : ACCESS_KEYS;
+}
 function assertAccessFields(value: Record<string, unknown>): void {
   const revoked = value["revoked_at"],
     reason = value["revocation_reason"];
@@ -216,7 +252,12 @@ function assertAccessFields(value: Record<string, unknown>): void {
     !ACCESS_ROLE_PATTERN.test(value["role_name"]) ||
     typeof value["host"] !== "string" ||
     !/^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/u.test(value["host"]) ||
-    value["database"] !== "neondb" ||
+    (value["provider"] === "pgcf"
+      ? typeof value["database"] !== "string" ||
+        !/^[a-z][a-z0-9]{19}$/u.test(value["database"]) ||
+        value["transport"] !== "wss" ||
+        value["websocket_url"] !== `wss://${value["host"]}/`
+      : value["database"] !== "neondb") ||
     (value["label"] !== null && accessLabel(value["label"]) !== value["label"]) ||
     !["active", "expired", "revoked"].includes(String(value["state"])) ||
     !timestamp(value["issued_at"]) ||

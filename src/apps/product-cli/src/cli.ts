@@ -281,6 +281,7 @@ export interface ProductCliDependencies {
   readonly operationEventSink?: { write(value: string): void };
   readonly readSecretValue: (signal: AbortSignal) => Promise<string>;
   readonly spawnPsql?: (input: {
+    readonly websocketUrl?: string;
     readonly host: string;
     readonly user: string;
     readonly password: string;
@@ -321,7 +322,7 @@ type CustomerCommandLabel = Exclude<CommandLabel, "unknown" | "help" | "version"
 
 const CLI_VERSION = cliPackage.version;
 const HELP_USAGE = Object.freeze({
-  init: "ohmyhost init [--directory PATH] [--root PATH] [--project SLUG] [--region us|eu] [--dry-run] --json (pass the project's hosting region so storage.jurisdiction matches it; us when omitted)",
+  init: "ohmyhost init [--directory PATH] [--root PATH] [--project SLUG] [--region us|eu] [--dry-run] --json (preserve existing storage jurisdiction; for new storage pass the project's region, us when omitted)",
   login:
     "ohmyhost login [--organization ULID] [--user USER_ID] [--profile-name NAME] --json (adds one saved login; nothing is saved unless the browser signed in as that user and organization)",
   logout:
@@ -372,7 +373,7 @@ const HELP_USAGE = Object.freeze({
   "feedback submit":
     "ohmyhost feedback submit --organization ULID --kind bug|issue|feature_request --title TITLE --description REDACTED_REPORT [--project ULID] [--environment ULID] [--operation ULID] [--error-code CODE] [--client-version VERSION] --idempotency-key KEY --json",
   "project create":
-    "ohmyhost project create --organization ULID --name NAME [--data-mode shared|isolated] [--dev-access-mode protected|public] [--region us|eu] --idempotency-key KEY --json (data mode is optional and defaults to shared; later assignments use project data plan/change without copying data; the region is chosen once: us is the default, eu places the database, files and builds in the EU; it cannot be changed later)",
+    "ohmyhost project create --organization ULID --name NAME [--data-mode shared|isolated] [--dev-access-mode protected|public] [--region us|eu] --idempotency-key KEY --json (data mode is optional and defaults to shared; later assignments use project data plan/change without copying data; the region is chosen once: us is the default, eu selects EU database, new files and builds; existing R2 locations survive authorized region moves; the customer API cannot change region later)",
   "project data plan":
     "ohmyhost project data plan --project ULID --change isolate_prod_keeps_data|isolate_dev_keeps_data|share_prod_keeps_data|reset_dev --json (shared is the optional creation default; review which data is kept or deleted; no data is copied)",
   "project data change":
@@ -398,8 +399,8 @@ const HELP_USAGE = Object.freeze({
   "project handle set":
     "ohmyhost project handle set --project ULID --handle HANDLE --if-match ETAG --idempotency-key KEY --json (moves the project to a free address; the old one stops working and anyone may claim it)",
   "database compute set":
-    "ohmyhost database compute set --project ULID --environment dev|prod --profile standard|performance --idempotency-key KEY --yes [--wait] --json\n" +
-    "  standard: Free 0.25 CU/1 GB, Paid 0.5 CU/2 GB. performance: Paid 1 CU/4 GB, 2.5x database compute credits per equal active minute. All profiles use the provider-default idle suspension.",
+    "ohmyhost database compute set --project ULID --environment dev|prod --memory-mib 256|512|1024|2048|4096 --idempotency-key KEY --yes [--wait] --json\n" +
+    "  10/20/40/80/160 credits per active hour, prorated; includes 500 MiB/1/2/4/8 GiB total disk and seven-day backups. Free supports 256 MiB; larger sizes require Paid. Sleep after 300 idle seconds. No separate database CPU, network or connection charge. Smaller disk requires a separate data migration. Transitional --profile standard|performance is accepted only for legacy provider use; never combine it with --memory-mib.",
   "database compute get":
     "ohmyhost database compute get --project ULID [--environment dev|prod] --json",
   "database write":
@@ -1872,7 +1873,8 @@ export class ProductCli {
       exitCode = await spawnPsql({
         host: credential.host,
         user: credential.role_name,
-        password: new URL(credential.connection_uri).password,
+        password: decodeURIComponent(new URL(credential.connection_uri).password),
+        ...(credential.provider === "pgcf" ? { websocketUrl: credential.websocket_url } : {}),
         database: credential.database,
         mode: credential.mode,
         signal,

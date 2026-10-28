@@ -20,6 +20,7 @@ import {
   type ProjectDatabaseWriteReceipt,
 } from "@ohmyhost/contracts/database-access";
 import { assertDatabaseCompute, type DatabaseCompute } from "@ohmyhost/contracts/database-compute";
+import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
 import {
   assertProjectContext,
   assertProjectNotesReceipt,
@@ -173,12 +174,13 @@ export interface ProductApi {
     confirmationToken: string;
     idempotencyKey: string;
   }): Promise<Operation>;
-  changeDatabaseCompute(input: {
-    projectId: string;
-    environment: "dev" | "prod";
-    profile: "standard" | "performance";
-    idempotencyKey: string;
-  }): Promise<import("@ohmyhost/sdk-ts").Operation>;
+  changeDatabaseCompute(
+    input: {
+      projectId: string;
+      environment: "dev" | "prod";
+      idempotencyKey: string;
+    } & DatabaseComputeSelection,
+  ): Promise<import("@ohmyhost/sdk-ts").Operation>;
   getDatabaseCompute(input: {
     projectId: string;
     environment: "dev" | "prod";
@@ -456,18 +458,23 @@ export class GeneratedSdkProductApi implements ProductApi {
     this.managedSource = new GeneratedSdkManagedSourceApi(() => this.#client);
   }
 
-  public async changeDatabaseCompute(input: {
-    projectId: string;
-    environment: "dev" | "prod";
-    profile: "standard" | "performance";
-    idempotencyKey: string;
-  }) {
+  public async changeDatabaseCompute(
+    input: {
+      projectId: string;
+      environment: "dev" | "prod";
+      idempotencyKey: string;
+    } & DatabaseComputeSelection,
+  ) {
     return changeDatabaseCompute(
       {
         project_id: input.projectId,
-        environment: input.environment,
-        profile: input.profile,
-        confirm: true,
+        body: {
+          environment: input.environment,
+          ...(input.memoryMiB === undefined
+            ? { profile: input.profile }
+            : { memory_mib: input.memoryMiB }),
+          confirm: true,
+        },
         "Idempotency-Key": input.idempotencyKey,
       },
       { client: this.#client },

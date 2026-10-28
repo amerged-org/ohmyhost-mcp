@@ -5,6 +5,11 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./database-sizes": {
+      "source": "./src/database-sizes.ts",
+      "types": "./dist/database-sizes.d.ts",
+      "import": "./dist/database-sizes.js"
+    },
     "./shared-mail": {
       "source": "./src/shared-mail.ts",
       "types": "./dist/shared-mail.d.ts",

@@ -12,6 +12,7 @@ import {
 } from "@ohmyhost/contracts/database-access";
 import { assertOrganizationAccount } from "@ohmyhost/contracts/credit-pricing";
 import { assertDatabaseCompute } from "@ohmyhost/contracts/database-compute";
+import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
 import {
   assertProjectContext,
   assertProjectNotesReceipt,
@@ -279,18 +280,23 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
     return bound;
   }
 
-  public async changeDatabaseCompute(input: {
-    projectId: string;
-    environment: "dev" | "prod";
-    profile: "standard" | "performance";
-    idempotencyKey: string;
-  }) {
+  public async changeDatabaseCompute(
+    input: {
+      projectId: string;
+      environment: "dev" | "prod";
+      idempotencyKey: string;
+    } & DatabaseComputeSelection,
+  ) {
     return changeDatabaseCompute(
       {
         project_id: input.projectId,
-        environment: input.environment,
-        profile: input.profile,
-        confirm: true,
+        body: {
+          environment: input.environment,
+          ...(input.memoryMiB === undefined
+            ? { profile: input.profile }
+            : { memory_mib: input.memoryMiB }),
+          confirm: true,
+        },
         "Idempotency-Key": input.idempotencyKey,
       },
       { client: this.#client },

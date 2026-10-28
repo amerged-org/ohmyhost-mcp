@@ -1,5 +1,9 @@
 import { isUserSecretName } from "@ohmyhost/contracts/secret-names";
 import {
+  databaseSizeForMemory,
+  type DatabaseComputeSelection,
+} from "@ohmyhost/contracts/database-sizes";
+import {
   isProjectDataChangeKind,
   type ProjectDataChangeKind,
 } from "@ohmyhost/contracts/project-data-changes";
@@ -92,15 +96,14 @@ export type ProductCliCommand =
       readonly organizationId: string;
       readonly credentialStore: "native";
     }
-  | {
+  | ({
       readonly kind: "database-compute-set";
       readonly projectId: string;
       readonly environment: "dev" | "prod";
-      readonly profile: "standard" | "performance";
       readonly idempotencyKey: string;
       readonly wait: boolean;
       readonly credentialStore: "native";
-    }
+    } & DatabaseComputeSelection)
   | {
       readonly kind: "database-compute-get";
       readonly projectId: string;
@@ -1761,20 +1764,30 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       "--project",
       "--environment",
       "--profile",
+      "--memory-mib",
       "--idempotency-key",
     ]);
     if (
       !options["--project"] ||
       !options["--idempotency-key"] ||
-      (options["--profile"] !== "standard" && options["--profile"] !== "performance") ||
+      (options["--profile"] === undefined) === (options["--memory-mib"] === undefined) ||
+      (options["--profile"] !== undefined &&
+        options["--profile"] !== "standard" &&
+        options["--profile"] !== "performance") ||
       (options["--environment"] !== "dev" && options["--environment"] !== "prod")
     )
       throw new InvalidCommandError();
+    let selection: DatabaseComputeSelection;
+    if (options["--memory-mib"] !== undefined) {
+      if (!/^(256|512|1024|2048|4096)$/u.test(options["--memory-mib"]))
+        throw new InvalidCommandError();
+      selection = { memoryMiB: databaseSizeForMemory(Number(options["--memory-mib"])).memoryMiB };
+    } else selection = { profile: options["--profile"] as "standard" | "performance" };
     return {
       kind: "database-compute-set",
       projectId: options["--project"],
       environment: options["--environment"],
-      profile: options["--profile"],
+      ...selection,
       idempotencyKey: options["--idempotency-key"],
       wait,
       credentialStore,

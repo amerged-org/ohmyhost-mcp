@@ -1,0 +1,1 @@
+PostgreSQL WebSocket bridge and authentication prelude handling adapted from cloudflare-postgres packages/cli, commit e05d9102c840e283602272ed0e16a95be3e3b8ea. Upstream license: Apache-2.0.

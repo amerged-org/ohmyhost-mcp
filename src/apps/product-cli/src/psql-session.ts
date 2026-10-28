@@ -1,29 +1,64 @@
 import { spawn } from "node:child_process";
+import { startBridge } from "@ohmyhost/postgres-bridge";
 
 import { PsqlUnavailableError } from "./cli.js";
 
-/**
- * Starts the customer's own psql against a temporary database credential.
- * The password reaches psql only through its private environment, never through
- * argv, the terminal title or any file; no authentication credential is involved.
- */
-export const runLocalPsql = (input: {
+/** One private loopback bridge lasts exactly as long as the customer's native psql session. */
+export const runLocalPsql = async (input: {
   readonly host: string;
   readonly user: string;
   readonly password: string;
   readonly database: string;
+  readonly websocketUrl?: string;
   readonly signal: AbortSignal;
-}): Promise<number> =>
-  new Promise<number>((resolve, reject) => {
-    const child = spawn("psql", ["-h", input.host, "-U", input.user, "-d", input.database], {
-      stdio: "inherit",
-      signal: input.signal,
-      env: { ...process.env, PGPASSWORD: input.password, PGSSLMODE: "require" },
+}): Promise<number> => {
+  input.signal.throwIfAborted();
+  if (input.websocketUrl !== undefined && input.websocketUrl !== `wss://${input.host}/`)
+    throw new Error("Invalid PGCF transport");
+  const bridge =
+    input.websocketUrl === undefined
+      ? null
+      : await startBridge({
+          endpoint: input.websocketUrl,
+          database: input.database,
+          user: input.user,
+          port: 0,
+        });
+  try {
+    input.signal.throwIfAborted();
+    // A caller's libpq service/hostaddr settings must not redirect this temporary credential.
+    const environment = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !/^PG[A-Z_]+$/iu.test(key)),
+    );
+    return await new Promise<number>((resolve, reject) => {
+      const child = spawn(
+        "psql",
+        ["-h", bridge?.host ?? input.host, "-U", input.user, "-d", input.database],
+        {
+          stdio: "inherit",
+          signal: input.signal,
+          env: {
+            ...environment,
+            PGPASSWORD: input.password,
+            PGSSLMODE: bridge ? "disable" : "require",
+            ...(bridge
+              ? {
+                  PGPORT: String(bridge.port),
+                  PGCHANNELBINDING: "disable",
+                  PGGSSENCMODE: "disable",
+                }
+              : {}),
+          },
+        },
+      );
+      child.once("error", (error: NodeJS.ErrnoException) => {
+        reject(error.code === "ENOENT" ? new PsqlUnavailableError() : error);
+      });
+      child.once("close", (code, signalName) => {
+        resolve(code ?? (signalName === null ? 1 : 130));
+      });
     });
-    child.once("error", (error: NodeJS.ErrnoException) => {
-      reject(error.code === "ENOENT" ? new PsqlUnavailableError() : error);
-    });
-    child.once("close", (code, signalName) => {
-      resolve(code ?? (signalName === null ? 1 : 130));
-    });
-  });
+  } finally {
+    await bridge?.close();
+  }
+};

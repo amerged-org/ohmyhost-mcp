@@ -1,6 +1,6 @@
 {
   "name": "@ohmyhost/mcp",
-  "version": "0.1.38",
+  "version": "0.1.39",
   "private": true,
   "ohmyhost": {
     "deployment": "production",

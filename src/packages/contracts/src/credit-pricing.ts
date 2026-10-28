@@ -96,7 +96,7 @@ export interface PublishedCreditRateCard {
     readonly meter: string;
     readonly unit: string;
     readonly units_per_charge: string;
-    readonly provider_cost_micros: string;
+    readonly provider_cost_micros: string | null;
     readonly credit_micros: string;
   }[];
 }
@@ -159,6 +159,12 @@ export function assertPublishedCreditRateCards(
       meters.add(identity);
       for (const key of ["units_per_charge", "provider_cost_micros", "credit_micros"]) {
         const amount = rate[key];
+        if (
+          key === "provider_cost_micros" &&
+          amount === null &&
+          rate["meter"] === "pgcf.memory.active"
+        )
+          continue;
         if (
           typeof amount !== "string" ||
           !/^(0|[1-9][0-9]{0,18})$/u.test(amount) ||

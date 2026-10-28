@@ -360,6 +360,7 @@ export type {
   FeedbackStatus,
   FeedbackSubmission,
   FeedbackUpdate,
+  FixedDatabaseCompute,
   FunctionRun,
   FunctionRunPage,
   GetAccountProfileData,

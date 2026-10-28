@@ -120,6 +120,20 @@ export const PROBLEM_POLICY = {
     restAction:
       "Performance compute needs active Paid and usable credits or grace; repeating unchanged does not help. Read 'ohmyhost credits account --organization ULID --json'. On Free, the Owner may start Paid with 'ohmyhost billing checkout --offer paid'; without usable credits, they may add credits. Until then, keep standard compute.",
   },
+  compute_paid_required: {
+    status: 403,
+    retryable: false,
+    action:
+      "Database sizes above 256 MiB require active Paid access. Read the account status; keep the existing database until the owner chooses an eligible size or Paid access.",
+    title: "Database size requires Paid access",
+  },
+  compute_storage_shrink_requires_migration: {
+    status: 409,
+    retryable: false,
+    action:
+      "This size includes less storage than the current volume. Keep the current database and plan an explicit data migration to a fresh smaller volume; do not retry the resize or delete data automatically.",
+    title: "Smaller storage requires a data migration",
+  },
   compute_performance_unavailable: {
     status: 503,
     retryable: false,
@@ -327,10 +341,10 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "Set storage.jurisdiction in ohmyhost.yaml to the project's region (us or eu) shown by 'ohmyhost project status', save or push the corrected version, then plan its commit (for a promotion, deploy it to Dev and promote again); the unchanged commit fails again. A project cannot move its files between regions; do not delete or recreate the project to change it.",
+      "Read 'Storage jurisdiction' in 'ohmyhost project context --project ULID --json' and set storage.jurisdiction in ohmyhost.yaml to that recorded value (us or eu). Existing R2 buckets and reservations keep their jurisdiction after a project-region migration; only new storage without a recorded bucket uses the project region. If context reports unavailable, report the request ID through feedback rather than guessing. Save or push the corrected version and plan its commit; for promotion, deploy it to Dev and promote again. Do not delete or recreate the project to move files.",
     title: "Storage jurisdiction conflict",
     restAction:
-      "Set storage.jurisdiction in ohmyhost.yaml to the project's region (us or eu) shown by 'ohmyhost project status', save or push the corrected version, then plan its commit (for a promotion, deploy it to Dev and promote again); the unchanged commit fails again. A project cannot move its files between regions; do not delete or recreate the project to change it.",
+      "Read 'Storage jurisdiction' in 'ohmyhost project context --project ULID --json' and set storage.jurisdiction in ohmyhost.yaml to that recorded value (us or eu). Existing R2 buckets and reservations keep their jurisdiction after a project-region migration; only new storage without a recorded bucket uses the project region. If context reports unavailable, report the request ID through feedback rather than guessing. Save or push the corrected version and plan its commit; for promotion, deploy it to Dev and promote again. Do not delete or recreate the project to move files.",
   },
   shared_data_requires_promotion: {
     status: 409,

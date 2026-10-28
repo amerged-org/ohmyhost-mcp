@@ -1,4 +1,5 @@
 import { isUserSecretName, USER_SECRET_NAME_PATTERN } from "@ohmyhost/contracts/secret-names";
+import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
 import {
   normalizeMcpSourceChanges,
   formatMcpSourceFileResponse,
@@ -113,12 +114,13 @@ export interface LocalMcpProductClient {
     projectId: string;
     idempotencyKey: string;
   }): Promise<import("@ohmyhost/sdk-ts").DevAccessState>;
-  changeDatabaseCompute(input: {
-    projectId: string;
-    environment: "dev" | "prod";
-    profile: "standard" | "performance";
-    idempotencyKey: string;
-  }): Promise<import("@ohmyhost/sdk-ts").Operation>;
+  changeDatabaseCompute(
+    input: {
+      projectId: string;
+      environment: "dev" | "prod";
+      idempotencyKey: string;
+    } & DatabaseComputeSelection,
+  ): Promise<import("@ohmyhost/sdk-ts").Operation>;
   getDatabaseCompute(input: {
     projectId: string;
     environment: "dev" | "prod";
@@ -513,7 +515,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_compute_get",
-    "Read current managed database size, memory, region and compute state without running SQL or waking the database. Shared Dev/Prod resolves to one physical database. A null database means no confirmed managed placement. suspend_timeout_seconds=0 uses the provider default; -1 disables scale to zero. A configured value is not proof that an in-progress resize finished. This read never resizes or changes billing.",
+    "Read current managed database memory, total storage, region and observed state without running SQL or waking the database. Shared Dev/Prod resolves to one physical database. First provisioning is distinct from cold (sleeping) and warm (running). A null database means no confirmed placement. A configured size does not prove an in-progress resize finished. This read never resizes or changes billing.",
     z.object({ project_id: identifier, environment: z.enum(["dev", "prod"]).default("dev") }),
     (client, input) =>
       client.getDatabaseCompute({ projectId: input.project_id, environment: input.environment }),
@@ -523,19 +525,35 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_compute_set",
-    "Select standard or performance compute for an existing database: Free 0.25 CU/1 GB, Paid 0.5 CU/2 GB. All profiles use provider-default idle suspension (suspend_timeout_seconds=0). First read database_compute_get and explain actual size, metered compute cost, possible brief connection interruption and that shared data changes both Dev and Prod. Require the user's decision before confirm=true. SQL data is preserved. Poll the returned operation every 60 seconds; never submit a second change while it runs. Performance requires active Paid access and selects 1 CU/4 GB at 2.5x Paid-standard compute credits per equal active minute. This affects only database compute. Read organization_credits_get for the published rate and active meter first. A successful choice is remembered per physical database; automatic Free downgrades preserve it, and an explicit standard choice clears it. Mixed/uncertain transition hours waive the premium; never multiply raw CU usage again.",
-    z.object({
-      project_id: identifier,
-      environment: z.enum(["dev", "prod"]),
-      profile: z.enum(["standard", "performance"]),
-      confirm: z.literal(true),
-      idempotency_key: idempotencyKey,
-    }),
+    "Choose fixed database RAM: 256, 512, 1024, 2048 or 4096 MiB. Free permits only 256 MiB; larger sizes require Paid. Included total disk is 500, 1024, 2048, 4096 or 8192 MiB, including PostgreSQL/WAL, plus seven-day backups. Prices are 10, 20, 40, 80 or 160 credits per active hour respectively, prorated. Sleep follows 300 idle seconds; sleeping has no active-RAM charge. No separate database CPU, network or connection charges apply. First read database_compute_get, explain the size, price, possible interruption and shared Dev/Prod scope, then obtain the user's choice before confirm=true. Smaller volumes need a separate data move. Poll the original operation; never duplicate a pending request. Legacy profile input applies only during provider transition. Supply exactly one of memory_mib and profile.",
+    z
+      .object({
+        project_id: identifier,
+        environment: z.enum(["dev", "prod"]),
+        profile: z.enum(["standard", "performance"]).optional(),
+        memory_mib: z
+          .union([
+            z.literal(256),
+            z.literal(512),
+            z.literal(1024),
+            z.literal(2048),
+            z.literal(4096),
+          ])
+          .optional(),
+        confirm: z.literal(true),
+        idempotency_key: idempotencyKey,
+      })
+      .refine(
+        (value) => (value.memory_mib === undefined) !== (value.profile === undefined),
+        "Select exactly one database size",
+      ),
     (client, input) =>
       client.changeDatabaseCompute({
         projectId: input.project_id,
         environment: input.environment,
-        profile: input.profile,
+        ...(input.memory_mib === undefined
+          ? { profile: z.enum(["standard", "performance"]).parse(input.profile) }
+          : { memoryMiB: input.memory_mib }),
         idempotencyKey: input.idempotency_key,
       }),
     mutationAnnotations(),
@@ -972,7 +990,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_access_create",
-    "Issue a time-bound PostgreSQL credential for this project's own Dev or Prod database. THE CONNECTION URI AND psql COMMAND ARE RETURNED EXACTLY ONCE and can never be read again: use them immediately for psql or another SQL client in this same task, and never write them into files, notes, source, commit messages or later messages. Mode read (default) is read-only; mode write joins the restricted runtime role and requires confirmed: true. Neither mode can change schema, application row-level security still applies, and schema changes stay in GitHub migrations. The lifetime is 5 minutes to 24 hours (3600 seconds by default) and at most three credentials are active per environment. Database compute wakes and is metered normally. Call database_access_revoke as soon as the work is finished.",
+    "Issue a time-bound PostgreSQL credential for this project's own Dev or Prod database. The credential URI and password are RETURNED EXACTLY ONCE: never write them into files, notes, source, commit messages or later messages; keep credentials out of command arguments, logs and feedback. PGCF declares transport=wss and websocket_url; its URI is not a public TCP endpoint. Use the secret-free psql_command to run the local ohmyhost database psql helper, which creates its own access, bridges verified WSS to loopback, and closes/revokes on exit. Mode read (default) is read-only; mode write joins the restricted runtime role and requires confirmed: true. Neither mode can change schema, application row-level security still applies, and schema changes stay in GitHub migrations. The lifetime is 5 minutes to 24 hours (3600 seconds by default) and at most three credentials are active per environment. Database compute wakes and is metered normally. Call database_access_revoke as soon as the work is finished.",
     z
       .object({
         project_id: identifier,
@@ -1243,7 +1261,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "project_create",
-    "Create an ohmyho.st project. Ask whether Dev should be protected (default) or public before creation; public means anyone with the Dev URL can open it, including when Dev and Prod share data. Recommend isolated Dev/Prod data, but respect the customer's choice and added database consumption. data_mode is optional and defaults to shared, using one database/file namespace; isolated separates database/Auth records and files. Later changes use project_data_plan and project_data_change; ohmyho.st never copies data and ordinary usage prices apply. region defaults to us; eu places the project's database, files and builds in the EU at the same prices. The region cannot be changed later, and ohmyhost.yaml storage.jurisdiction must equal it.",
+    "Create an ohmyho.st project. Ask whether Dev should be protected (default) or public before creation; public means anyone with the Dev URL can open it, including when Dev and Prod share data. Recommend isolated Dev/Prod data, but respect the customer's choice and added database consumption. data_mode is optional and defaults to shared, using one database/file namespace; isolated separates database/Auth records and files. Later changes use project_data_plan and project_data_change; ohmyho.st never copies data and ordinary usage prices apply. region defaults to us; new projects provision their PGCF database, new files and builds in the selected us or eu region at the same prices. Read database_compute_get for the observed database region. Existing projects migrated with their owner's authorization now use US databases; their existing R2 object locations remain unchanged. The customer API cannot change region later. ohmyhost.yaml storage.jurisdiction must match the recorded R2 bucket or reservation jurisdiction, using project region only for new storage. Read the Storage jurisdiction line in project_context_get; if unavailable, report it rather than guessing.",
     z.object({
       organization_id: identifier,
       name: z.string().min(1).max(128),

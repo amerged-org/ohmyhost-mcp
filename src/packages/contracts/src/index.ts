@@ -209,7 +209,7 @@ function normalizeEgressOrigins(value: readonly string[] | undefined): readonly 
 function forbiddenEgressHostname(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
   return (
-    /^ohmyho-(?:mail|storage)-gateway-[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*\.workers\.dev\.?$/u.test(
+    /(?:^|\.)ohmyho-(?:mail|storage)-gateway-[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*\.workers\.dev\.?$/u.test(
       normalized,
     ) ||
     normalized === "localhost" ||

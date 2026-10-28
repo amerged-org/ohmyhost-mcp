@@ -4441,18 +4441,21 @@ export const getDatabaseCompute = <ThrowOnError extends boolean = true>(
 };
 
 /**
- * Select standard or Paid performance database compute
+ * Select database memory and included storage
  *
- * Requires project-write access and explicit confirmation. Reads the organization plan at acceptance (Free 0.25 CU/1 GB/60 idle seconds or Paid 0.5 CU/2 GB/60 idle seconds). Changes the existing database in place without copying or resetting data. Shared Dev/Prod data changes both environments. A brief connection interruption is possible. Poll the returned operation every 60 seconds; do not submit a second change while it runs. Completion requires actual provider settings and settled operations. Actual CU consumption remains metered. Performance requires effective Paid access and an active rate; it selects fixed 1 CU/4 GB/300 idle seconds at 2.5 times Paid-standard database compute credits per equal active minute. Only database compute changes price. Raw CU-second measurements are preserved; mixed or uncertain transition hours waive the premium. Returning to standard restores the effective plan size.
+ * Requires project-write access and explicit confirmation. Select 256, 512, 1024, 2048 or 4096 MiB RAM; Free permits only 256 MiB. Included total storage is respectively 500, 1024, 2048, 4096 or 8192 MiB, including PostgreSQL and WAL. Seven-day backups are included. Each 256 MiB costs 10 credits per active hour, prorated by time; sleeping costs no active RAM credits. Shared Dev/Prod data changes both environments. A smaller volume requires a separate data migration and is refused here. A brief connection interruption is possible. Poll the original operation until observed completion. The legacy profile input is accepted only for databases still on the transitional provider; it does not imply PGCF autoscaling.
  */
 export const changeDatabaseCompute = <ThrowOnError extends boolean = true>(
   parameters: {
     "X-Request-Id"?: string;
     "Idempotency-Key": string;
     project_id: Ulid;
-    environment: "dev" | "prod";
-    profile: "standard" | "performance";
-    confirm: true;
+    body: unknown & {
+      environment: "dev" | "prod";
+      profile?: "standard" | "performance";
+      memory_mib?: 256 | 512 | 1024 | 2048 | 4096;
+      confirm: true;
+    };
   },
   options?: Options<never, ThrowOnError>,
 ): RequestResult<
@@ -4469,9 +4472,7 @@ export const changeDatabaseCompute = <ThrowOnError extends boolean = true>(
           { in: "headers", key: "X-Request-Id" },
           { in: "headers", key: "Idempotency-Key" },
           { in: "path", key: "project_id" },
-          { in: "body", key: "environment" },
-          { in: "body", key: "profile" },
-          { in: "body", key: "confirm" },
+          { key: "body", map: "body" },
         ],
       },
     ],

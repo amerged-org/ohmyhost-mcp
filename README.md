@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.38; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.39; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.38 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.39 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -53,8 +53,8 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `database_access_create`: Issue a time-bound PostgreSQL credential for this project's own Dev or Prod database.
 - `database_access_list`: List this project's issued database credentials with their state (active, expired or revoked).
 - `database_access_revoke`: Revoke one issued database credential immediately: open sessions end and its PostgreSQL role is removed.
-- `database_compute_get`: Read current managed database size, memory, region and compute state without running SQL or waking the database.
-- `database_compute_set`: Select standard or performance compute for an existing database: Free 0.25 CU/1 GB, Paid 0.5 CU/2 GB.
+- `database_compute_get`: Read current managed database memory, total storage, region and observed state without running SQL or waking the database.
+- `database_compute_set`: Choose fixed database RAM: 256, 512, 1024, 2048 or 4096 MiB.
 - `database_query`: Read one owner-authorized Dev or Prod database query (at most 100 rows, five-second timeout).
 - `database_write`: Execute one explicitly authorized INSERT, UPDATE or DELETE/upsert in the chosen Dev or Prod database.
 - `delete_execute`: Execute a reviewed project deletion
@@ -164,7 +164,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.38 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.39 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

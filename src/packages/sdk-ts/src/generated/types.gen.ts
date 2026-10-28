@@ -376,9 +376,9 @@ export type PublishedCreditRateCard = {
     unit: string;
     units_per_charge: string;
     /**
-     * Provider list-cost basis for units_per_charge, in USD micro-units (1000000 equals 1 USD), before shared allowances and discounts.
+     * Provider list-cost basis for units_per_charge, in USD micro-units (1000000 equals 1 USD), before shared allowances and discounts. Null for the PGCF RAM tariff means node infrastructure costs are tracked separately and are not allocated to this customer rate; null never means zero cost.
      */
-    provider_cost_micros: string;
+    provider_cost_micros: string | null;
     credit_micros: CreditMicros;
   }>;
 };
@@ -894,13 +894,29 @@ export type ProjectDatabaseAccessRequest = {
   label?: string | null;
 };
 
-export type ProjectDatabaseAccess = {
+export type ProjectDatabaseAccess = (
+  | {
+      database?: "neondb";
+    }
+  | {
+      database?: unknown;
+    }
+) & {
   access_id: Ulid;
   environment: "dev" | "prod";
   mode: "read" | "write";
   role_name: string;
   host: string;
-  database: "neondb";
+  /**
+   * neondb for a transitional Neon credential; the exact 20-character PGCF database identity for WSS.
+   */
+  database: string;
+  provider?: "pgcf";
+  transport?: "wss";
+  /**
+   * Verified WSS origin ending in / and matching host. The local bridge adds /v2 and the bound database and user; no public PostgreSQL TCP endpoint.
+   */
+  websocket_url?: string;
   label: string | null;
   state: "active" | "expired" | "revoked";
   issued_at: string;
@@ -909,13 +925,41 @@ export type ProjectDatabaseAccess = {
   revocation_reason: "principal" | "expired" | "budget" | "creation_failed" | "data_change" | null;
 };
 
-export type ProjectDatabaseAccessCredential = ProjectDatabaseAccess & {
+export type ProjectDatabaseAccessCredential = (
+  | {
+      database?: "neondb";
+    }
+  | {
+      database?: unknown;
+    }
+) & {
+  access_id: Ulid;
+  environment: "dev" | "prod";
+  mode: "read" | "write";
+  role_name: string;
+  host: string;
   /**
-   * Returned exactly once. Use it immediately and never store it in files, notes or source.
+   * neondb for a transitional Neon credential; the exact 20-character PGCF database identity for WSS.
+   */
+  database: string;
+  provider?: "pgcf";
+  transport?: "wss";
+  /**
+   * Verified WSS origin ending in / and matching host. The local bridge adds /v2 and the bound database and user; no public PostgreSQL TCP endpoint.
+   */
+  websocket_url?: string;
+  label: string | null;
+  state: "active" | "expired" | "revoked";
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  revocation_reason: "principal" | "expired" | "budget" | "creation_failed" | "data_change" | null;
+  /**
+   * Returned once as credential material. For PGCF this identifies a WSS transport, never direct public TCP. Never place it in command arguments, files, notes or source.
    */
   connection_uri: string;
   /**
-   * The same credential as a ready psql invocation.
+   * For PGCF, a secret-free ohmyhost database psql invocation that obtains and revokes its own session credential. Transitional Neon responses retain their original direct invocation.
    */
   psql_command: string;
 };
@@ -1102,7 +1146,7 @@ export type Sha256Digest = string;
 export type ProjectDataMode = "shared" | "isolated";
 
 /**
- * Chosen when the project is created and immutable afterwards. us (default) places the project's database, files, build sandbox and build objects in the US; eu places them in the EU. Prices are identical. ohmyhost.yaml storage.jurisdiction must equal this value.
+ * Chosen at project creation and immutable through customer operations. us (default) or eu places new build resources and, when no storage is already assigned, new file buckets. Existing buckets, source repositories and historical artifacts retain their recorded locations independently of a platform-authorized project-region migration. New PGCF application databases follow the selected project region; existing owner-authorized migrations target US1. Read database compute for the actual database region. storage.jurisdiction must match the project's recorded storage location, or this region when no storage custody exists. Project context reports the authoritative storage jurisdiction. Prices are identical in both project regions.
  */
 export type HostingRegion = "us" | "eu";
 
@@ -1362,6 +1406,8 @@ export type ProblemDetails = {
     | "paid_plan_required"
     | "project_budget_exceeded"
     | "compute_performance_paid_required"
+    | "compute_paid_required"
+    | "compute_storage_shrink_requires_migration"
     | "compute_performance_unavailable"
     | "database_write_pending"
     | "database_access_limit"
@@ -1486,20 +1532,40 @@ export type DatabaseCompute = {
   environment: "dev" | "prod";
   data_mode: "shared" | "isolated";
   observed_at: string;
-  database: null | {
-    min_cu: number;
-    max_cu: number;
-    min_memory_gb: number;
-    max_memory_gb: number;
-    /**
-     * Configured timeout: 0 is provider default; -1 disables suspension.
-     */
-    suspend_timeout_seconds: number;
-    state: "init" | "active" | "idle";
-    pending_state: "init" | "active" | "idle" | null;
-    disabled: boolean;
-    region: string;
-  };
+  database:
+    | null
+    | FixedDatabaseCompute
+    | {
+        min_cu: number;
+        max_cu: number;
+        min_memory_gb: number;
+        max_memory_gb: number;
+        /**
+         * Configured timeout: 0 is provider default; -1 disables suspension.
+         */
+        suspend_timeout_seconds: number;
+        state: "init" | "active" | "idle";
+        pending_state: "init" | "active" | "idle" | null;
+        disabled: boolean;
+        region: string;
+      };
+};
+
+/**
+ * Fixed resources; storage includes engine and WAL overhead. First provisioning is distinct from a sleeping database.
+ */
+export type FixedDatabaseCompute = {
+  provider: "pgcf";
+  size_class_id: "r256-s500m" | "r512-s1g" | "r1024-s2g" | "r2048-s4g" | "r4096-s8g";
+  memory_mib: 256 | 512 | 1024 | 2048 | 4096;
+  cpu_millicores: 250 | 500 | 1000 | 2000;
+  storage_mib: 500 | 1024 | 2048 | 4096 | 8192;
+  max_connections: 20 | 40 | 80 | 160 | 200;
+  suspend_timeout_seconds: number;
+  state: "provisioning" | "cold" | "warm" | "suspended" | "error";
+  pending_state: "provisioning" | "cold" | "warm" | "suspended" | "error" | null;
+  disabled: boolean;
+  region: "us" | "eu";
 };
 
 export type ProjectContext = {
@@ -7457,9 +7523,10 @@ export type GetDatabaseComputeResponse =
   GetDatabaseComputeResponses[keyof GetDatabaseComputeResponses];
 
 export type ChangeDatabaseComputeData = {
-  body: {
+  body: unknown & {
     environment: "dev" | "prod";
-    profile: "standard" | "performance";
+    profile?: "standard" | "performance";
+    memory_mib?: 256 | 512 | 1024 | 2048 | 4096;
     confirm: true;
   };
   headers: {

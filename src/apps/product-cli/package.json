@@ -1,6 +1,6 @@
 {
   "name": "@ohmyhost/product-cli",
-  "version": "0.1.38",
+  "version": "0.1.39",
   "private": true,
   "ohmyhost": {
     "deployment": "production",
@@ -41,7 +41,8 @@
     "@ohmyhost/sdk-ts": "workspace:*",
     "@ohmyhost/workos-auth-contracts": "workspace:*",
     "ignore": "7.0.12",
-    "isomorphic-git": "1.43.0"
+    "isomorphic-git": "1.43.0",
+    "@ohmyhost/postgres-bridge": "workspace:*"
   },
   "license": "Apache-2.0"
 }
