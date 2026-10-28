@@ -450,7 +450,7 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
   better_auth_version_required: {
     paths: ["manifest"],
     template:
-      '"{{path}}" must declare better-auth at exactly 1.7.1 in dependencies because ohmyhost.yaml sets auth.provider: better-auth. Pin that version or set auth.provider: none, commit and push the change, then plan the new commit.',
+      '"{{path}}" must declare better-auth at exactly 1.7.7 in dependencies because ohmyhost.yaml sets auth.provider: better-auth. Pin that version or set auth.provider: none, commit and push the change, then plan the new commit.',
   },
   package_manifest_invalid: {
     paths: ["manifest"],

@@ -32,7 +32,7 @@ import { classifyFrameworkFamily } from "./framework-family.js";
 import { parseOhmyhostConfigYaml, type OhmyhostConfig } from "./index.js";
 
 /** The only better-auth release the managed auth bridge installs. */
-export const MANAGED_BETTER_AUTH_VERSION = "1.7.1" as const;
+export const MANAGED_BETTER_AUTH_VERSION = "1.7.7" as const;
 /** The largest framework config the rules inspect, in UTF-8 bytes. */
 export const MAXIMUM_FRAMEWORK_CONFIG_BYTES = 256 * 1024;
 /** The customer Worker module of the functions runtime and of Next.js or TanStack Start crons. */
