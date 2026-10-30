@@ -1930,7 +1930,7 @@ export const createOrganization = <ThrowOnError extends boolean = true>(
 /**
  * Create or resume an owner's hosted Stripe Checkout
  *
- * Returns a human payment URL, never charges a saved card. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 credits. Top-ups require active Paid access and have no time limit during uninterrupted Paid membership; remaining top-ups expire when the workspace returns to Free. Monthly Paid credits expire at billing-period end without rollover. Retry the same offer, packs and Idempotency-Key after uncertainty. Browser return is not payment proof; read this checkout and the organization balance. A conflicting or existing subscription returns billing_purchase_conflict (409); read the original checkout or request an owner billing portal URL instead of another purchase. Works at zero credits.
+ * Returns a human payment URL, never charges a saved card. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 credits. Top-ups require active Paid access and never expire, also after the workspace returns to Free. Monthly Paid credits expire at billing-period end without rollover. Retry the same offer, packs and Idempotency-Key after uncertainty. Browser return is not payment proof; read this checkout and the organization balance. A conflicting or existing subscription returns billing_purchase_conflict (409); read the original checkout or request an owner billing portal URL instead of another purchase. Works at zero credits.
  */
 export const createBillingCheckout = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -1983,7 +1983,7 @@ export const createBillingCheckout = <ThrowOnError extends boolean = true>(
 /**
  * Observe and reconcile an owner's original checkout
  *
- * Reads Stripe and reconciles confirmed credits/refunds idempotently. payment_confirmed describes the original Checkout, not spendable credit or current Paid entitlement. Read organization credits for available funding and the organization account's effective plan for Paid coverage; paid_until is the paid Stripe period end, not the end of renewal grace. No new purchase intent or payment is created; an uncertain original Checkout can resume using its stored identity.
+ * Reads Stripe and reconciles confirmed credits/refunds idempotently. payment_confirmed describes the original Checkout, not spendable credit or current Paid entitlement. Read organization credits for available funding and the organization account's effective plan for Paid coverage; paid_until is the end of paid coverage, the paid Stripe period end plus its 14-day renewal grace. No new purchase intent or payment is created; an uncertain original Checkout can resume using its stored identity.
  */
 export const getBillingCheckout = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -2105,7 +2105,7 @@ export const getBillingRecharge = <ThrowOnError extends boolean = true>(
 /**
  * Enable or disable explicitly authorized auto-recharge
  *
- * Owner-only. An agent must obtain explicit approval for off-session charges and the gross monthly spending cap before enabling. Each refill costs USD 9 before tax for 1000 top-up credits when available credits fall below 100. Active Paid access is required to enable recharge and initiate a payment; remaining refill credits expire on downgrade to Free. A saved Stripe card is required; follow setup_url if returned. Current revision prevents stale edits; retry the original Idempotency-Key and payload after uncertainty. Disable prevents new charge initiation; already initiated payments may complete. No subscription or Paid features are created.
+ * Owner-only. An agent must obtain explicit approval for off-session charges and the gross monthly spending cap before enabling. Each refill costs USD 9 before tax for 1000 top-up credits when available credits fall below 100. Active Paid access is required to enable recharge and initiate a payment; bought credits never expire, also after a downgrade to Free. A saved Stripe card is required; follow setup_url if returned. Current revision prevents stale edits; retry the original Idempotency-Key and payload after uncertainty. Disable prevents new charge initiation; already initiated payments may complete. No subscription or Paid features are created.
  */
 export const configureBillingRecharge = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -2162,7 +2162,7 @@ export const configureBillingRecharge = <ThrowOnError extends boolean = true>(
 /**
  * Read the owner's shared organization credit pool
  *
- * Returns posted credits and reservations, in microcredits (one credit is 1000000 microcredits). Monthly entitlement posting is idempotent. Only the organization Owner may read this balance. active_meters names the currently billed sources; unreported usage is not included. platform_overrun_micros is recorded platform exposure, not customer debt. Remains available at zero credit.
+ * Returns the spendable credit and the open reservations, in microcredits (one credit is 1000000 microcredits). available_micros is the monthly credit plus the one-time credit minus the reservations, never below zero. Only the organization Owner may read this balance. active_meters names the currently billed sources; usage that is not billed yet is not included. When the credit is used up, grace_started_at and grace_expires_at name the seven days that keep existing services running. Remains available at zero credit.
  */
 export const getOrganizationCredits = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -2202,16 +2202,14 @@ export const getOrganizationCredits = <ThrowOnError extends boolean = true>(
 };
 
 /**
- * Read monthly measured usage by project and meter
+ * Read recent measured usage by day, project and meter
  *
- * Owner-only event-month ledger totals, including signed corrections posted by as_of. Returns up to 20 projects per page in ID order; use next_cursor with the same month. Current unresolved reservations are separate from measured consumption. Null environment_id means project-shared cost, never guessed Dev allocation. Only posted measurements are included; this is not a complete provider invoice or zero-usage guarantee. Billing may arrive later. No credit is granted or charged by this read; it remains usable at zero credits.
+ * Owner-only. days holds the credit-log charges of the last up to 14 UTC days (today included, oldest first), grouped by day, project and meter. projects holds what each project has used so far in the current UTC month. A null environment_id means a project-shared cost, never a guessed Dev allocation. Only billed usage is included; charges may arrive later, so this is not a complete provider invoice or a zero-usage guarantee. No credit is granted or charged by this read; it remains usable at zero credits.
  */
 export const getOrganizationCreditUsage = <ThrowOnError extends boolean = true>(
   parameters: {
     "X-Request-Id"?: string;
     organization_id: Ulid;
-    month: string;
-    cursor?: Ulid;
   },
   options?: Options<never, ThrowOnError>,
 ): RequestResult<
@@ -2227,8 +2225,6 @@ export const getOrganizationCreditUsage = <ThrowOnError extends boolean = true>(
         args: [
           { in: "headers", key: "X-Request-Id" },
           { in: "path", key: "organization_id" },
-          { in: "query", key: "month" },
-          { in: "query", key: "cursor" },
         ],
       },
     ],

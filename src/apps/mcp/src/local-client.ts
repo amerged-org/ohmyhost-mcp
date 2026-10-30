@@ -536,15 +536,9 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
     assertBillingPortal(value);
     return value;
   }
-  public async getOrganizationCreditUsage(
-    input: Parameters<LocalMcpProductClient["getOrganizationCreditUsage"]>[0],
-  ) {
+  public async getOrganizationCreditUsage(organizationId: string) {
     const value = await getOrganizationCreditUsage(
-      {
-        organization_id: input.organizationId,
-        month: input.month,
-        ...(input.cursor ? { cursor: input.cursor } : {}),
-      },
+      { organization_id: organizationId },
       { client: this.#client },
     );
     assertOrganizationCreditUsage(value);

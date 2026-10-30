@@ -351,7 +351,7 @@ const HELP_USAGE = Object.freeze({
   "billing portal":
     "ohmyhost billing portal --organization ULID --json (short-lived human URL; request fresh after expiry)",
   "credits usage":
-    "ohmyhost credits usage --organization ULID --month YYYY-MM [--cursor ULID] --json",
+    "ohmyhost credits usage --organization ULID --json (billed usage of the last up to 14 UTC days by day, project and meter, and each project's use this UTC month)",
   "budget get": "ohmyhost budget get --project ULID --json",
   "budget set":
     "ohmyhost budget set --project ULID --credits NUMBER|none [--mode continue|stop] --idempotency-key KEY --json",
@@ -844,7 +844,7 @@ export class ProductCli {
       }
       if (command.kind === "credits-usage") {
         const api = await this.authenticatedApi(command.credentialStore, signal);
-        const usage = await api.getOrganizationCreditUsage(command);
+        const usage = await api.getOrganizationCreditUsage(command.organizationId);
         try {
           assertOrganizationCreditUsage(usage);
         } catch {

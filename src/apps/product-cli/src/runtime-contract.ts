@@ -552,9 +552,6 @@ export function parseOrganizationCredits(value: unknown): OrganizationCredits {
     "as_of",
     "available_micros",
     "reserved_micros",
-    "spent_micros",
-    "expired_micros",
-    "platform_overrun_micros",
     "grace_started_at",
     "grace_expires_at",
     "active_meters",
@@ -586,13 +583,7 @@ export function parseOrganizationCredits(value: unknown): OrganizationCredits {
     )
   )
     throw new ResponseContractError();
-  for (const field of [
-    "available_micros",
-    "reserved_micros",
-    "spent_micros",
-    "expired_micros",
-    "platform_overrun_micros",
-  ]) {
+  for (const field of ["available_micros", "reserved_micros"]) {
     const amount = input[field];
     if (
       typeof amount !== "string" ||

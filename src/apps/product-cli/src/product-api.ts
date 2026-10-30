@@ -230,11 +230,7 @@ export interface ProductApi {
     organizationId: string,
   ): Promise<import("@ohmyhost/sdk-ts").OrganizationReferral>;
   getOrganizationCredits(organizationId: string): Promise<OrganizationCredits>;
-  getOrganizationCreditUsage(input: {
-    organizationId: string;
-    month: string;
-    cursor?: string;
-  }): Promise<OrganizationCreditUsage>;
+  getOrganizationCreditUsage(organizationId: string): Promise<OrganizationCreditUsage>;
   getProjectCreditBudget(projectId: string): Promise<ProjectCreditBudget>;
   setProjectCreditBudget(input: {
     projectId: string;
@@ -614,15 +610,9 @@ export class GeneratedSdkProductApi implements ProductApi {
       { client: this.#client },
     );
   }
-  public getOrganizationCreditUsage(
-    input: Parameters<ProductApi["getOrganizationCreditUsage"]>[0],
-  ) {
+  public getOrganizationCreditUsage(organizationId: string) {
     return getOrganizationCreditUsage(
-      {
-        organization_id: input.organizationId,
-        month: input.month,
-        ...(input.cursor ? { cursor: input.cursor } : {}),
-      },
+      { organization_id: organizationId },
       { client: this.#client },
     );
   }

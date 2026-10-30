@@ -214,11 +214,6 @@ export function parseFeedbackStatus(value: unknown): FeedbackStatus {
   return v as unknown as FeedbackStatus;
 }
 
-/** Bounded, trimmed text without control characters other than tab and line breaks. */
-export function validFeedbackText(value: unknown, max: number): value is string {
-  return validText(value, max, true);
-}
-
 function validUpdate(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const v = value as Record<string, unknown>;

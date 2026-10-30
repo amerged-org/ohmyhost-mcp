@@ -189,11 +189,9 @@ export interface LocalMcpProductClient {
     idempotencyKey: string;
   }): Promise<import("@ohmyhost/sdk-ts").BillingRecharge>;
   createBillingPortal(organizationId: string): Promise<import("@ohmyhost/sdk-ts").BillingPortal>;
-  getOrganizationCreditUsage(input: {
-    organizationId: string;
-    month: string;
-    cursor?: string;
-  }): Promise<import("@ohmyhost/sdk-ts").OrganizationCreditUsage>;
+  getOrganizationCreditUsage(
+    organizationId: string,
+  ): Promise<import("@ohmyhost/sdk-ts").OrganizationCreditUsage>;
   getOrganizationAccount(
     organizationId: string,
   ): Promise<import("@ohmyhost/sdk-ts").OrganizationAccount>;
@@ -702,7 +700,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "billing_checkout_create",
-    "Owner-only: create or resume a hosted Checkout. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 top-up credits. Monthly Paid credits expire at billing-period end; top-ups carry over while Paid and expire on downgrade to Free. Return the URL to the human to review/pay; never auto-pay or treat browser return as confirmation. Preserve the same offer/packs/idempotency key after uncertainty. An existing active, overdue, unpaid or paused subscription must be managed through billing_portal_create, not replaced with another Paid purchase. Then read checkout status and organization credits. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
+    "Owner-only: create or resume a hosted Checkout. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 top-up credits. Monthly Paid credits expire at billing-period end; top-ups never expire, also after a downgrade to Free. Return the URL to the human to review/pay; never auto-pay or treat browser return as confirmation. Preserve the same offer/packs/idempotency key after uncertainty. An existing active, overdue, unpaid or paused subscription must be managed through billing_portal_create, not replaced with another Paid purchase. Then read checkout status and organization credits. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
     z.object({
       organization_id: identifier,
       offer: z.enum(["topup", "paid"]),
@@ -722,7 +720,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "billing_checkout_get",
-    "Owner-only: observe the original checkout and reconcile confirmed credits/refunds, without another purchase. payment_confirmed is historical; read organization_credits_get for spendable funds and organization_account_get's effective plan for Paid coverage; paid_until remains the paid Stripe period end during renewal grace. Follow required_action: complete_checkout means give its URL to the human; open_billing_portal means call billing_portal_create and give that fresh URL to the human to resolve payment. contact_support means contact https://ohmyho.st/contact about the original invoice; none means no human payment step now, not proof of current Paid coverage. Never start a second subscription to repair a failed renewal. Follow billing_issue when tax needs attention: use billing_portal_create for open_billing_portal, or https://ohmyho.st/contact for contact_support; retain the original invoice and never disable tax. Retry the same checkout after an outage. state=expired ends this attempt; use a new key only for an explicitly requested new purchase, never automatically after an error or timeout.",
+    "Owner-only: observe the original checkout and reconcile confirmed credits/refunds, without another purchase. payment_confirmed is historical; read organization_credits_get for spendable funds and organization_account_get's effective plan for Paid coverage; paid_until is the end of paid coverage: the paid Stripe period end plus its 14-day renewal grace. Follow required_action: complete_checkout means give its URL to the human; open_billing_portal means call billing_portal_create and give that fresh URL to the human to resolve payment. contact_support means contact https://ohmyho.st/contact about the original invoice; none means no human payment step now, not proof of current Paid coverage. Never start a second subscription to repair a failed renewal. Follow billing_issue when tax needs attention: use billing_portal_create for open_billing_portal, or https://ohmyho.st/contact for contact_support; retain the original invoice and never disable tax. Retry the same checkout after an outage. state=expired ends this attempt; use a new key only for an explicitly requested new purchase, never automatically after an error or timeout.",
     z.object({ organization_id: identifier, checkout_id: identifier }),
     (client, input) =>
       client.getBillingCheckout({
@@ -742,7 +740,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "billing_recharge_configure",
-    "Owner-only: enable or disable automatic off-session payments. Enabling requires active Paid access. NEVER enable without explicit human approval for USD 9 plus tax per 1000 top-up credits, which carry over while Paid and expire on downgrade to Free, refill below 100 credits, and the chosen gross USD monthly limit. Set consent off_session_v1 only after that approval; null when disabling. Read current revision first. Preserve the original idempotency key and payload after uncertainty. A saved Stripe card may require setup_url. Disabling prevents new payment initiation; in-progress payments may finish. This does not create a subscription or Paid access.",
+    "Owner-only: enable or disable automatic off-session payments. Enabling requires active Paid access. NEVER enable without explicit human approval for USD 9 plus tax per 1000 top-up credits, which never expire, refill below 100 credits, and the chosen gross USD monthly limit. Set consent off_session_v1 only after that approval; null when disabling. Read current revision first. Preserve the original idempotency key and payload after uncertainty. A saved Stripe card may require setup_url. Disabling prevents new payment initiation; in-progress payments may finish. This does not create a subscription or Paid access.",
     z.object({
       organization_id: identifier,
       enabled: z.boolean(),
@@ -804,24 +802,15 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "organization_usage_get",
-    "Read posted UTC-month usage by project, environment and published meter/rate. One credit is 1000000 microcredits. Includes corrections; null environment means shared project cost. Current reservations are separate. Follow next_cursor with the same month (20 projects/page). Late or unmetered usage is not zero consumption. platform_overrun_micros is platform expense, not customer debt. Owner-only; works at zero credit without new charges.",
-    z.object({
-      organization_id: identifier,
-      month: z.string().regex(/^20[0-9]{2}-(0[1-9]|1[0-2])$/u),
-      cursor: identifier.optional(),
-    }),
-    (client, input) =>
-      client.getOrganizationCreditUsage({
-        organizationId: input.organization_id,
-        month: input.month,
-        ...(input.cursor ? { cursor: input.cursor } : {}),
-      }),
+    "Read the billed usage of the last up to 14 UTC days (today included) grouped by day, project and meter, and what each project has used so far this UTC month. One credit is 1000000 microcredits. Null environment means shared project cost. Charges can arrive late and unmetered usage is not zero consumption. Owner-only; works at zero credit without new charges.",
+    z.object({ organization_id: identifier }),
+    (client, input) => client.getOrganizationCreditUsage(input.organization_id),
   );
   registerProductTool(
     server,
     dependencies,
     "organization_account_get",
-    "Owner-only: read the effective Free/Paid plan, its Stripe or granted source, available monthly credits that expire at period end and top-up credits that carry over while Paid but expire on downgrade to Free, reservations and next expiry. Granted Paid features do not imply a Stripe subscription or extra monthly Paid allowance. paid_until is the paid Stripe period end or grant end; null on Free or for an unbounded grant. An unpaid renewal may retain Paid features for up to 14 days after that Stripe period end, without new monthly credits. This read grants no access or credits.",
+    "Owner-only: read the effective Free/Paid plan, its Stripe or granted source, the monthly credits that expire at next_expiry, the top-up and bonus credits that never expire, the reservations that hold part of them, and available_micros (monthly plus one-time minus reservations). Granted Paid features do not imply a Stripe subscription or extra monthly Paid allowance. paid_until is the end of the paid coverage, which includes the 14-day renewal grace of a Stripe subscription; null on Free. This read grants no access or credits.",
     z.object({ organization_id: identifier }),
     (client, input) => client.getOrganizationAccount(input.organization_id),
   );
@@ -837,7 +826,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "organization_credits_get",
-    "Read the owner's shared organization credit pool, seven-day grace_started_at/grace_expires_at and published rate_cards. Existing services/domains are not immediately shut down at zero credit; an explicit project stop budget is separate. One credit is 1000000 microcredits. Each rate states credit_micros for units_per_charge; publication alone does not enable billing. active_meters identifies billed sources; provider outages and platform overrun are not customer debt. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
+    "Read the owner's shared organization credit pool (available_micros is monthly plus one-time credit minus reservations), the seven-day grace_started_at/grace_expires_at that begins when the credit is used up, and published rate_cards. Existing services/domains are not immediately shut down at zero credit; an explicit project stop budget is separate. One credit is 1000000 microcredits. Each rate states credit_micros for units_per_charge; publication alone does not enable billing. active_meters identifies billed sources; provider outages are not customer debt. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
     z.object({ organization_id: identifier }),
     (client, input) => client.getOrganizationCredits(input.organization_id),
   );
@@ -845,7 +834,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "project_budget_get",
-    "Read the owner's project UTC-month budget, measured usage and open reservations. A budget never allocates a second wallet.",
+    "Read the owner's project UTC-month budget, this month's use and open reservations. A budget never allocates a second wallet.",
     z.object({ project_id: identifier }),
     (client, input) => client.getProjectCreditBudget(input.project_id),
   );

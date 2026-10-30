@@ -199,8 +199,6 @@ export type ProductCliCommand =
   | {
       readonly kind: "credits-usage";
       readonly organizationId: string;
-      readonly month: string;
-      readonly cursor?: string;
       readonly credentialStore: "native";
     }
   | {
@@ -1407,20 +1405,8 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
   if (first === "credits" && values[0] === "usage") {
     values.shift();
     if (yes || wait || follow || stdin) throw new InvalidCommandError();
-    const options = parseOptionalOptions(values, ["--organization", "--month", "--cursor"]);
-    if (
-      !options["--organization"] ||
-      !options["--month"] ||
-      !/^20[0-9]{2}-(0[1-9]|1[0-2])$/u.test(options["--month"])
-    )
-      throw new InvalidCommandError();
-    return {
-      kind: "credits-usage",
-      organizationId: options["--organization"],
-      month: options["--month"],
-      ...(options["--cursor"] ? { cursor: options["--cursor"] } : {}),
-      credentialStore,
-    };
+    const options = parseOptions(values, ["--organization"]);
+    return { kind: "credits-usage", organizationId: options["--organization"], credentialStore };
   }
   if (first === "credits" && values[0] === "account") {
     values.shift();

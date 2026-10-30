@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.40; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.41; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.40 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.41 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -93,16 +93,16 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `operation_get`: Get durable operation status and current deployment progress/reconciliation guidance.
 - `operation_logs`: Read available operation events for at most ten seconds, stopping earlier at max_events or a terminal event.
 - `operation_reconcile`: Start an explicitly confirmed provider reconciliation attempt
-- `organization_account_get`: Owner-only: read the effective Free/Paid plan, its Stripe or granted source, available monthly credits that expire at period end and top-up credits that carry over while Paid but expire on downgrade to Free, reservations and next expiry.
+- `organization_account_get`: Owner-only: read the effective Free/Paid plan, its Stripe or granted source, the monthly credits that expire at next_expiry, the top-up and bonus credits that never expire, the reservations that hold part of them, and available_micros (monthly plus one-time minus reservations).
 - `organization_create`: Create an organization owned by the signed-in user.
-- `organization_credits_get`: Read the owner's shared organization credit pool, seven-day grace_started_at/grace_expires_at and published rate_cards.
+- `organization_credits_get`: Read the owner's shared organization credit pool (available_micros is monthly plus one-time credit minus reservations), the seven-day grace_started_at/grace_expires_at that begins when the credit is used up, and published rate_cards.
 - `organization_list`: List the workspaces the chosen login's user belongs to and which one that login is scoped to.
-- `organization_usage_get`: Read posted UTC-month usage by project, environment and published meter/rate.
+- `organization_usage_get`: Read the billed usage of the last up to 14 UTC days (today included) grouped by day, project and meter, and what each project has used so far this UTC month.
 - `organization_use`: Bind a saved login that has no organization yet to one workspace, so later calls act inside it.
 - `powered_by_flag_get`: Read whether the production site shows the opt-in "Powered by ohmyho.st" flag.
 - `powered_by_flag_set`: Owner only, ask the human first: show or hide a small "Powered by ohmyho.st" flag on the right edge of the production site.
 - `profile_list`: List the saved ohmyho.st logins on this computer: each has a name, a user and an organization, never a token.
-- `project_budget_get`: Read the owner's project UTC-month budget, measured usage and open reservations.
+- `project_budget_get`: Read the owner's project UTC-month budget, this month's use and open reservations.
 - `project_budget_set`: Set an owner's optional monthly project budget in microcredits (1000000 = one credit).
 - `project_context_get`: Read fresh project status, DNS/mail next actions, authorized usage and bounded shared notes.
 - `project_create`: Create an ohmyho.st project.
@@ -161,10 +161,11 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 - [Get-started Skill](https://ohmyho.st/skills/ohmyhost-get-started/SKILL.md) and the [Skill index](https://ohmyho.st/.well-known/agent-skills/index.json); the server also serves every Skill as an MCP resource.
 - [Support](https://docs.ohmyho.st/support): ask your agent; it reports through `feedback_submit` and follows up with `feedback_status`.
 - [Current client release](https://ohmyho.st/client-release.json)
+- [PGCF](https://github.com/amerged-org/cloudflare-postgres): the open-source PostgreSQL platform behind the `database_*` tools and the `psql` bridge.
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.40 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.41 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 
