@@ -1,20 +1,20 @@
 {
-  "version": "0.1.40",
-  "sourceCommit": "400fffa05f4c0fc38ca3a1a0dfcf3f3dfd3cfffc",
+  "version": "0.1.41",
+  "sourceCommit": "02a4fa93e16f56eb3004d537ebc88e614224a2f4",
   "npm": {
     "name": "@amerged/ohmyhost-mcp",
-    "version": "0.1.40",
-    "integrity": "sha512-y41OkWX4JnVTtUphSuryZTYYTY6zARR7kzj/qI0ve7ncev0VgFV7YV7EmEqK86eWFz95wvSYq/3C2jG7k8cfqw==",
-    "sha256": "bb28b9932475d868433513669d13a31df00b2918817d2af8c1e4ad6239cb1048",
-    "tarball": "https://registry.npmjs.org/@amerged/ohmyhost-mcp/-/ohmyhost-mcp-0.1.40.tgz"
+    "version": "0.1.41",
+    "integrity": "sha512-JTJHRYGjrIVKnj0QdpTUy7PgZMtkU6bONtbtkaycqVc5q8VQOBZYhENJB2EiDqkazvsmsXFIMwpb6FiV59nK0g==",
+    "sha256": "125135be546bae81a58157d7755a34c51d417f37d067c31037acd7656dd2b6b8",
+    "tarball": "https://registry.npmjs.org/@amerged/ohmyhost-mcp/-/ohmyhost-mcp-0.1.41.tgz"
   },
   "omitted": {
-    "README.md": "6d8e5f380963e82b6bb1af1f57117f99697d2ee3bbedb03e7ad71913d99fcd61",
-    "dist/chunk-OW4IDEWK.js": "a0b610212a428af2eaf0d8a128ee79ae1019dfae6a7c3693056e6b59829a8fcd",
-    "dist/index.js": "8eef5cca74d8da02234f8d547f8d08fbf632cb8e35e22bd52b6da16287c2a48c",
+    "README.md": "31716b31a13691b320aa6a8c39e85e40d2d0f2e39e9565abf1be4cef91782f32",
+    "dist/chunk-6HQPHICK.js": "db56ac8b432f6e10f95378669cfdfd9ce1ad8ff78e643dcfe6462bb475c4a6ca",
+    "dist/index.js": "5304cb0977b7d5d8b543b30f91563297ebd859b364603db508349f2986b11ac9",
     "dist/licenses/pgcf-bridge-LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
-    "dist/licenses/pgcf-bridge-NOTICE": "d337f3d4e3ae4f1686d61af419cda72d8f843a4635d079bbf810d734d24beedb",
-    "dist/stdio-main.js": "3e0567664364d1e6c01e45edbcf29cd46f014bc33fc79c6867f0cb8a1d9136a4"
+    "dist/licenses/pgcf-bridge-NOTICE": "f7427d4a6d88f62ef8743e1fc5a2400199346ff5cbb0c6b7c3adfa2187251960",
+    "dist/stdio-main.js": "be30095fa2e773abeb5197b82cf2d58952d0e41dc6cd5e5803a90cfe1c5578d0"
   },
-  "generatedAt": "2026-10-28T15:51:17.890Z"
+  "generatedAt": "2026-10-30T19:39:29.055Z"
 }

@@ -321,15 +321,12 @@ export type OrganizationCredits = {
   as_of: string;
   available_micros: CreditMicros;
   reserved_micros: CreditMicros;
-  spent_micros: CreditMicros;
-  expired_micros: CreditMicros;
-  platform_overrun_micros: CreditMicros;
   /**
-   * First confirmed exhaustion in this continuous period; null while funded.
+   * When the credit was used up; null while funded or after the monthly credit renewed.
    */
   grace_started_at: string | null;
   /**
-   * Seven days after first confirmed exhaustion. Existing services and domains are retained during this grace; no automatic data deletion. Explicit project stop budgets are separate.
+   * Seven days after the credit was used up. Existing services and domains are retained during this grace; no automatic data deletion. Explicit project stop budgets are separate.
    */
   grace_expires_at: string | null;
   active_meters: Array<string>;
@@ -346,22 +343,38 @@ export type UsageTotal = string;
 
 export type OrganizationCreditUsage = {
   organization_id: Ulid;
-  month: string;
   as_of: string;
   unit: "microcredits";
-  next_cursor: Ulid | null;
-  data: Array<{
+  /**
+   * The UTC month that projects[].used_micros counts.
+   */
+  period: string;
+  /**
+   * The start of the oldest UTC day in days.
+   */
+  from: string;
+  /**
+   * What each project has used so far in period, in ID order; projects without use are left out.
+   */
+  projects: Array<{
     project_id: Ulid;
-    reserved_micros: UsageTotal;
-    meters: Array<{
-      environment_id: Ulid | null;
-      meter: string;
-      unit: string;
-      rate_card_id: string;
-      quantity: UsageTotal;
-      charged_micros: UsageTotal;
-      funded_micros: UsageTotal;
-      platform_overrun_micros: UsageTotal;
+    used_micros: UsageTotal;
+  }>;
+  /**
+   * Billed charges of the last up to 14 UTC days, oldest first.
+   */
+  days: Array<{
+    day: string;
+    projects: Array<{
+      project_id: Ulid;
+      meters: Array<{
+        environment_id: Ulid | null;
+        meter: string;
+        unit: string;
+        rate_card_id: string;
+        quantity: string;
+        charged_micros: UsageTotal;
+      }>;
     }>;
   }>;
 };
@@ -384,6 +397,9 @@ export type PublishedCreditRateCard = {
 };
 
 export type SetProjectCreditBudgetRequest = {
+  /**
+   * The monthly budget, at most 9007199254740991 microcredits (about 9 billion credits); null removes it.
+   */
   amount_micros: CreditMicros | null;
   mode: "continue" | "stop";
 };
@@ -1264,13 +1280,28 @@ export type OrganizationAccount = {
   plan: "free" | "paid";
   plan_source: "free" | "stripe" | "granted" | "manual";
   /**
-   * End of the paid Stripe billing period or the applicable grant; null on Free or for an unbounded grant. During an unpaid renewal the effective Paid plan may remain available for up to 14 days after this Stripe period end, without new monthly credits.
+   * End of the paid coverage: the Stripe billing period plus its 14-day renewal grace, or the end of the grant; null on Free. Paid features stay available until this instant.
    */
   paid_until: string | null;
+  /**
+   * Spendable credit: monthly plus one-time credit minus the open reservations, never below zero.
+   */
   available_micros: CreditMicros;
+  /**
+   * The monthly credit, which ends at next_expiry; the Free allowance is 200 credits and the Paid allowance 1000 credits per period.
+   */
   monthly_micros: CreditMicros;
+  /**
+   * Top-up, bonus and referral credit. It does not expire.
+   */
   one_time_micros: CreditMicros;
+  /**
+   * Credit held for open builds; it is part of the monthly and one-time credit until the build settles.
+   */
   reserved_micros: CreditMicros;
+  /**
+   * When the monthly credit ends and renews; null when none is left.
+   */
   next_expiry: string | null;
   as_of: string;
 };
@@ -4396,10 +4427,7 @@ export type GetOrganizationCreditUsageData = {
   path: {
     organization_id: Ulid;
   };
-  query: {
-    month: string;
-    cursor?: Ulid;
-  };
+  query?: never;
   url: "/v1/organizations/{organization_id}/credit-usage";
 };
 
@@ -4431,7 +4459,7 @@ export type GetOrganizationCreditUsageError =
 
 export type GetOrganizationCreditUsageResponses = {
   /**
-   * Current posted usage for the selected UTC month and project page.
+   * Recent billed usage of the organization.
    */
   200: OrganizationCreditUsage;
 };
