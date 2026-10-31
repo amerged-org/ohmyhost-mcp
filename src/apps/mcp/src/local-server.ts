@@ -1254,7 +1254,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_schedule_set",
-    "Create or replace a named database schedule that runs SQL statements repeatedly on a timer, as the application's own runtime role, so row-level security applies. Send exactly one of cron (five-field UTC expression) or every_seconds (60 to 2678400). Each run is cancelled after timeout_ms (1000 to 30000, default 10000). Statements run in order and must be safe to repeat: write idempotent statements. Destructive: requires confirmed: true.",
+    "Create or replace a named database schedule that runs SQL statements repeatedly on a timer, as the application's own runtime role, so row-level security applies. Send exactly one of cron (five-field UTC expression) or every_seconds (60 to 2678400). Each run is cancelled after timeout_ms (1000 to 30000, default 10000). Statements run in order and must be safe to repeat: write idempotent statements. Destructive: requires confirmed: true. A project whose Stop budget is reached has its schedules disabled automatically, within about an hour of the billed usage reaching the budget: the credit service does this after its hourly pgcf pass, and Continue budgets are never touched. While the budget is reached, schedule set with enabled true and schedule run are refused with project_budget_exceeded (HTTP 402). Re-enabling is manual: raise the budget (or wait for the next UTC month) and run database schedule set --enabled true again with the schedule body (read it with schedule get).",
     z
       .object({
         project_id: identifier,
@@ -1339,7 +1339,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_schedule_run_now",
-    "Queue one immediate run of a database schedule. Refused while the schedule is disabled or a run is already queued. Destructive: the statements execute against the database; requires confirmed: true. If the answer is lost, read database_schedule_run_list before calling again; a second call queues another run.",
+    "Queue one immediate run of a database schedule. Refused while the schedule is disabled or a run is already queued. Destructive: the statements execute against the database; requires confirmed: true. If the answer is lost, read database_schedule_run_list before calling again; a second call queues another run. Refused with project_budget_exceeded while the project's Stop budget is reached.",
     z.object({
       project_id: identifier,
       environment: databaseEnvironment,
@@ -1358,7 +1358,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_execution_usage_get",
-    "Read metered database execution usage: schedule runs and webhook attempts per UTC hour or day window. from and to are UTC timestamps with milliseconds (Z), aligned to the granularity, at most 31 days apart. Only completed windows are final. Rejected, skipped, event and delivery counts are reported but not billed.",
+    "Read metered database execution usage: schedule runs and webhook attempts per UTC hour or day window. from and to are UTC timestamps with milliseconds (Z), aligned to the granularity, at most 31 days apart. Only completed windows are final. The counts are counters only: executions have no price of their own, and the awake compute time of the database is what is billed.",
     z.object({
       project_id: identifier,
       environment: databaseEnvironment.optional(),

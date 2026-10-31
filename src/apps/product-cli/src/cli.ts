@@ -434,7 +434,7 @@ const HELP_USAGE = Object.freeze({
   "database webhook replay":
     "ohmyhost database webhook replay --project ULID --environment dev|prod --delivery ID --yes --json",
   "database schedule set":
-    "ohmyhost database schedule set --project ULID --environment dev|prod --name NAME (--cron EXPR | --every-seconds N) --statements-file PATH [--timeout-ms N] [--enabled true|false] --yes --json (runs the statements in the file, a UTF-8 JSON array of 1 to 20 SQL strings, as the runtime role of the application; cron has five fields in UTC; every-seconds is 60 to 2678400; timeout-ms is 1000 to 30000, default 10000)",
+    "ohmyhost database schedule set --project ULID --environment dev|prod --name NAME (--cron EXPR | --every-seconds N) --statements-file PATH [--timeout-ms N] [--enabled true|false] --yes --json (runs the statements in the file, a UTF-8 JSON array of 1 to 20 SQL strings, as the runtime role of the application; cron has five fields in UTC; every-seconds is 60 to 2678400; timeout-ms is 1000 to 30000, default 10000). A project whose Stop budget is reached has its schedules disabled automatically, within about an hour of the billed usage reaching the budget: the credit service does this after its hourly pgcf pass, and Continue budgets are never touched. While the budget is reached, schedule set with enabled true and schedule run are refused with project_budget_exceeded (HTTP 402). Re-enabling is manual: raise the budget (or wait for the next UTC month) and run database schedule set --enabled true again with the schedule body (read it with schedule get).",
   "database schedule list":
     "ohmyhost database schedule list --project ULID [--environment dev|prod] --json (dev when omitted)",
   "database schedule get":
@@ -444,9 +444,9 @@ const HELP_USAGE = Object.freeze({
   "database schedule runs":
     "ohmyhost database schedule runs --project ULID [--environment dev|prod] --name NAME [--limit 1..50] --json",
   "database schedule run":
-    "ohmyhost database schedule run --project ULID --environment dev|prod --name NAME --yes --json (queues one run now, in addition to the timer)",
+    "ohmyhost database schedule run --project ULID --environment dev|prod --name NAME --yes --json (queues one run now, in addition to the timer; refused with project_budget_exceeded (HTTP 402) while the project's Stop budget is reached)",
   "database executions":
-    "ohmyhost database executions --project ULID [--environment dev|prod] --from ISO --to ISO --granularity hour|day [--limit 1..100] [--cursor CURSOR] --json (UTC timestamps like 2026-10-30T00:00:00.000Z aligned to the granularity, at most 31 days; counts schedule runs, webhook attempts and events per hour or day; usage counters only, nothing is charged for them until the operator prices them)",
+    "ohmyhost database executions --project ULID [--environment dev|prod] --from ISO --to ISO --granularity hour|day [--limit 1..100] [--cursor CURSOR] --json (UTC timestamps like 2026-10-30T00:00:00.000Z aligned to the granularity, at most 31 days; counts schedule runs, webhook attempts and events per hour or day; these are counters only, executions have no price of their own and the awake compute time of the database is what is billed)",
   "database psql":
     "ohmyhost database psql --project ULID --environment dev|prod [--mode read|write] [--ttl 5m|1h|24h|SECONDS] [--json] (starts local psql with a temporary credential and revokes it on exit)",
   link: "ohmyhost link --project ULID --repository-owner OWNER --repository-name REPOSITORY --idempotency-key KEY --json (uses the workspace GitHub connection and waits for the source-link operation)",

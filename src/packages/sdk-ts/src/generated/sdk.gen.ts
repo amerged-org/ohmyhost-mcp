@@ -5227,7 +5227,7 @@ export const getProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
 /**
  * Create or replace one database schedule
  *
- * Creates the named schedule or replaces it. Each run executes the statements as the application's own runtime role, so row-level security applies as for the application. A run that does not finish within timeout_ms is cancelled.
+ * Creates the named schedule or replaces it. Each run executes the statements as the application's own runtime role, so row-level security applies as for the application. A run that does not finish within timeout_ms is cancelled. A reached Stop budget (or exhausted credit past its grace) refuses an enabled schedule with project_budget_exceeded (402); disabling the schedule is never refused.
  */
 export const setProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -5328,7 +5328,7 @@ export const listProjectDatabaseScheduleRuns = <ThrowOnError extends boolean = t
 /**
  * Queue one immediate run of a database schedule
  *
- * Queues one manual run. The run is refused while the schedule is disabled or while a run is already queued.
+ * Queues one manual run. The run is refused while the schedule is disabled or while a run is already queued. A reached Stop budget (or exhausted credit past its grace) refuses the run with project_budget_exceeded (402).
  */
 export const runProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -5374,7 +5374,7 @@ export const runProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
 /**
  * Read metered database execution usage
  *
- * Returns schedule runs and webhook attempts per time window. Only completed windows are final; the current window may still change. Windows are UTC and at most 31 days long. Rejected, skipped, event and delivery counts are reported but not billed.
+ * Returns schedule runs and webhook attempts per time window. Only completed windows are final; the current window may still change. Windows are UTC and at most 31 days long. The counts are counters only; executions have no price of their own, and the awake compute time of the database is what is billed.
  */
 export const getProjectDatabaseExecutionUsage = <ThrowOnError extends boolean = true>(
   parameters: {

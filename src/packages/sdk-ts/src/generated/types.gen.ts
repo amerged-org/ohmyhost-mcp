@@ -8791,6 +8791,10 @@ export type SetProjectDatabaseScheduleErrors = {
    */
   401: ProblemDetails;
   /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
    * The resource does not exist or is not visible to the authenticated principal.
    */
   404: ProblemDetails;
@@ -8924,6 +8928,10 @@ export type RunProjectDatabaseScheduleErrors = {
    * The request failed.
    */
   401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
   /**
    * The resource does not exist or is not visible to the authenticated principal.
    */

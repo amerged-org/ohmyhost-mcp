@@ -34,12 +34,12 @@ const failures = {
     "Do not repeat the write with a new key. Inspect the target data with a read query and retain this operation ID. The same key only reads this receipt.",
   ],
   database_compute_failed: [
-    "The database size change failed at the provider.",
-    "Read the current database compute and report this operation ID through feedback. Preserve data; do not reset or redeploy the database to repair its size.",
+    "The database provider refused the size change or had no room for it. The database keeps its previous size and keeps running, and no credits are charged for the failed change.",
+    "Read the current size with 'ohmyhost database compute get --project PROJECT_ULID --environment dev|prod --json' or MCP database_compute_get, then repeat the change with a new idempotency key; the old key only returns this failure. If it fails again after a few minutes, start a new deployment of the project, repeat the change and report this operation ID through feedback. Never reset the database to change its size.",
   ],
   database_compute_plan_changed: [
-    "Paid access ended before the database size change started.",
-    "Read the organization's plan and current database compute, then confirm a new standard-size request. This operation did not resize the database.",
+    "Paid access ended before the database size change started, so it was not sent to the database provider. The database keeps its previous size and keeps running, and no credits are charged for the change.",
+    "Read the organization's plan with 'ohmyhost credits account --organization ORGANIZATION_ULID --json' or MCP organization_account_get. Sizes above 256 MiB need active Paid: ask the organization Owner to activate Paid through billing checkout, then read the current size with database compute get and repeat the change with a new idempotency key.",
   ],
   database_compute_rejected: [
     "The database size change could not be started.",
