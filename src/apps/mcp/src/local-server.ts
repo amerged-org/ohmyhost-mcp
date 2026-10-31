@@ -921,7 +921,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "organization_credits_get",
-    "Read the owner's shared organization credit pool (available_micros is monthly plus one-time credit minus reservations), the seven-day grace_started_at/grace_expires_at that begins when the credit is used up, and published rate_cards. Existing services/domains are not immediately shut down at zero credit; an explicit project stop budget is separate. One credit is 1000000 microcredits. Each rate states credit_micros for units_per_charge; publication alone does not enable billing. active_meters identifies billed sources; provider outages are not customer debt. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
+    "Read the owner's shared organization credit balance (available_micros is monthly plus one-time credit minus reservations) and the seven-day grace_started_at/grace_expires_at that begins when the credit is used up. It states what is left, not what the credit was spent on; read organization_usage_get for the recent charges. Existing services/domains are not immediately shut down at zero credit; an explicit project stop budget is separate. One credit is 1000000 microcredits. Provider outages are not customer debt. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
     z.object({ organization_id: identifier }),
     (client, input) => client.getOrganizationCredits(input.organization_id),
   );

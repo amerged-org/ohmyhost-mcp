@@ -23,7 +23,6 @@ import type {
   ProjectCreditBudget,
 } from "@ohmyhost/sdk-ts";
 import { isSaasCnameTarget, type SaasCnameTarget } from "@ohmyhost/contracts/platform-origins";
-import { assertPublishedCreditRateCards } from "@ohmyhost/contracts/credit-pricing";
 import {
   publicOperationFailure,
   publicOperationReconciliation,
@@ -554,14 +553,7 @@ export function parseOrganizationCredits(value: unknown): OrganizationCredits {
     "reserved_micros",
     "grace_started_at",
     "grace_expires_at",
-    "active_meters",
-    "rate_cards",
   ]);
-  try {
-    assertPublishedCreditRateCards(input["rate_cards"]);
-  } catch {
-    throw new ResponseContractError();
-  }
   const graceStart = input["grace_started_at"],
     graceEnd = input["grace_expires_at"];
   if (
@@ -576,11 +568,7 @@ export function parseOrganizationCredits(value: unknown): OrganizationCredits {
   if (
     !isUlid(input["organization_id"]) ||
     input["unit"] !== "microcredits" ||
-    !isIsoInstant(input["as_of"]) ||
-    !Array.isArray(input["active_meters"]) ||
-    input["active_meters"].some(
-      (m: unknown) => typeof m !== "string" || !/^[a-z0-9_.-]{1,128}$/u.test(m),
-    )
+    !isIsoInstant(input["as_of"])
   )
     throw new ResponseContractError();
   for (const field of ["available_micros", "reserved_micros"]) {

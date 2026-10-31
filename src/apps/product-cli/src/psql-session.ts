@@ -9,21 +9,17 @@ export const runLocalPsql = async (input: {
   readonly user: string;
   readonly password: string;
   readonly database: string;
-  readonly websocketUrl?: string;
+  readonly websocketUrl: string;
   readonly signal: AbortSignal;
 }): Promise<number> => {
   input.signal.throwIfAborted();
-  if (input.websocketUrl !== undefined && input.websocketUrl !== `wss://${input.host}/`)
-    throw new Error("Invalid PGCF transport");
-  const bridge =
-    input.websocketUrl === undefined
-      ? null
-      : await startBridge({
-          endpoint: input.websocketUrl,
-          database: input.database,
-          user: input.user,
-          port: 0,
-        });
+  if (input.websocketUrl !== `wss://${input.host}/`) throw new Error("Invalid PGCF transport");
+  const bridge = await startBridge({
+    endpoint: input.websocketUrl,
+    database: input.database,
+    user: input.user,
+    port: 0,
+  });
   try {
     input.signal.throwIfAborted();
     // A caller's libpq service/hostaddr settings must not redirect this temporary credential.
@@ -31,26 +27,18 @@ export const runLocalPsql = async (input: {
       Object.entries(process.env).filter(([key]) => !/^PG[A-Z_]+$/iu.test(key)),
     );
     return await new Promise<number>((resolve, reject) => {
-      const child = spawn(
-        "psql",
-        ["-h", bridge?.host ?? input.host, "-U", input.user, "-d", input.database],
-        {
-          stdio: "inherit",
-          signal: input.signal,
-          env: {
-            ...environment,
-            PGPASSWORD: input.password,
-            PGSSLMODE: bridge ? "disable" : "require",
-            ...(bridge
-              ? {
-                  PGPORT: String(bridge.port),
-                  PGCHANNELBINDING: "disable",
-                  PGGSSENCMODE: "disable",
-                }
-              : {}),
-          },
+      const child = spawn("psql", ["-h", bridge.host, "-U", input.user, "-d", input.database], {
+        stdio: "inherit",
+        signal: input.signal,
+        env: {
+          ...environment,
+          PGPASSWORD: input.password,
+          PGSSLMODE: "disable",
+          PGPORT: String(bridge.port),
+          PGCHANNELBINDING: "disable",
+          PGGSSENCMODE: "disable",
         },
-      );
+      });
       child.once("error", (error: NodeJS.ErrnoException) => {
         reject(error.code === "ENOENT" ? new PsqlUnavailableError() : error);
       });
@@ -59,6 +47,6 @@ export const runLocalPsql = async (input: {
       });
     });
   } finally {
-    await bridge?.close();
+    await bridge.close();
   }
 };

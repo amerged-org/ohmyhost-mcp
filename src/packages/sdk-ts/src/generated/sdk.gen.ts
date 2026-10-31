@@ -2192,7 +2192,7 @@ export const configureBillingRecharge = <ThrowOnError extends boolean = true>(
 /**
  * Read the owner's shared organization credit pool
  *
- * Returns the spendable credit and the open reservations, in microcredits (one credit is 1000000 microcredits). available_micros is the monthly credit plus the one-time credit minus the reservations, never below zero. Only the organization Owner may read this balance. active_meters names the currently billed sources; usage that is not billed yet is not included. When the credit is used up, grace_started_at and grace_expires_at name the seven days that keep existing services running. Remains available at zero credit.
+ * Returns the spendable credit and the open reservations, in microcredits (one credit is 1000000 microcredits). available_micros is the monthly credit plus the one-time credit minus the reservations, never below zero. Only the organization Owner may read this balance. It states what is left and never what the credit was spent on; read the recent usage from getOrganizationCreditUsage. When the credit is used up, grace_started_at and grace_expires_at name the seven days that keep existing services running. Remains available at zero credit.
  */
 export const getOrganizationCredits = <ThrowOnError extends boolean = true>(
   parameters: {

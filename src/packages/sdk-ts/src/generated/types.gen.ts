@@ -329,11 +329,6 @@ export type OrganizationCredits = {
    * Seven days after the credit was used up. Existing services and domains are retained during this grace; no automatic data deletion. Explicit project stop budgets are separate.
    */
   grace_expires_at: string | null;
-  active_meters: Array<string>;
-  /**
-   * Published integer prices, newest first. A published rate is not proof of enabled billing; only active_meters names currently billed sources. Builds retain their accepted quote. Provider cost is a list-price basis before platform allowances, not an invoice.
-   */
-  rate_cards: Array<PublishedCreditRateCard>;
 };
 
 /**
@@ -376,23 +371,6 @@ export type OrganizationCreditUsage = {
         charged_micros: UsageTotal;
       }>;
     }>;
-  }>;
-};
-
-export type PublishedCreditRateCard = {
-  id: string;
-  currency: "USD";
-  published_at: string;
-  effective_from: string;
-  rates: Array<{
-    meter: string;
-    unit: string;
-    units_per_charge: string;
-    /**
-     * Provider list-cost basis for units_per_charge, in USD micro-units (1000000 equals 1 USD), before shared allowances and discounts. Null for the PGCF RAM tariff means node infrastructure costs are tracked separately and are not allocated to this customer rate; null never means zero cost.
-     */
-    provider_cost_micros: string | null;
-    credit_micros: CreditMicros;
   }>;
 };
 

@@ -829,7 +829,6 @@ export type {
   PromoteDeploymentResponse,
   PromoteDeploymentResponses,
   ProviderReconciliationAttempt,
-  PublishedCreditRateCard,
   PutEnvironmentSecretData,
   PutEnvironmentSecretError,
   PutEnvironmentSecretErrors,
