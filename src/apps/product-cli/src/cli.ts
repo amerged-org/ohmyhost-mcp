@@ -28,6 +28,11 @@ import {
 } from "@ohmyhost/contracts/database-access";
 import { assertOrganizationAccount } from "@ohmyhost/contracts/credit-pricing";
 import { assertDatabaseCompute } from "@ohmyhost/contracts/database-compute";
+import {
+  parseDatabaseScheduleSetRequest,
+  parseDatabaseWebhookCreateRequest,
+  type DatabaseScheduleSetRequest,
+} from "@ohmyhost/contracts/database-events";
 import cliPackage from "../package.json" with { type: "json" };
 import { isUserSecretName } from "@ohmyhost/contracts/secret-names";
 import {
@@ -281,7 +286,7 @@ export interface ProductCliDependencies {
   readonly operationEventSink?: { write(value: string): void };
   readonly readSecretValue: (signal: AbortSignal) => Promise<string>;
   readonly spawnPsql?: (input: {
-    readonly websocketUrl?: string;
+    readonly websocketUrl: string;
     readonly host: string;
     readonly user: string;
     readonly password: string;
@@ -414,6 +419,34 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost database access list --project ULID [--environment dev|prod] --json",
   "database access revoke":
     "ohmyhost database access revoke --project ULID --access ULID --yes --json",
+  "database webhook create":
+    "ohmyhost database webhook create --project ULID --environment dev|prod --url HTTPS_URL --event-types TYPE[,TYPE] [--headers-file PATH] --idempotency-key KEY --yes --json (the signing secret is shown once in this answer; types: database.created, database.ready, database.woke, database.slept, database.suspended, database.resized, database.deleted; the headers file is a UTF-8 JSON object of at most 8 KiB)",
+  "database webhook list":
+    "ohmyhost database webhook list --project ULID [--environment dev|prod] --json (dev when omitted; the secret is never listed)",
+  "database webhook get":
+    "ohmyhost database webhook get --project ULID [--environment dev|prod] --webhook ID --json",
+  "database webhook delete":
+    "ohmyhost database webhook delete --project ULID --environment dev|prod --webhook ID --yes --json",
+  "database webhook test":
+    "ohmyhost database webhook test --project ULID --environment dev|prod --webhook ID --yes --json (sends one signed test request to the receiver; nothing is stored)",
+  "database webhook deliveries":
+    "ohmyhost database webhook deliveries --project ULID [--environment dev|prod] [--webhook ID] [--limit 1..100] [--cursor CURSOR] --json",
+  "database webhook replay":
+    "ohmyhost database webhook replay --project ULID --environment dev|prod --delivery ID --yes --json",
+  "database schedule set":
+    "ohmyhost database schedule set --project ULID --environment dev|prod --name NAME (--cron EXPR | --every-seconds N) --statements-file PATH [--timeout-ms N] [--enabled true|false] --yes --json (runs the statements in the file, a UTF-8 JSON array of 1 to 20 SQL strings, as the runtime role of the application; cron has five fields in UTC; every-seconds is 60 to 2678400; timeout-ms is 1000 to 30000, default 10000)",
+  "database schedule list":
+    "ohmyhost database schedule list --project ULID [--environment dev|prod] --json (dev when omitted)",
+  "database schedule get":
+    "ohmyhost database schedule get --project ULID [--environment dev|prod] --name NAME --json",
+  "database schedule delete":
+    "ohmyhost database schedule delete --project ULID --environment dev|prod --name NAME --yes --json",
+  "database schedule runs":
+    "ohmyhost database schedule runs --project ULID [--environment dev|prod] --name NAME [--limit 1..50] --json",
+  "database schedule run":
+    "ohmyhost database schedule run --project ULID --environment dev|prod --name NAME --yes --json (queues one run now, in addition to the timer)",
+  "database executions":
+    "ohmyhost database executions --project ULID [--environment dev|prod] --from ISO --to ISO --granularity hour|day [--limit 1..100] [--cursor CURSOR] --json (UTC timestamps like 2026-10-30T00:00:00.000Z aligned to the granularity, at most 31 days; counts schedule runs, webhook attempts and events per hour or day; usage counters only, nothing is charged for them until the operator prices them)",
   "database psql":
     "ohmyhost database psql --project ULID --environment dev|prod [--mode read|write] [--ttl 5m|1h|24h|SECONDS] [--json] (starts local psql with a temporary credential and revokes it on exit)",
   link: "ohmyhost link --project ULID --repository-owner OWNER --repository-name REPOSITORY --idempotency-key KEY --json (uses the workspace GitHub connection and waits for the source-link operation)",
@@ -528,6 +561,20 @@ const HELP_COMMANDS = Object.freeze(
   Object.entries(HELP_USAGE).map(([command, usage]) => Object.freeze({ command, usage })),
 );
 
+/**
+ * The entries a help topic selects: an exact command name, or else every command of a group such as
+ * `database`. An exact name wins, so `source publish` does not list `source publish complete`.
+ */
+const helpEntries = (topic: string | undefined) => {
+  if (topic === undefined) return HELP_COMMANDS;
+  const exact = HELP_COMMANDS.filter((entry) => entry.command === topic);
+  return exact.length > 0
+    ? exact
+    : HELP_COMMANDS.filter((entry) => entry.command.startsWith(`${topic} `));
+};
+
+export const helpTopicKnown = (topic: string): boolean => helpEntries(topic).length > 0;
+
 export const cliMetadataResult = (kind: "help" | "version", topic?: string): CliResult =>
   kind === "help"
     ? success("help", {
@@ -536,7 +583,7 @@ export const cliMetadataResult = (kind: "help" | "version", topic?: string): Cli
         usage: "ohmyhost <command> [options] [--profile-name NAME] --json",
         environment:
           "OHMYHOST_ENVIRONMENT=development|production (default: production); OHMYHOST_PROFILE=NAME binds this process to one saved login",
-        commands: HELP_COMMANDS.filter((entry) => !topic || entry.command === topic),
+        commands: helpEntries(topic),
       })
     : success("version", { status: "succeeded", cli_version: CLI_VERSION });
 
@@ -569,22 +616,48 @@ export const invalidCommandAction = (argv: readonly string[], commandPrefix: str
   }`;
 };
 
+/**
+ * The retry step after an ambiguous failure, as a clause that follows "Then" or a semicolon. A
+ * command that takes --idempotency-key repeats its change with that key. A mutation without a key
+ * (--yes but no key) may already have applied its change, so its state is read first. Any other
+ * command only reads or signs in; it keeps the general advice.
+ */
+const retryAdvice = (command: string): string => {
+  const usage = Object.hasOwn(HELP_USAGE, command)
+    ? HELP_USAGE[command as CustomerCommandLabel]
+    : "";
+  if (usage.includes("--idempotency-key"))
+    return "run the same command again with the same --idempotency-key; the change may already have been applied, and a new key could apply it twice";
+  if (usage.includes("--yes"))
+    return "this command has no idempotency key and the change may already have been applied; check its current state first with the matching list or get command (for example database access list --project ULID --json), and run the command again only if the change is not there";
+  return "run the same command again; this command has no idempotency key, so check its current state first if it may have changed anything";
+};
+
 /** The next step after an unexpected client failure; the stderr diagnostic line identifies it. */
-export const INTERNAL_ERROR_ACTION =
-  "The ohmyhost client stopped on an unexpected error; the stderr line starting with [ohmyhost: identifies it. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json and install the published client if it is older, then run the same command again with the same --idempotency-key. If the current client fails the same way, report it with feedback submit (kind bug, error code internal_error) and quote that stderr line.";
+export const internalErrorAction = (command: string): string =>
+  `The ohmyhost client stopped on an unexpected error; the stderr line starting with [ohmyhost: identifies it. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json and install the published client if it is older, then ${retryAdvice(command)}. If the current client fails the same way, report it with feedback submit (kind bug, error code internal_error) and quote that stderr line.`;
 
 /** The local credential store or saved-login index failed; a sandbox is the usual cause. */
 export const CREDENTIAL_STORE_UNAVAILABLE_ACTION =
   "This computer's credential store (for example macOS Keychain or Windows Credential Manager) or the saved-login list in ~/.ohmyhost/profiles could not be read or written; nothing was changed. If the agent runs in a sandbox, run the command with access to them before asking the customer to sign in again. If the store is locked, ask the customer to unlock it, then run the command again. On a server, container or CI runner without a credential store, do not run login: load OHMYHOST_TOKEN from a private env file with a token from the portal's API Tokens page.";
 
-const RESPONSE_CONTRACT_INVALID_ACTION =
-  "The ohmyho.st API answered in a form this client version does not accept, usually because the client is older than the service. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json; if it is older, install the published CLI and MCP and reload MCP. Then run the same command again with the same --idempotency-key: the change may already have been applied. If the current version answers this too, report it with feedback submit (kind bug, error code response_contract_invalid).";
+const responseContractAction = (command: string): string =>
+  `The ohmyho.st API answered in a form this client version does not accept, usually because the client is older than the service. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json; if it is older, install the published CLI and MCP and reload MCP. Then ${retryAdvice(command)}. If the current version answers this too, report it with feedback submit (kind bug, error code response_contract_invalid).`;
 
-const REQUEST_TIMEOUT_ACTION =
-  "The ohmyho.st API did not answer within 30 seconds. Run the same command again with the same --idempotency-key; the change may already be under way, and a new key could apply it twice.";
+const requestTimeoutAction = (command: string): string =>
+  `The ohmyho.st API did not answer within 30 seconds; ${retryAdvice(command)}.`;
 
 const LOGOUT_UNCONFIRMED_ACTION =
   "The saved login was removed from this computer, but ohmyho.st did not confirm that its session ended. Running logout again cannot retry this, because the login is gone; do not sign in again just to revoke it. Tell the customer the session end was not confirmed.";
+
+const HEADERS_FILE_INVALID_ACTION =
+  "Put one JSON object of header names and values in the file named by --headers-file: UTF-8, at most 8 KiB, unique names, values of visible ASCII characters. Names such as content-type, host, content-length, connection, transfer-encoding, user-agent, te, upgrade and expect, and names starting with pgcf-, cf- or x-forwarded-, are refused. Nothing was sent; fix the file and run the command again.";
+
+const SCHEDULE_STATEMENTS_FILE_INVALID_ACTION =
+  "Put one JSON array of 1 to 20 non-empty SQL strings in the file named by --statements-file: UTF-8, at most 64 KiB in total and 16 KiB per statement, without NUL characters. Nothing was saved; fix the file and run the command again.";
+
+const SCHEDULE_INVALID_ACTION =
+  "Check the schedule request: --cron takes five fields in UTC (9 to 120 characters), or --every-seconds takes 60 to 2678400, never both; --timeout-ms takes 1000 to 30000; the statements file must hold 1 to 20 non-blank SQL strings of at most 16 KiB each and 64 KiB in total. Nothing was saved; fix it and run the command again.";
 
 const STATEMENT_FILE_INVALID_ACTION =
   "Put one INSERT, UPDATE or DELETE statement that starts with that keyword (no leading comment or WITH), UTF-8, at most 64 KiB, in the file named by --statement-file, then rerun with the same --idempotency-key.";
@@ -652,6 +725,8 @@ export class ProductCli {
     let command: ProductCliCommand;
     try {
       command = parseProductCliCommand(argv);
+      if (command.kind === "help" && command.topic !== undefined && !helpTopicKnown(command.topic))
+        throw new InvalidCommandError();
     } catch (error) {
       if (error instanceof InvalidCommandError) {
         return failure(
@@ -672,7 +747,7 @@ export class ProductCli {
         1,
         "internal_error",
         false,
-        INTERNAL_ERROR_ACTION,
+        internalErrorAction(recognizedCommandLabel(argv)),
       );
     }
     return this.runCommand(command, signal);
@@ -1116,6 +1191,34 @@ export class ProductCli {
         return await this.listDatabaseAccess(command, signal);
       if (command.kind === "database-access-revoke")
         return await this.revokeDatabaseAccess(command, signal);
+      if (command.kind === "database-webhook-create")
+        return await this.createDatabaseWebhook(command, signal);
+      if (command.kind === "database-webhook-list")
+        return await this.listDatabaseWebhooks(command, signal);
+      if (command.kind === "database-webhook-get")
+        return await this.getDatabaseWebhook(command, signal);
+      if (command.kind === "database-webhook-delete")
+        return await this.deleteDatabaseWebhook(command, signal);
+      if (command.kind === "database-webhook-test")
+        return await this.testDatabaseWebhook(command, signal);
+      if (command.kind === "database-webhook-deliveries")
+        return await this.listDatabaseWebhookDeliveries(command, signal);
+      if (command.kind === "database-webhook-replay")
+        return await this.replayDatabaseWebhookDelivery(command, signal);
+      if (command.kind === "database-schedule-set")
+        return await this.setDatabaseSchedule(command, signal);
+      if (command.kind === "database-schedule-list")
+        return await this.listDatabaseSchedules(command, signal);
+      if (command.kind === "database-schedule-get")
+        return await this.getDatabaseSchedule(command, signal);
+      if (command.kind === "database-schedule-delete")
+        return await this.deleteDatabaseSchedule(command, signal);
+      if (command.kind === "database-schedule-runs")
+        return await this.listDatabaseScheduleRuns(command, signal);
+      if (command.kind === "database-schedule-run")
+        return await this.runDatabaseSchedule(command, signal);
+      if (command.kind === "database-executions")
+        return await this.getDatabaseExecutionUsage(command, signal);
       if (command.kind === "database-psql") return await this.runProjectPsql(command, signal);
       if (command.kind === "link") return await this.linkSource(command, signal);
       if (command.kind === "source-auto-deploy-set")
@@ -1849,6 +1952,209 @@ export class ProductCli {
     return success("database access revoke", { status: "succeeded", access });
   }
 
+  /** The signing secret is returned by create only; every other answer carries no secret. */
+  private async createDatabaseWebhook(
+    command: Extract<ProductCliCommand, { kind: "database-webhook-create" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const request = await webhookCreateRequest(command);
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const webhook = await api.createProjectDatabaseWebhook({
+      projectId: command.projectId,
+      environment: command.environment,
+      idempotencyKey: command.idempotencyKey,
+      url: request.url,
+      eventTypes: request.event_types,
+      headers: request.headers,
+    });
+    return success("database webhook create", { status: "succeeded", webhook });
+  }
+
+  private async listDatabaseWebhooks(
+    command: Extract<ProductCliCommand, { kind: "database-webhook-list" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const page = await api.listProjectDatabaseWebhooks({
+      projectId: command.projectId,
+      environment: command.environment,
+    });
+    return success("database webhook list", { status: "succeeded", webhook: page.items });
+  }
+
+  private async getDatabaseWebhook(
+    command: Extract<ProductCliCommand, { kind: "database-webhook-get" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const webhook = await api.getProjectDatabaseWebhook({
+      projectId: command.projectId,
+      environment: command.environment,
+      webhookId: command.webhookId,
+    });
+    return success("database webhook get", { status: "succeeded", webhook });
+  }
+
+  private async deleteDatabaseWebhook(
+    command: Extract<ProductCliCommand, { kind: "database-webhook-delete" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const deleted = await api.deleteProjectDatabaseWebhook({
+      projectId: command.projectId,
+      environment: command.environment,
+      webhookId: command.webhookId,
+    });
+    return success("database webhook delete", { status: "succeeded", deleted });
+  }
+
+  private async testDatabaseWebhook(
+    command: Extract<ProductCliCommand, { kind: "database-webhook-test" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const result = await api.testProjectDatabaseWebhook({
+      projectId: command.projectId,
+      environment: command.environment,
+      webhookId: command.webhookId,
+    });
+    return success("database webhook test", { status: "succeeded", result });
+  }
+
+  private async listDatabaseWebhookDeliveries(
+    command: Extract<ProductCliCommand, { kind: "database-webhook-deliveries" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const page = await api.listProjectDatabaseWebhookDeliveries({
+      projectId: command.projectId,
+      environment: command.environment,
+      ...(command.webhookId === null ? {} : { webhookId: command.webhookId }),
+      ...(command.limit === null ? {} : { limit: command.limit }),
+      ...(command.cursor === null ? {} : { cursor: command.cursor }),
+    });
+    return success("database webhook deliveries", {
+      status: "succeeded",
+      delivery: page.items,
+      next_cursor: page.next_cursor,
+    });
+  }
+
+  private async replayDatabaseWebhookDelivery(
+    command: Extract<ProductCliCommand, { kind: "database-webhook-replay" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const replay = await api.replayProjectDatabaseWebhookDelivery({
+      projectId: command.projectId,
+      environment: command.environment,
+      deliveryId: command.deliveryId,
+    });
+    return success("database webhook replay", { status: "succeeded", replay });
+  }
+
+  /** The statements file and the schedule fields are checked before any request is sent. */
+  private async setDatabaseSchedule(
+    command: Extract<ProductCliCommand, { kind: "database-schedule-set" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const request = await scheduleSetRequest(command);
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const schedule = await api.setProjectDatabaseSchedule({
+      projectId: command.projectId,
+      environment: command.environment,
+      name: command.name,
+      request,
+    });
+    return success("database schedule set", { status: "succeeded", schedule });
+  }
+
+  private async listDatabaseSchedules(
+    command: Extract<ProductCliCommand, { kind: "database-schedule-list" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const page = await api.listProjectDatabaseSchedules({
+      projectId: command.projectId,
+      environment: command.environment,
+    });
+    return success("database schedule list", { status: "succeeded", schedule: page.items });
+  }
+
+  private async getDatabaseSchedule(
+    command: Extract<ProductCliCommand, { kind: "database-schedule-get" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const schedule = await api.getProjectDatabaseSchedule({
+      projectId: command.projectId,
+      environment: command.environment,
+      name: command.name,
+    });
+    return success("database schedule get", { status: "succeeded", schedule });
+  }
+
+  private async deleteDatabaseSchedule(
+    command: Extract<ProductCliCommand, { kind: "database-schedule-delete" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const deleted = await api.deleteProjectDatabaseSchedule({
+      projectId: command.projectId,
+      environment: command.environment,
+      name: command.name,
+    });
+    return success("database schedule delete", { status: "succeeded", deleted });
+  }
+
+  private async listDatabaseScheduleRuns(
+    command: Extract<ProductCliCommand, { kind: "database-schedule-runs" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const page = await api.listProjectDatabaseScheduleRuns({
+      projectId: command.projectId,
+      environment: command.environment,
+      name: command.name,
+      ...(command.limit === null ? {} : { limit: command.limit }),
+    });
+    return success("database schedule runs", { status: "succeeded", schedule_run: page.items });
+  }
+
+  private async runDatabaseSchedule(
+    command: Extract<ProductCliCommand, { kind: "database-schedule-run" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const run = await api.runProjectDatabaseSchedule({
+      projectId: command.projectId,
+      environment: command.environment,
+      name: command.name,
+    });
+    return success("database schedule run", { status: "succeeded", run });
+  }
+
+  private async getDatabaseExecutionUsage(
+    command: Extract<ProductCliCommand, { kind: "database-executions" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const page = await api.getProjectDatabaseExecutionUsage({
+      projectId: command.projectId,
+      environment: command.environment,
+      from: command.from,
+      to: command.to,
+      granularity: command.granularity,
+      ...(command.limit === null ? {} : { limit: command.limit }),
+      ...(command.cursor === null ? {} : { cursor: command.cursor }),
+    });
+    return success("database executions", {
+      status: "succeeded",
+      usage: page.items,
+      next_cursor: page.next_cursor,
+    });
+  }
+
   /** psql receives the password through its own environment; the URI is never printed. */
   private async runProjectPsql(
     command: Extract<ProductCliCommand, { kind: "database-psql" }>,
@@ -1874,7 +2180,7 @@ export class ProductCli {
         host: credential.host,
         user: credential.role_name,
         password: decodeURIComponent(new URL(credential.connection_uri).password),
-        ...(credential.provider === "pgcf" ? { websocketUrl: credential.websocket_url } : {}),
+        websocketUrl: credential.websocket_url,
         database: credential.database,
         mode: credential.mode,
         signal,
@@ -2761,7 +3067,8 @@ export class ProductCli {
         );
       }
       if (isTimeout(error)) {
-        throw new ProductCliFailure(8, "request_timeout", true, REQUEST_TIMEOUT_ACTION);
+        // classifyFailure replaces this text with the advice for the command that timed out.
+        throw new ProductCliFailure(8, "request_timeout", true, requestTimeoutAction("unknown"));
       }
       if (error instanceof LifecycleTransportError) {
         throw new ProductCliFailure(
@@ -2860,11 +3167,16 @@ const classifyFailure = (
       130,
       "command_cancelled",
       true,
-      "The command was stopped by an interrupt or termination signal, for example the shell's command timeout, before it finished. Run it again with the same --idempotency-key; a change may already be under way. Give login and commands with --wait or --follow several minutes, or run them in the background.",
+      `The command was stopped by an interrupt or termination signal, for example the shell's command timeout, before it finished; ${retryAdvice(command)}. Give login and commands with --wait or --follow several minutes, or run them in the background.`,
     );
   }
   if (isTimeout(error)) {
-    return failure(command, 8, "request_timeout", true, REQUEST_TIMEOUT_ACTION);
+    return failure(command, 8, "request_timeout", true, requestTimeoutAction(command));
+  }
+  // A retryable request_timeout is a token refresh that timed out inside this command; the logout
+  // timeout is not retryable and keeps its own advice.
+  if (error instanceof ProductCliFailure && error.code === "request_timeout" && error.retryable) {
+    return failure(command, 8, "request_timeout", true, requestTimeoutAction(command));
   }
   if (error instanceof ProductCliFailure) {
     return failure(
@@ -2924,13 +3236,7 @@ const classifyFailure = (
     );
   }
   if (error instanceof ResponseContractError) {
-    return failure(
-      command,
-      7,
-      "response_contract_invalid",
-      false,
-      RESPONSE_CONTRACT_INVALID_ACTION,
-    );
+    return failure(command, 7, "response_contract_invalid", false, responseContractAction(command));
   }
   if (error instanceof PublicResponseTooLargeError) {
     return failure(
@@ -2963,18 +3269,12 @@ const classifyFailure = (
         7,
         "response_contract_invalid",
         false,
-        RESPONSE_CONTRACT_INVALID_ACTION,
+        responseContractAction(command),
       );
     }
   }
   if (looksLikeRemoteObject(error)) {
-    return failure(
-      command,
-      7,
-      "response_contract_invalid",
-      false,
-      RESPONSE_CONTRACT_INVALID_ACTION,
-    );
+    return failure(command, 7, "response_contract_invalid", false, responseContractAction(command));
   }
   if (error instanceof NetworkTransportError) {
     return failure(
@@ -2982,10 +3282,10 @@ const classifyFailure = (
       8,
       "network_error",
       true,
-      "The request did not reach the ohmyho.st API, or its answer was cut off. If the agent runs in a sandbox without network access, run the command with network access. Otherwise run the same command again with the same --idempotency-key; the change may already have been applied, and a new key could apply it twice.",
+      `The request did not reach the ohmyho.st API, or its answer was cut off. If the agent runs in a sandbox without network access, run the command with network access. Otherwise ${retryAdvice(command)}.`,
     );
   }
-  return failure(command, 1, "internal_error", false, INTERNAL_ERROR_ACTION);
+  return failure(command, 1, "internal_error", false, internalErrorAction(command));
 };
 
 /** A 409 idempotency_key_reused problem, with what its answer carries. */
@@ -3006,33 +3306,119 @@ const OPERATION_STREAM_CONNECTIONS = 4;
  * The single DML statement of `database write --statement-file`: a regular UTF-8 file of at most
  * 64 KiB. Anything else, including a missing file, is refused before any request.
  */
-const readStatementFile = async (path: string): Promise<string> => {
-  const invalid = () =>
-    new ProductCliFailure(2, "statement_file_invalid", false, STATEMENT_FILE_INVALID_ACTION);
+const readStatementFile = (path: string): Promise<string> =>
+  readBoundedUtf8File(
+    path,
+    65_536,
+    () => new ProductCliFailure(2, "statement_file_invalid", false, STATEMENT_FILE_INVALID_ACTION),
+  );
+
+/** A regular UTF-8 file of at most maxBytes; anything else is refused with the given failure. */
+const readBoundedUtf8File = async (
+  path: string,
+  maxBytes: number,
+  refusal: () => ProductCliFailure,
+): Promise<string> => {
   let file: Awaited<ReturnType<typeof open>>;
   try {
     file = await open(path, "r");
   } catch {
-    throw invalid();
+    throw refusal();
   }
-  const buffer = Buffer.alloc(65_537);
+  const buffer = Buffer.alloc(maxBytes + 1);
   try {
     const stat = await file.stat();
-    if (!stat.isFile() || stat.size > 65_536) throw invalid();
+    if (!stat.isFile() || stat.size > maxBytes) throw refusal();
     let length = 0;
     while (length < buffer.length) {
       const read = await file.read(buffer, length, buffer.length - length, null);
       if (read.bytesRead === 0) break;
       length += read.bytesRead;
     }
-    if (length > 65_536) throw invalid();
+    if (length > maxBytes) throw refusal();
     return new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, length));
   } catch (error) {
     if (error instanceof ProductCliFailure) throw error;
-    throw invalid();
+    throw refusal();
   } finally {
     buffer.fill(0);
     await file.close();
+  }
+};
+
+/** The create request with the headers of `--headers-file`; a refused file sends nothing. */
+const webhookCreateRequest = async (
+  command: Extract<ProductCliCommand, { kind: "database-webhook-create" }>,
+) => {
+  const headersFailure = () =>
+    new ProductCliFailure(2, "headers_file_invalid", false, HEADERS_FILE_INVALID_ACTION);
+  const headers =
+    command.headersFile === null
+      ? undefined
+      : await readBoundedUtf8File(command.headersFile, 8_192, headersFailure).then(
+          (text: string): unknown => {
+            try {
+              return JSON.parse(text) as unknown;
+            } catch {
+              throw headersFailure();
+            }
+          },
+        );
+  try {
+    return parseDatabaseWebhookCreateRequest({
+      url: command.url,
+      event_types: command.eventTypes,
+      headers,
+    });
+  } catch {
+    throw headersFailure();
+  }
+};
+
+/**
+ * The schedule request of `database schedule set`: the statements file is a UTF-8 JSON array, and
+ * the schedule fields are checked by the same contract the service uses. A refused file or field
+ * sends nothing.
+ */
+const scheduleSetRequest = async (
+  command: Extract<ProductCliCommand, { kind: "database-schedule-set" }>,
+): Promise<DatabaseScheduleSetRequest> => {
+  const statementsFailure = () =>
+    new ProductCliFailure(
+      2,
+      "statements_file_invalid",
+      false,
+      SCHEDULE_STATEMENTS_FILE_INVALID_ACTION,
+    );
+  const statements = await readBoundedUtf8File(
+    command.statementsFile,
+    65_536,
+    statementsFailure,
+  ).then((text: string): unknown => {
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      throw statementsFailure();
+    }
+  });
+  // The statements are checked on their own first, so a bad file always answers statements_file_invalid.
+  // The placeholder cadence only lets the contract reach the statements; it is never sent.
+  try {
+    parseDatabaseScheduleSetRequest({ every_seconds: 60, statements, confirm: true });
+  } catch {
+    throw statementsFailure();
+  }
+  try {
+    return parseDatabaseScheduleSetRequest({
+      ...(command.cron === null ? {} : { cron: command.cron }),
+      ...(command.everySeconds === null ? {} : { every_seconds: command.everySeconds }),
+      statements,
+      ...(command.timeoutMs === null ? {} : { timeout_ms: command.timeoutMs }),
+      ...(command.enabled === null ? {} : { enabled: command.enabled }),
+      confirm: true,
+    });
+  } catch {
+    throw new ProductCliFailure(2, "schedule_invalid", false, SCHEDULE_INVALID_ACTION);
   }
 };
 
@@ -3140,6 +3526,20 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "database-access-list") return "database access list";
   if (command.kind === "database-access-revoke") return "database access revoke";
   if (command.kind === "database-psql") return "database psql";
+  if (command.kind === "database-webhook-create") return "database webhook create";
+  if (command.kind === "database-webhook-list") return "database webhook list";
+  if (command.kind === "database-webhook-get") return "database webhook get";
+  if (command.kind === "database-webhook-delete") return "database webhook delete";
+  if (command.kind === "database-webhook-test") return "database webhook test";
+  if (command.kind === "database-webhook-deliveries") return "database webhook deliveries";
+  if (command.kind === "database-webhook-replay") return "database webhook replay";
+  if (command.kind === "database-schedule-set") return "database schedule set";
+  if (command.kind === "database-schedule-list") return "database schedule list";
+  if (command.kind === "database-schedule-get") return "database schedule get";
+  if (command.kind === "database-schedule-delete") return "database schedule delete";
+  if (command.kind === "database-schedule-runs") return "database schedule runs";
+  if (command.kind === "database-schedule-run") return "database schedule run";
+  if (command.kind === "database-executions") return "database executions";
   if (command.kind === "source-auto-deploy-set") return "source auto-deploy set";
   if (command.kind === "source-auto-deploy-status") return "source auto-deploy status";
   if (command.kind === "domain-cloudflare-authorize") return "domain cloudflare authorize";

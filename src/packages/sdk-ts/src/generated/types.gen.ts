@@ -910,29 +910,22 @@ export type ProjectDatabaseAccessRequest = {
   label?: string | null;
 };
 
-export type ProjectDatabaseAccess = (
-  | {
-      database?: "neondb";
-    }
-  | {
-      database?: unknown;
-    }
-) & {
+export type ProjectDatabaseAccess = {
   access_id: Ulid;
   environment: "dev" | "prod";
   mode: "read" | "write";
   role_name: string;
   host: string;
   /**
-   * neondb for a transitional Neon credential; the exact 20-character PGCF database identity for WSS.
+   * The exact 20-character PGCF database identity for WSS.
    */
   database: string;
-  provider?: "pgcf";
-  transport?: "wss";
+  provider: "pgcf";
+  transport: "wss";
   /**
    * Verified WSS origin ending in / and matching host. The local bridge adds /v2 and the bound database and user; no public PostgreSQL TCP endpoint.
    */
-  websocket_url?: string;
+  websocket_url: string;
   label: string | null;
   state: "active" | "expired" | "revoked";
   issued_at: string;
@@ -941,29 +934,22 @@ export type ProjectDatabaseAccess = (
   revocation_reason: "principal" | "expired" | "budget" | "creation_failed" | "data_change" | null;
 };
 
-export type ProjectDatabaseAccessCredential = (
-  | {
-      database?: "neondb";
-    }
-  | {
-      database?: unknown;
-    }
-) & {
+export type ProjectDatabaseAccessCredential = {
   access_id: Ulid;
   environment: "dev" | "prod";
   mode: "read" | "write";
   role_name: string;
   host: string;
   /**
-   * neondb for a transitional Neon credential; the exact 20-character PGCF database identity for WSS.
+   * The exact 20-character PGCF database identity for WSS.
    */
   database: string;
-  provider?: "pgcf";
-  transport?: "wss";
+  provider: "pgcf";
+  transport: "wss";
   /**
    * Verified WSS origin ending in / and matching host. The local bridge adds /v2 and the bound database and user; no public PostgreSQL TCP endpoint.
    */
-  websocket_url?: string;
+  websocket_url: string;
   label: string | null;
   state: "active" | "expired" | "revoked";
   issued_at: string;
@@ -975,13 +961,208 @@ export type ProjectDatabaseAccessCredential = (
    */
   connection_uri: string;
   /**
-   * For PGCF, a secret-free ohmyhost database psql invocation that obtains and revokes its own session credential. Transitional Neon responses retain their original direct invocation.
+   * For PGCF, a secret-free ohmyhost database psql invocation that obtains and revokes its own session credential.
    */
   psql_command: string;
 };
 
 export type ProjectDatabaseAccessPage = {
   items: Array<ProjectDatabaseAccess>;
+};
+
+export type DatabaseWebhookEventType =
+  | "database.created"
+  | "database.ready"
+  | "database.woke"
+  | "database.slept"
+  | "database.suspended"
+  | "database.resized"
+  | "database.deleted";
+
+export type DatabaseWebhookCreateRequest = {
+  /**
+   * HTTPS receiver URL.
+   */
+  url: string;
+  event_types: Array<DatabaseWebhookEventType>;
+  /**
+   * Extra headers sent with every delivery. Names are case-insensitive and must be unique; content-type, host, content-length, connection, transfer-encoding, user-agent, te, upgrade, expect and any name starting with pgcf-, cf- or x-forwarded- are refused.
+   */
+  headers?: {
+    [key: string]: string;
+  };
+};
+
+export type DatabaseWebhook = {
+  id: string;
+  environment: "dev" | "prod";
+  url: string;
+  event_types: Array<DatabaseWebhookEventType>;
+  /**
+   * Names of the extra headers only; their values are never returned.
+   */
+  header_names: Array<string>;
+  created_at: string;
+};
+
+export type DatabaseWebhookCreated = {
+  id: string;
+  environment: "dev" | "prod";
+  url: string;
+  event_types: Array<DatabaseWebhookEventType>;
+  header_names: Array<string>;
+  created_at: string;
+  /**
+   * Signing secret, returned only by this creation answer.
+   */
+  secret: string;
+};
+
+export type DatabaseWebhookPage = {
+  items: Array<DatabaseWebhook>;
+};
+
+export type DatabaseWebhookDeleted = {
+  id: string;
+  deleted: true;
+};
+
+export type DatabaseWebhookDelivery = {
+  id: string;
+  event_id: string;
+  event_type: DatabaseWebhookEventType;
+  webhook_id: string;
+  state: "pending" | "delivered" | "dead_lettered";
+  attempts: number;
+  created_at: string;
+  next_attempt_at: string | null;
+  delivered_at: string | null;
+  last_status: number | null;
+  last_error: "timeout" | "network" | "http" | "expired" | "permanent" | null;
+};
+
+export type DatabaseWebhookDeliveryPage = {
+  items: Array<DatabaseWebhookDelivery>;
+  next_cursor: string | null;
+};
+
+export type DatabaseWebhookTestResult = {
+  delivered: boolean;
+  status: number | null;
+  error: "timeout" | "network" | "http" | null;
+  duration_ms: number;
+};
+
+export type DatabaseWebhookReplayAccepted = {
+  delivery_id: string;
+  state: "pending";
+};
+
+export type DatabaseScheduleSetRequest = unknown & {
+  /**
+   * Five-field cron expression evaluated in UTC. Send exactly one of cron or every_seconds.
+   */
+  cron?: string;
+  /**
+   * Interval in seconds between runs. Send exactly one of cron or every_seconds.
+   */
+  every_seconds?: number;
+  /**
+   * Statements run in order by the application's runtime role. At most 16 KiB per statement and 64 KiB in total.
+   */
+  statements: Array<string>;
+  timeout_ms?: number;
+  enabled?: boolean;
+  /**
+   * Confirms that the statements run with the application's runtime role.
+   */
+  confirm: true;
+};
+
+export type DatabaseSchedule = (
+  | {
+      cron?: string;
+      every_seconds?: null;
+    }
+  | {
+      cron?: null;
+      every_seconds?: number;
+    }
+) & {
+  name: string;
+  environment: "dev" | "prod";
+  cron: string | null;
+  every_seconds: number | null;
+  statements: Array<string>;
+  timeout_ms: number;
+  enabled: boolean;
+  next_run_at: string | null;
+  created_at: string;
+};
+
+export type DatabaseSchedulePage = {
+  items: Array<DatabaseSchedule>;
+};
+
+export type DatabaseScheduleDeleted = {
+  name: string;
+  deleted: true;
+};
+
+export type DatabaseScheduleRun = {
+  id: number;
+  schedule: string;
+  scheduled_at: string;
+  started_at: string | null;
+  finished_at: string;
+  outcome:
+    | "succeeded"
+    | "failed"
+    | "timed_out"
+    | "outcome_unknown"
+    | "rejected"
+    | "skipped_capacity"
+    | "skipped_suspended"
+    | "skipped_deleted"
+    | "skipped_missed";
+  sqlstate: string | null;
+  attempts: number;
+  manual: boolean;
+};
+
+export type DatabaseScheduleRunPage = {
+  items: Array<DatabaseScheduleRun>;
+};
+
+export type DatabaseScheduleRunAccepted = {
+  schedule: string;
+  state: "queued";
+};
+
+export type DatabaseExecutionMetrics = {
+  schedule_runs_succeeded: number;
+  schedule_runs_failed: number;
+  schedule_runs_timed_out: number;
+  schedule_runs_outcome_unknown: number;
+  schedule_runs_rejected: number;
+  schedule_runs_skipped: number;
+  events_emitted: number;
+  event_bytes: number;
+  webhook_attempts: number;
+  webhook_deliveries_delivered: number;
+  webhook_deliveries_dead_lettered: number;
+};
+
+export type DatabaseExecutionUsageRow = {
+  start: string;
+  end: string;
+  final: boolean;
+  metrics: DatabaseExecutionMetrics;
+};
+
+export type DatabaseExecutionUsagePage = {
+  items: Array<DatabaseExecutionUsageRow>;
+  next_cursor: string | null;
 };
 
 export type SetDevAccessModeRequest = {
@@ -1442,6 +1623,10 @@ export type ProblemDetails = {
     | "compute_performance_unavailable"
     | "database_write_pending"
     | "database_access_limit"
+    | "database_webhook_limit"
+    | "database_schedule_limit"
+    | "database_schedule_not_runnable"
+    | "database_webhook_delivery_pending"
     | "compute_change_pending"
     | "compute_change_conflict"
     | "billing_purchase_conflict"
@@ -1817,9 +2002,34 @@ export type ProjectId = Ulid;
 export type DatabaseAccessId = Ulid;
 
 /**
+ * Application environment to read; dev when omitted.
+ */
+export type DatabaseEnvironmentRead = "dev" | "prod";
+
+/**
  * Restrict the listing to one application environment.
  */
 export type DatabaseEnvironmentFilter = "dev" | "prod";
+
+/**
+ * Application environment the mutation applies to.
+ */
+export type DatabaseEnvironment = "dev" | "prod";
+
+/**
+ * Database webhook identifier.
+ */
+export type DatabaseWebhookId = string;
+
+/**
+ * Database webhook delivery identifier.
+ */
+export type DatabaseWebhookDeliveryId = string;
+
+/**
+ * Database schedule name, unique per project environment.
+ */
+export type DatabaseScheduleName = string;
 
 /**
  * Opaque continuation cursor returned by the preceding project page.
@@ -7927,6 +8137,924 @@ export type RevokeProjectDatabaseAccessResponses = {
 
 export type RevokeProjectDatabaseAccessResponse =
   RevokeProjectDatabaseAccessResponses[keyof RevokeProjectDatabaseAccessResponses];
+
+export type ListProjectDatabaseWebhooksData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: {
+    /**
+     * Application environment to read; dev when omitted.
+     */
+    environment?: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/webhooks";
+};
+
+export type ListProjectDatabaseWebhooksErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListProjectDatabaseWebhooksError =
+  ListProjectDatabaseWebhooksErrors[keyof ListProjectDatabaseWebhooksErrors];
+
+export type ListProjectDatabaseWebhooksResponses = {
+  /**
+   * The database webhooks of the environment.
+   */
+  200: DatabaseWebhookPage;
+};
+
+export type ListProjectDatabaseWebhooksResponse =
+  ListProjectDatabaseWebhooksResponses[keyof ListProjectDatabaseWebhooksResponses];
+
+export type CreateProjectDatabaseWebhookData = {
+  body: DatabaseWebhookCreateRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/webhooks";
+};
+
+export type CreateProjectDatabaseWebhookErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateProjectDatabaseWebhookError =
+  CreateProjectDatabaseWebhookErrors[keyof CreateProjectDatabaseWebhookErrors];
+
+export type CreateProjectDatabaseWebhookResponses = {
+  /**
+   * The webhook with its signing secret, returned once and never persisted in plaintext.
+   */
+  201: DatabaseWebhookCreated;
+};
+
+export type CreateProjectDatabaseWebhookResponse =
+  CreateProjectDatabaseWebhookResponses[keyof CreateProjectDatabaseWebhookResponses];
+
+export type DeleteProjectDatabaseWebhookData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Database webhook identifier.
+     */
+    webhook_id: string;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/webhooks/{webhook_id}";
+};
+
+export type DeleteProjectDatabaseWebhookErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DeleteProjectDatabaseWebhookError =
+  DeleteProjectDatabaseWebhookErrors[keyof DeleteProjectDatabaseWebhookErrors];
+
+export type DeleteProjectDatabaseWebhookResponses = {
+  /**
+   * The identifier of the deleted webhook.
+   */
+  200: DatabaseWebhookDeleted;
+};
+
+export type DeleteProjectDatabaseWebhookResponse =
+  DeleteProjectDatabaseWebhookResponses[keyof DeleteProjectDatabaseWebhookResponses];
+
+export type GetProjectDatabaseWebhookData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Database webhook identifier.
+     */
+    webhook_id: string;
+  };
+  query?: {
+    /**
+     * Application environment to read; dev when omitted.
+     */
+    environment?: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/webhooks/{webhook_id}";
+};
+
+export type GetProjectDatabaseWebhookErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetProjectDatabaseWebhookError =
+  GetProjectDatabaseWebhookErrors[keyof GetProjectDatabaseWebhookErrors];
+
+export type GetProjectDatabaseWebhookResponses = {
+  /**
+   * The database webhook.
+   */
+  200: DatabaseWebhook;
+};
+
+export type GetProjectDatabaseWebhookResponse =
+  GetProjectDatabaseWebhookResponses[keyof GetProjectDatabaseWebhookResponses];
+
+export type TestProjectDatabaseWebhookData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Database webhook identifier.
+     */
+    webhook_id: string;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/webhooks/{webhook_id}/test";
+};
+
+export type TestProjectDatabaseWebhookErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type TestProjectDatabaseWebhookError =
+  TestProjectDatabaseWebhookErrors[keyof TestProjectDatabaseWebhookErrors];
+
+export type TestProjectDatabaseWebhookResponses = {
+  /**
+   * The outcome of the test request.
+   */
+  200: DatabaseWebhookTestResult;
+};
+
+export type TestProjectDatabaseWebhookResponse =
+  TestProjectDatabaseWebhookResponses[keyof TestProjectDatabaseWebhookResponses];
+
+export type ListProjectDatabaseWebhookDeliveriesData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: {
+    /**
+     * Application environment to read; dev when omitted.
+     */
+    environment?: "dev" | "prod";
+    /**
+     * Restrict the listing to the deliveries of one webhook.
+     */
+    webhook_id?: string;
+    /**
+     * Maximum number of deliveries in this page.
+     */
+    limit?: number;
+    /**
+     * Opaque cursor returned by the previous page.
+     */
+    cursor?: string;
+  };
+  url: "/v1/projects/{project_id}/database/webhook-deliveries";
+};
+
+export type ListProjectDatabaseWebhookDeliveriesErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListProjectDatabaseWebhookDeliveriesError =
+  ListProjectDatabaseWebhookDeliveriesErrors[keyof ListProjectDatabaseWebhookDeliveriesErrors];
+
+export type ListProjectDatabaseWebhookDeliveriesResponses = {
+  /**
+   * One page of database webhook deliveries.
+   */
+  200: DatabaseWebhookDeliveryPage;
+};
+
+export type ListProjectDatabaseWebhookDeliveriesResponse =
+  ListProjectDatabaseWebhookDeliveriesResponses[keyof ListProjectDatabaseWebhookDeliveriesResponses];
+
+export type ReplayProjectDatabaseWebhookDeliveryData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Database webhook delivery identifier.
+     */
+    delivery_id: string;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/webhook-deliveries/{delivery_id}/replay";
+};
+
+export type ReplayProjectDatabaseWebhookDeliveryErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ReplayProjectDatabaseWebhookDeliveryError =
+  ReplayProjectDatabaseWebhookDeliveryErrors[keyof ReplayProjectDatabaseWebhookDeliveryErrors];
+
+export type ReplayProjectDatabaseWebhookDeliveryResponses = {
+  /**
+   * The delivery was queued for another attempt.
+   */
+  202: DatabaseWebhookReplayAccepted;
+};
+
+export type ReplayProjectDatabaseWebhookDeliveryResponse =
+  ReplayProjectDatabaseWebhookDeliveryResponses[keyof ReplayProjectDatabaseWebhookDeliveryResponses];
+
+export type ListProjectDatabaseSchedulesData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: {
+    /**
+     * Application environment to read; dev when omitted.
+     */
+    environment?: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/schedules";
+};
+
+export type ListProjectDatabaseSchedulesErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListProjectDatabaseSchedulesError =
+  ListProjectDatabaseSchedulesErrors[keyof ListProjectDatabaseSchedulesErrors];
+
+export type ListProjectDatabaseSchedulesResponses = {
+  /**
+   * The database schedules of the environment.
+   */
+  200: DatabaseSchedulePage;
+};
+
+export type ListProjectDatabaseSchedulesResponse =
+  ListProjectDatabaseSchedulesResponses[keyof ListProjectDatabaseSchedulesResponses];
+
+export type DeleteProjectDatabaseScheduleData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Database schedule name, unique per project environment.
+     */
+    name: string;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/schedules/{name}";
+};
+
+export type DeleteProjectDatabaseScheduleErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DeleteProjectDatabaseScheduleError =
+  DeleteProjectDatabaseScheduleErrors[keyof DeleteProjectDatabaseScheduleErrors];
+
+export type DeleteProjectDatabaseScheduleResponses = {
+  /**
+   * The name of the deleted schedule.
+   */
+  200: DatabaseScheduleDeleted;
+};
+
+export type DeleteProjectDatabaseScheduleResponse =
+  DeleteProjectDatabaseScheduleResponses[keyof DeleteProjectDatabaseScheduleResponses];
+
+export type GetProjectDatabaseScheduleData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Database schedule name, unique per project environment.
+     */
+    name: string;
+  };
+  query?: {
+    /**
+     * Application environment to read; dev when omitted.
+     */
+    environment?: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/schedules/{name}";
+};
+
+export type GetProjectDatabaseScheduleErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetProjectDatabaseScheduleError =
+  GetProjectDatabaseScheduleErrors[keyof GetProjectDatabaseScheduleErrors];
+
+export type GetProjectDatabaseScheduleResponses = {
+  /**
+   * The database schedule.
+   */
+  200: DatabaseSchedule;
+};
+
+export type GetProjectDatabaseScheduleResponse =
+  GetProjectDatabaseScheduleResponses[keyof GetProjectDatabaseScheduleResponses];
+
+export type SetProjectDatabaseScheduleData = {
+  body: DatabaseScheduleSetRequest;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Database schedule name, unique per project environment.
+     */
+    name: string;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/schedules/{name}";
+};
+
+export type SetProjectDatabaseScheduleErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type SetProjectDatabaseScheduleError =
+  SetProjectDatabaseScheduleErrors[keyof SetProjectDatabaseScheduleErrors];
+
+export type SetProjectDatabaseScheduleResponses = {
+  /**
+   * The schedule as stored.
+   */
+  200: DatabaseSchedule;
+};
+
+export type SetProjectDatabaseScheduleResponse =
+  SetProjectDatabaseScheduleResponses[keyof SetProjectDatabaseScheduleResponses];
+
+export type ListProjectDatabaseScheduleRunsData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Database schedule name, unique per project environment.
+     */
+    name: string;
+  };
+  query?: {
+    /**
+     * Application environment to read; dev when omitted.
+     */
+    environment?: "dev" | "prod";
+    /**
+     * Maximum number of runs in this page.
+     */
+    limit?: number;
+  };
+  url: "/v1/projects/{project_id}/database/schedules/{name}/runs";
+};
+
+export type ListProjectDatabaseScheduleRunsErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListProjectDatabaseScheduleRunsError =
+  ListProjectDatabaseScheduleRunsErrors[keyof ListProjectDatabaseScheduleRunsErrors];
+
+export type ListProjectDatabaseScheduleRunsResponses = {
+  /**
+   * The newest runs of the schedule, newest first.
+   */
+  200: DatabaseScheduleRunPage;
+};
+
+export type ListProjectDatabaseScheduleRunsResponse =
+  ListProjectDatabaseScheduleRunsResponses[keyof ListProjectDatabaseScheduleRunsResponses];
+
+export type RunProjectDatabaseScheduleData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Database schedule name, unique per project environment.
+     */
+    name: string;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/schedules/{name}/run";
+};
+
+export type RunProjectDatabaseScheduleErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RunProjectDatabaseScheduleError =
+  RunProjectDatabaseScheduleErrors[keyof RunProjectDatabaseScheduleErrors];
+
+export type RunProjectDatabaseScheduleResponses = {
+  /**
+   * The run was queued.
+   */
+  202: DatabaseScheduleRunAccepted;
+};
+
+export type RunProjectDatabaseScheduleResponse =
+  RunProjectDatabaseScheduleResponses[keyof RunProjectDatabaseScheduleResponses];
+
+export type GetProjectDatabaseExecutionUsageData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    /**
+     * Application environment to read; dev when omitted.
+     */
+    environment?: "dev" | "prod";
+    /**
+     * Inclusive window start in UTC, aligned to the granularity.
+     */
+    from: string;
+    /**
+     * Exclusive window end in UTC, aligned to the granularity.
+     */
+    to: string;
+    /**
+     * Length of each returned window.
+     */
+    granularity: "hour" | "day";
+    /**
+     * Maximum number of windows in this page.
+     */
+    limit?: number;
+    /**
+     * Opaque cursor returned by the previous page.
+     */
+    cursor?: string;
+  };
+  url: "/v1/projects/{project_id}/database/execution-usage";
+};
+
+export type GetProjectDatabaseExecutionUsageErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetProjectDatabaseExecutionUsageError =
+  GetProjectDatabaseExecutionUsageErrors[keyof GetProjectDatabaseExecutionUsageErrors];
+
+export type GetProjectDatabaseExecutionUsageResponses = {
+  /**
+   * One page of execution usage windows.
+   */
+  200: DatabaseExecutionUsagePage;
+};
+
+export type GetProjectDatabaseExecutionUsageResponse =
+  GetProjectDatabaseExecutionUsageResponses[keyof GetProjectDatabaseExecutionUsageResponses];
 
 export type PlanDeploymentRollbackData = {
   body?: never;

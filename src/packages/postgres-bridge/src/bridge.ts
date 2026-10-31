@@ -123,10 +123,6 @@ export async function startBridge(raw: ConnectOptions, hooks: BridgeHooks = {}):
       if (!binary) finish();
     });
     upstream.on("ping", (data) => {
-      if (upstream.bufferedAmount >= STREAM_BYTES) {
-        finish();
-        return;
-      }
       upstream.pong(data, true, (error) => {
         if (error) finish();
       });

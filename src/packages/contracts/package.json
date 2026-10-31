@@ -127,6 +127,11 @@
       "types": "./dist/database-access.d.ts",
       "import": "./dist/database-access.js"
     },
+    "./database-events": {
+      "source": "./src/database-events.ts",
+      "types": "./dist/database-events.d.ts",
+      "import": "./dist/database-events.js"
+    },
     "./functions": {
       "source": "./src/functions.ts",
       "types": "./dist/functions.d.ts",

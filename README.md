@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.41; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.42; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.41 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.42 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -55,7 +55,19 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `database_access_revoke`: Revoke one issued database credential immediately: open sessions end and its PostgreSQL role is removed.
 - `database_compute_get`: Read current managed database memory, total storage, region and observed state without running SQL or waking the database.
 - `database_compute_set`: Choose fixed database RAM: 256, 512, 1024, 2048 or 4096 MiB.
+- `database_execution_usage_get`: Read metered database execution usage: schedule runs and webhook attempts per UTC hour or day window.
 - `database_query`: Read one owner-authorized Dev or Prod database query (at most 100 rows, five-second timeout).
+- `database_schedule_delete`: Remove one database schedule so it never runs again.
+- `database_schedule_list`: List this project's database schedules of one Dev or Prod environment (dev when omitted), with their cadence, statements, timeout and next run.
+- `database_schedule_run_list`: List the newest runs of one database schedule, newest first, with each run's outcome (succeeded, failed, timed_out, outcome_unknown, rejected or a skipped reason) and SQLSTATE when one applies.
+- `database_schedule_run_now`: Queue one immediate run of a database schedule.
+- `database_schedule_set`: Create or replace a named database schedule that runs SQL statements repeatedly on a timer, as the application's own runtime role, so row-level security applies.
+- `database_webhook_create`: Subscribe one HTTPS receiver to database lifecycle events (database.created, ready, woke, slept, suspended, resized, deleted) of one Dev or Prod database.
+- `database_webhook_delete`: Stop all deliveries to one database webhook.
+- `database_webhook_delivery_list`: List recent database webhook deliveries, newest first, optionally for one webhook.
+- `database_webhook_delivery_replay`: Queue one more attempt for a database webhook delivery that is no longer being retried.
+- `database_webhook_list`: List this project's database webhooks of one Dev or Prod environment (dev when omitted), without signing secrets.
+- `database_webhook_test`: Send one signed test request to a database webhook and report the outcome synchronously.
 - `database_write`: Execute one explicitly authorized INSERT, UPDATE or DELETE/upsert in the chosen Dev or Prod database.
 - `delete_execute`: Execute a reviewed project deletion
 - `delete_plan`: Plan complete project deletion
@@ -165,7 +177,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.41 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.42 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

@@ -1,5 +1,16 @@
 import { isUserSecretName } from "@ohmyhost/contracts/secret-names";
 import {
+  DATABASE_PAGE_MAX_ITEMS,
+  parseDatabaseCursor,
+  parseDatabaseDeliveryId,
+  parseDatabaseListLimit,
+  parseDatabaseScheduleName,
+  parseDatabaseUsageWindow,
+  parseDatabaseWebhookCreateRequest,
+  parseDatabaseWebhookId,
+  type DatabaseWebhookEventType,
+} from "@ohmyhost/contracts/database-events";
+import {
   databaseSizeForMemory,
   type DatabaseComputeSelection,
 } from "@ohmyhost/contracts/database-sizes";
@@ -391,6 +402,124 @@ export type ProductCliCommand =
       readonly projectId: string;
       readonly accessId: string;
       readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-webhook-create";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly url: string;
+      readonly eventTypes: readonly DatabaseWebhookEventType[];
+      readonly headersFile: string | null;
+      readonly idempotencyKey: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-webhook-list";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-webhook-get";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly webhookId: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-webhook-delete";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly webhookId: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-webhook-test";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly webhookId: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-webhook-deliveries";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly webhookId: string | null;
+      readonly limit: number | null;
+      readonly cursor: string | null;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-webhook-replay";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly deliveryId: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-schedule-set";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly name: string;
+      readonly cron: string | null;
+      readonly everySeconds: number | null;
+      readonly statementsFile: string;
+      readonly timeoutMs: number | null;
+      readonly enabled: boolean | null;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-schedule-list";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-schedule-get";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly name: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-schedule-delete";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly name: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-schedule-runs";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly name: string;
+      readonly limit: number | null;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-schedule-run";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly name: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-executions";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly from: string;
+      readonly to: string;
+      readonly granularity: "hour" | "day";
+      readonly limit: number | null;
+      readonly cursor: string | null;
       readonly credentialStore: "native";
     }
   | {
@@ -874,6 +1003,20 @@ export type RecognizedCommandLabel =
   | "database access create"
   | "database access list"
   | "database access revoke"
+  | "database webhook create"
+  | "database webhook list"
+  | "database webhook get"
+  | "database webhook delete"
+  | "database webhook test"
+  | "database webhook deliveries"
+  | "database webhook replay"
+  | "database schedule set"
+  | "database schedule list"
+  | "database schedule get"
+  | "database schedule delete"
+  | "database schedule runs"
+  | "database schedule run"
+  | "database executions"
   | "database psql"
   | "link"
   | "source auto-deploy set"
@@ -1031,6 +1174,24 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
       if (values[1] === "list") return "database access list";
       if (values[1] === "revoke") return "database access revoke";
     }
+    if (value === "database" && values[0] === "webhook") {
+      if (values[1] === "create") return "database webhook create";
+      if (values[1] === "list") return "database webhook list";
+      if (values[1] === "get") return "database webhook get";
+      if (values[1] === "delete") return "database webhook delete";
+      if (values[1] === "test") return "database webhook test";
+      if (values[1] === "deliveries") return "database webhook deliveries";
+      if (values[1] === "replay") return "database webhook replay";
+    }
+    if (value === "database" && values[0] === "schedule") {
+      if (values[1] === "set") return "database schedule set";
+      if (values[1] === "list") return "database schedule list";
+      if (values[1] === "get") return "database schedule get";
+      if (values[1] === "delete") return "database schedule delete";
+      if (values[1] === "runs") return "database schedule runs";
+      if (values[1] === "run") return "database schedule run";
+    }
+    if (value === "database" && values[0] === "executions") return "database executions";
     if (value === "database" && values[0] === "psql") return "database psql";
     if (value === "link" || value === "plan" || value === "deploy" || value === "logs")
       return value;
@@ -1107,6 +1268,9 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
   return "unknown";
 };
 
+/** `database schedule runs --limit` is at most 50 entries, the route's own maximum. */
+const SCHEDULE_RUNS_MAX_ITEMS = 50;
+
 export const parseProductCliCommand = (argv: readonly string[]): ProductCliCommand => {
   const values = [...argv];
   removeFlag(values, "--json");
@@ -1114,10 +1278,12 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
   if ((values.length === 1 && values[0] === "help") || values.length === 0) {
     return { kind: "help" };
   }
+  // `help database` is the same request as `database --help`.
+  if (values[0] === "help") return parseProductCliCommand([...values.slice(1), "--help"]);
   if (help) {
-    const topic = recognizedCommandLabel(values);
-    if (topic === "unknown" || topic === "version" || topic !== values.join(" "))
-      throw new InvalidCommandError();
+    // The topic is only checked for shape here; the CLI answers unknown topics with invalid_command.
+    const topic = values.join(" ");
+    if (!/^[a-z][a-z0-9 -]*$/u.test(topic) || topic === "version") throw new InvalidCommandError();
     return { kind: "help", topic };
   }
   if (values.length === 1 && (values[0] === "--version" || values[0] === "version")) {
@@ -1897,6 +2063,318 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
     }
     throw new InvalidCommandError();
   }
+  if (first === "database" && values[0] === "webhook") {
+    values.shift();
+    const subcommand = values.shift();
+    if (subcommand === "create") {
+      if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, [
+        "--project",
+        "--environment",
+        "--url",
+        "--event-types",
+        "--headers-file",
+        "--idempotency-key",
+      ]);
+      const projectId = options["--project"],
+        environment = options["--environment"],
+        url = options["--url"],
+        eventTypes = options["--event-types"],
+        headersFile = options["--headers-file"],
+        idempotencyKey = options["--idempotency-key"];
+      if (
+        !isValue(projectId) ||
+        !isValue(idempotencyKey) ||
+        !isValue(url) ||
+        !isValue(eventTypes) ||
+        (headersFile !== undefined && !isValue(headersFile)) ||
+        (environment !== "dev" && environment !== "prod")
+      )
+        throw new InvalidCommandError();
+      const request = contractValue(() =>
+        parseDatabaseWebhookCreateRequest({ url, event_types: eventTypes.split(",") }),
+      );
+      return {
+        kind: "database-webhook-create",
+        projectId,
+        environment,
+        url: request.url,
+        eventTypes: request.event_types,
+        headersFile: headersFile ?? null,
+        idempotencyKey,
+        yes: true,
+        credentialStore,
+      };
+    }
+    if (subcommand === "list") {
+      if (yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, ["--project", "--environment"]);
+      const projectId = options["--project"],
+        environment = options["--environment"] ?? "dev";
+      if (!isValue(projectId) || (environment !== "dev" && environment !== "prod"))
+        throw new InvalidCommandError();
+      return { kind: "database-webhook-list", projectId, environment, credentialStore };
+    }
+    if (subcommand === "get") {
+      if (yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, ["--project", "--environment", "--webhook"]);
+      const projectId = options["--project"],
+        environment = options["--environment"] ?? "dev",
+        webhookId = options["--webhook"];
+      if (!isValue(projectId) || (environment !== "dev" && environment !== "prod"))
+        throw new InvalidCommandError();
+      return {
+        kind: "database-webhook-get",
+        projectId,
+        environment,
+        webhookId: contractValue(() => parseDatabaseWebhookId(webhookId)),
+        credentialStore,
+      };
+    }
+    if (subcommand === "delete" || subcommand === "test") {
+      if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, ["--project", "--environment", "--webhook"]);
+      const projectId = options["--project"],
+        environment = options["--environment"],
+        webhookId = options["--webhook"];
+      if (!isValue(projectId)) throw new InvalidCommandError();
+      if (environment !== "dev" && environment !== "prod") throw new InvalidCommandError();
+      const target = contractValue(() => parseDatabaseWebhookId(webhookId));
+      if (subcommand === "delete")
+        return {
+          kind: "database-webhook-delete",
+          projectId,
+          environment,
+          webhookId: target,
+          yes: true,
+          credentialStore,
+        };
+      return {
+        kind: "database-webhook-test",
+        projectId,
+        environment,
+        webhookId: target,
+        yes: true,
+        credentialStore,
+      };
+    }
+    if (subcommand === "deliveries") {
+      if (yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, [
+        "--project",
+        "--environment",
+        "--webhook",
+        "--limit",
+        "--cursor",
+      ]);
+      const projectId = options["--project"],
+        environment = options["--environment"] ?? "dev",
+        webhookId = options["--webhook"],
+        limit = options["--limit"],
+        cursor = options["--cursor"];
+      if (!isValue(projectId) || (environment !== "dev" && environment !== "prod"))
+        throw new InvalidCommandError();
+      return {
+        kind: "database-webhook-deliveries",
+        projectId,
+        environment,
+        webhookId:
+          webhookId === undefined ? null : contractValue(() => parseDatabaseWebhookId(webhookId)),
+        limit:
+          limit === undefined
+            ? null
+            : contractValue(() =>
+                parseDatabaseListLimit(limit, DATABASE_PAGE_MAX_ITEMS, DATABASE_PAGE_MAX_ITEMS),
+              ),
+        cursor: contractValue(() => parseDatabaseCursor(cursor)),
+        credentialStore,
+      };
+    }
+    if (subcommand === "replay") {
+      if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, ["--project", "--environment", "--delivery"]);
+      const projectId = options["--project"],
+        environment = options["--environment"],
+        deliveryId = options["--delivery"];
+      if (!isValue(projectId) || (environment !== "dev" && environment !== "prod"))
+        throw new InvalidCommandError();
+      return {
+        kind: "database-webhook-replay",
+        projectId,
+        environment,
+        deliveryId: contractValue(() => parseDatabaseDeliveryId(deliveryId)),
+        yes: true,
+        credentialStore,
+      };
+    }
+    throw new InvalidCommandError();
+  }
+  if (first === "database" && values[0] === "schedule") {
+    values.shift();
+    const subcommand = values.shift();
+    if (subcommand === "set") {
+      if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, [
+        "--project",
+        "--environment",
+        "--name",
+        "--cron",
+        "--every-seconds",
+        "--statements-file",
+        "--timeout-ms",
+        "--enabled",
+      ]);
+      const projectId = options["--project"],
+        environment = options["--environment"],
+        name = options["--name"],
+        cron = options["--cron"],
+        everySeconds = options["--every-seconds"],
+        statementsFile = options["--statements-file"],
+        timeoutMs = options["--timeout-ms"],
+        enabled = options["--enabled"];
+      if (
+        !isValue(projectId) ||
+        !isValue(statementsFile) ||
+        (environment !== "dev" && environment !== "prod") ||
+        (cron === undefined) === (everySeconds === undefined) ||
+        (everySeconds !== undefined && !/^[0-9]{1,9}$/u.test(everySeconds)) ||
+        (timeoutMs !== undefined && !/^[0-9]{1,6}$/u.test(timeoutMs)) ||
+        (enabled !== undefined && enabled !== "true" && enabled !== "false")
+      )
+        throw new InvalidCommandError();
+      return {
+        kind: "database-schedule-set",
+        projectId,
+        environment,
+        name: contractValue(() => parseDatabaseScheduleName(name)),
+        cron: cron ?? null,
+        everySeconds: everySeconds === undefined ? null : Number(everySeconds),
+        statementsFile,
+        timeoutMs: timeoutMs === undefined ? null : Number(timeoutMs),
+        enabled: enabled === undefined ? null : enabled === "true",
+        yes: true,
+        credentialStore,
+      };
+    }
+    if (subcommand === "list") {
+      if (yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, ["--project", "--environment"]);
+      const projectId = options["--project"],
+        environment = options["--environment"] ?? "dev";
+      if (!isValue(projectId) || (environment !== "dev" && environment !== "prod"))
+        throw new InvalidCommandError();
+      return { kind: "database-schedule-list", projectId, environment, credentialStore };
+    }
+    if (subcommand === "get" || subcommand === "runs") {
+      if (yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(
+        values,
+        subcommand === "get"
+          ? ["--project", "--environment", "--name"]
+          : ["--project", "--environment", "--name", "--limit"],
+      );
+      const projectId = options["--project"],
+        environment = options["--environment"] ?? "dev",
+        name = options["--name"],
+        limit = options["--limit"];
+      if (!isValue(projectId) || (environment !== "dev" && environment !== "prod"))
+        throw new InvalidCommandError();
+      const scheduleName = contractValue(() => parseDatabaseScheduleName(name));
+      if (subcommand === "get")
+        return {
+          kind: "database-schedule-get",
+          projectId,
+          environment,
+          name: scheduleName,
+          credentialStore,
+        };
+      return {
+        kind: "database-schedule-runs",
+        projectId,
+        environment,
+        name: scheduleName,
+        limit:
+          limit === undefined
+            ? null
+            : contractValue(() =>
+                parseDatabaseListLimit(limit, SCHEDULE_RUNS_MAX_ITEMS, SCHEDULE_RUNS_MAX_ITEMS),
+              ),
+        credentialStore,
+      };
+    }
+    if (subcommand === "delete" || subcommand === "run") {
+      if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, ["--project", "--environment", "--name"]);
+      const projectId = options["--project"],
+        environment = options["--environment"];
+      if (!isValue(projectId) || (environment !== "dev" && environment !== "prod"))
+        throw new InvalidCommandError();
+      const name = contractValue(() => parseDatabaseScheduleName(options["--name"]));
+      return subcommand === "delete"
+        ? {
+            kind: "database-schedule-delete",
+            projectId,
+            environment,
+            name,
+            yes: true,
+            credentialStore,
+          }
+        : {
+            kind: "database-schedule-run",
+            projectId,
+            environment,
+            name,
+            yes: true,
+            credentialStore,
+          };
+    }
+    throw new InvalidCommandError();
+  }
+  if (first === "database" && values[0] === "executions") {
+    values.shift();
+    if (yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+    const options = parseOptionalOptions(values, [
+      "--project",
+      "--environment",
+      "--from",
+      "--to",
+      "--granularity",
+      "--limit",
+      "--cursor",
+    ]);
+    const projectId = options["--project"],
+      environment = options["--environment"] ?? "dev",
+      from = options["--from"],
+      to = options["--to"],
+      granularity = options["--granularity"],
+      limit = options["--limit"],
+      cursor = options["--cursor"];
+    if (
+      !isValue(projectId) ||
+      (environment !== "dev" && environment !== "prod") ||
+      !isValue(from) ||
+      !isValue(to) ||
+      (granularity !== "hour" && granularity !== "day")
+    )
+      throw new InvalidCommandError();
+    const window = contractValue(() => parseDatabaseUsageWindow(from, to, granularity));
+    return {
+      kind: "database-executions",
+      projectId,
+      environment,
+      from: window.from,
+      to: window.to,
+      granularity: window.granularity,
+      limit:
+        limit === undefined
+          ? null
+          : contractValue(() =>
+              parseDatabaseListLimit(limit, DATABASE_PAGE_MAX_ITEMS, DATABASE_PAGE_MAX_ITEMS),
+            ),
+      cursor: contractValue(() => parseDatabaseCursor(cursor)),
+      credentialStore,
+    };
+  }
   if (first === "database" && values[0] === "psql") {
     values.shift();
     if (yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
@@ -2545,6 +3023,15 @@ const handedAccount = (
 
 const isValue = (value: string | undefined): value is string =>
   value !== undefined && value.length > 0 && !value.startsWith("--");
+
+/** A value the contract refuses, or one that is missing, is an invalid command. */
+const contractValue = <T>(parse: () => T): T => {
+  try {
+    return parse();
+  } catch {
+    throw new InvalidCommandError();
+  }
+};
 
 const validGithubBranchName = (value: string): boolean =>
   !(

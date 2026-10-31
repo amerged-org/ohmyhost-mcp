@@ -1,6 +1,29 @@
 import { isUserSecretName, USER_SECRET_NAME_PATTERN } from "@ohmyhost/contracts/secret-names";
 import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
 import {
+  DATABASE_WEBHOOK_EVENT_TYPES,
+  DATABASE_SCHEDULE_MAX_EVERY_SECONDS,
+  DATABASE_SCHEDULE_MAX_STATEMENTS,
+  DATABASE_SCHEDULE_MAX_TIMEOUT_MS,
+  DATABASE_SCHEDULE_MIN_EVERY_SECONDS,
+  DATABASE_SCHEDULE_MIN_TIMEOUT_MS,
+  DATABASE_SCHEDULE_STATEMENT_MAX_BYTES,
+  type DatabaseExecutionUsagePage,
+  type DatabaseSchedule,
+  type DatabaseSchedulePage,
+  type DatabaseScheduleDeleted,
+  type DatabaseScheduleRunAccepted,
+  type DatabaseScheduleRunPage,
+  type DatabaseWebhookCreated,
+  type DatabaseWebhookDeleted,
+  type DatabaseWebhookDeliveryPage,
+  type DatabaseWebhookEventType,
+  type DatabaseWebhookPage,
+  type DatabaseWebhookReplayAccepted,
+  type DatabaseWebhookTestResult,
+} from "@ohmyhost/contracts/database-events";
+import type { DatabaseEnvironment } from "@ohmyhost/contracts/database-access";
+import {
   normalizeMcpSourceChanges,
   formatMcpSourceFileResponse,
   McpSourceChangesInputError,
@@ -76,6 +99,26 @@ import type {
   ProviderReconciliationAttempt,
   ProjectDatabaseQueryResult,
 } from "@ohmyhost/sdk-ts";
+
+interface DatabaseWebhookTarget {
+  readonly projectId: string;
+  readonly environment: DatabaseEnvironment;
+  readonly webhookId: string;
+}
+
+interface DatabaseScheduleTarget {
+  readonly projectId: string;
+  readonly environment: DatabaseEnvironment;
+  readonly name: string;
+}
+
+interface DatabaseScheduleSetInput extends DatabaseScheduleTarget {
+  readonly cron?: string;
+  readonly everySeconds?: number;
+  readonly statements: readonly string[];
+  readonly timeoutMs?: number;
+  readonly enabled?: boolean;
+}
 
 export interface LocalMcpProductClient {
   readonly managedSource?: ManagedSourceApi;
@@ -276,6 +319,54 @@ export interface LocalMcpProductClient {
     readonly projectId: string;
     readonly accessId: string;
   }): Promise<import("@ohmyhost/contracts/database-access").ProjectDatabaseAccess>;
+  listDatabaseWebhooks(input: {
+    readonly projectId: string;
+    readonly environment?: DatabaseEnvironment;
+  }): Promise<DatabaseWebhookPage>;
+  createDatabaseWebhook(input: {
+    readonly projectId: string;
+    readonly environment: DatabaseEnvironment;
+    readonly url: string;
+    readonly eventTypes: readonly DatabaseWebhookEventType[];
+    readonly headers: Readonly<Record<string, string>>;
+    readonly idempotencyKey: string;
+  }): Promise<DatabaseWebhookCreated>;
+  testDatabaseWebhook(input: DatabaseWebhookTarget): Promise<DatabaseWebhookTestResult>;
+  deleteDatabaseWebhook(input: DatabaseWebhookTarget): Promise<DatabaseWebhookDeleted>;
+  listDatabaseWebhookDeliveries(input: {
+    readonly projectId: string;
+    readonly environment?: DatabaseEnvironment;
+    readonly webhookId?: string;
+    readonly limit?: number;
+    readonly cursor?: string;
+  }): Promise<DatabaseWebhookDeliveryPage>;
+  replayDatabaseWebhookDelivery(input: {
+    readonly projectId: string;
+    readonly environment: DatabaseEnvironment;
+    readonly deliveryId: string;
+  }): Promise<DatabaseWebhookReplayAccepted>;
+  listDatabaseSchedules(input: {
+    readonly projectId: string;
+    readonly environment?: DatabaseEnvironment;
+  }): Promise<DatabaseSchedulePage>;
+  setDatabaseSchedule(input: DatabaseScheduleSetInput): Promise<DatabaseSchedule>;
+  deleteDatabaseSchedule(input: DatabaseScheduleTarget): Promise<DatabaseScheduleDeleted>;
+  listDatabaseScheduleRuns(input: {
+    readonly projectId: string;
+    readonly environment?: DatabaseEnvironment;
+    readonly name: string;
+    readonly limit?: number;
+  }): Promise<DatabaseScheduleRunPage>;
+  runDatabaseSchedule(input: DatabaseScheduleTarget): Promise<DatabaseScheduleRunAccepted>;
+  getDatabaseExecutionUsage(input: {
+    readonly projectId: string;
+    readonly environment?: DatabaseEnvironment;
+    readonly from: string;
+    readonly to: string;
+    readonly granularity: "hour" | "day";
+    readonly limit?: number;
+    readonly cursor?: string;
+  }): Promise<DatabaseExecutionUsagePage>;
   connectGithub(input: {
     organizationId: string;
     idempotencyKey: string;
@@ -446,6 +537,10 @@ interface ProjectDeleteInput {
 }
 
 const identifier = z.string().min(1).max(256);
+const databaseEnvironment = z.enum(["dev", "prod"]);
+const databaseWebhookId = z.string().regex(/^whk_[a-z0-9]{20}$/u);
+const databaseDeliveryId = z.string().regex(/^dlv_[0-9a-f]{20}$/u);
+const databaseScheduleName = z.string().regex(/^[a-z][a-z0-9_-]{0,62}$/u);
 /** Every product tool accepts the saved login to act as; it is an alias, never a credential. */
 const profileName = z
   .string()
@@ -1026,6 +1121,263 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     (client, input) =>
       client.revokeDatabaseAccess({ projectId: input.project_id, accessId: input.access_id }),
     destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_webhook_list",
+    "List this project's database webhooks of one Dev or Prod environment (dev when omitted), without signing secrets. Each webhook lists its event types and header names only.",
+    z.object({ project_id: identifier, environment: databaseEnvironment.optional() }),
+    (client, input) =>
+      client.listDatabaseWebhooks({
+        projectId: input.project_id,
+        ...(input.environment === undefined ? {} : { environment: input.environment }),
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_webhook_create",
+    "Subscribe one HTTPS receiver to database lifecycle events (database.created, ready, woke, slept, suspended, resized, deleted) of one Dev or Prod database. The signing secret is RETURNED EXACTLY ONCE: store it in a secret manager and never write it into files, notes, source, commit messages or later messages. Deliveries are signed, retried and dead-lettered when retries stop. At most five webhooks exist per project environment. Requires confirmed: true and an idempotency key; the same key with the same request returns the stored answer.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      url: z
+        .string()
+        .max(2048)
+        .regex(/^https:\/\//u),
+      event_types: z.array(z.enum(DATABASE_WEBHOOK_EVENT_TYPES)).min(1).max(16),
+      headers: z.record(z.string(), z.string()).optional(),
+      idempotency_key: idempotencyKey,
+      confirmed: z.literal(true),
+    }),
+    (client, input) =>
+      client.createDatabaseWebhook({
+        projectId: input.project_id,
+        environment: input.environment,
+        url: input.url,
+        eventTypes: input.event_types,
+        headers: input.headers ?? {},
+        idempotencyKey: input.idempotency_key,
+      }),
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_webhook_test",
+    "Send one signed test request to a database webhook and report the outcome synchronously. Each call sends one request to the receiver; the platform allows one test per webhook every five seconds. If the answer is lost, read database_webhook_delivery_list before calling again; a second call sends another request.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      webhook_id: databaseWebhookId,
+    }),
+    (client, input) =>
+      client.testDatabaseWebhook({
+        projectId: input.project_id,
+        environment: input.environment,
+        webhookId: input.webhook_id,
+      }),
+    { ...mutationAnnotations(), idempotentHint: false },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_webhook_delete",
+    "Stop all deliveries to one database webhook. Destructive: requires confirmed: true. Deleting an already deleted webhook answers not found.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      webhook_id: databaseWebhookId,
+      confirmed: z.literal(true),
+    }),
+    (client, input) =>
+      client.deleteDatabaseWebhook({
+        projectId: input.project_id,
+        environment: input.environment,
+        webhookId: input.webhook_id,
+      }),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_webhook_delivery_list",
+    "List recent database webhook deliveries, newest first, optionally for one webhook. Each delivery shows its state (pending, delivered or dead_lettered), attempts and last error.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment.optional(),
+      webhook_id: databaseWebhookId.optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+      cursor: z.string().min(1).max(200).optional(),
+    }),
+    (client, input) =>
+      client.listDatabaseWebhookDeliveries({
+        projectId: input.project_id,
+        ...(input.environment === undefined ? {} : { environment: input.environment }),
+        ...(input.webhook_id === undefined ? {} : { webhookId: input.webhook_id }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_webhook_delivery_replay",
+    "Queue one more attempt for a database webhook delivery that is no longer being retried. Each call queues one attempt; the delivery returns to pending until it is delivered or dead-lettered again. If the answer is lost, read database_webhook_delivery_list before calling again; a second call queues another attempt.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      delivery_id: databaseDeliveryId,
+    }),
+    (client, input) =>
+      client.replayDatabaseWebhookDelivery({
+        projectId: input.project_id,
+        environment: input.environment,
+        deliveryId: input.delivery_id,
+      }),
+    { ...mutationAnnotations(), idempotentHint: false },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_schedule_list",
+    "List this project's database schedules of one Dev or Prod environment (dev when omitted), with their cadence, statements, timeout and next run.",
+    z.object({ project_id: identifier, environment: databaseEnvironment.optional() }),
+    (client, input) =>
+      client.listDatabaseSchedules({
+        projectId: input.project_id,
+        ...(input.environment === undefined ? {} : { environment: input.environment }),
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_schedule_set",
+    "Create or replace a named database schedule that runs SQL statements repeatedly on a timer, as the application's own runtime role, so row-level security applies. Send exactly one of cron (five-field UTC expression) or every_seconds (60 to 2678400). Each run is cancelled after timeout_ms (1000 to 30000, default 10000). Statements run in order and must be safe to repeat: write idempotent statements. Destructive: requires confirmed: true.",
+    z
+      .object({
+        project_id: identifier,
+        environment: databaseEnvironment,
+        name: databaseScheduleName,
+        cron: z.string().min(9).max(120).optional(),
+        every_seconds: z
+          .number()
+          .int()
+          .min(DATABASE_SCHEDULE_MIN_EVERY_SECONDS)
+          .max(DATABASE_SCHEDULE_MAX_EVERY_SECONDS)
+          .optional(),
+        statements: z
+          .array(z.string().min(1).max(DATABASE_SCHEDULE_STATEMENT_MAX_BYTES))
+          .min(1)
+          .max(DATABASE_SCHEDULE_MAX_STATEMENTS),
+        timeout_ms: z
+          .number()
+          .int()
+          .min(DATABASE_SCHEDULE_MIN_TIMEOUT_MS)
+          .max(DATABASE_SCHEDULE_MAX_TIMEOUT_MS)
+          .optional(),
+        enabled: z.boolean().optional(),
+        confirmed: z.literal(true),
+      })
+      .refine((value) => (value.cron === undefined) !== (value.every_seconds === undefined), {
+        message: "Send exactly one of cron or every_seconds",
+        path: ["every_seconds"],
+      }),
+    (client, input) =>
+      client.setDatabaseSchedule({
+        projectId: input.project_id,
+        environment: input.environment,
+        name: input.name,
+        cron: input.cron,
+        everySeconds: input.every_seconds,
+        statements: input.statements,
+        timeoutMs: input.timeout_ms,
+        enabled: input.enabled,
+      }),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_schedule_delete",
+    "Remove one database schedule so it never runs again. Destructive: requires confirmed: true.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      name: databaseScheduleName,
+      confirmed: z.literal(true),
+    }),
+    (client, input) =>
+      client.deleteDatabaseSchedule({
+        projectId: input.project_id,
+        environment: input.environment,
+        name: input.name,
+      }),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_schedule_run_list",
+    "List the newest runs of one database schedule, newest first, with each run's outcome (succeeded, failed, timed_out, outcome_unknown, rejected or a skipped reason) and SQLSTATE when one applies.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment.optional(),
+      name: databaseScheduleName,
+      limit: z.number().int().min(1).max(50).optional(),
+    }),
+    (client, input) =>
+      client.listDatabaseScheduleRuns({
+        projectId: input.project_id,
+        ...(input.environment === undefined ? {} : { environment: input.environment }),
+        name: input.name,
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_schedule_run_now",
+    "Queue one immediate run of a database schedule. Refused while the schedule is disabled or a run is already queued. Destructive: the statements execute against the database; requires confirmed: true. If the answer is lost, read database_schedule_run_list before calling again; a second call queues another run.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      name: databaseScheduleName,
+      confirmed: z.literal(true),
+    }),
+    (client, input) =>
+      client.runDatabaseSchedule({
+        projectId: input.project_id,
+        environment: input.environment,
+        name: input.name,
+      }),
+    { ...destructiveAnnotations(), idempotentHint: false },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_execution_usage_get",
+    "Read metered database execution usage: schedule runs and webhook attempts per UTC hour or day window. from and to are UTC timestamps with milliseconds (Z), aligned to the granularity, at most 31 days apart. Only completed windows are final. Rejected, skipped, event and delivery counts are reported but not billed.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment.optional(),
+      from: z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/u),
+      to: z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/u),
+      granularity: z.enum(["hour", "day"]),
+      limit: z.number().int().min(1).max(100).optional(),
+      cursor: z.string().min(1).max(200).optional(),
+    }),
+    (client, input) =>
+      client.getDatabaseExecutionUsage({
+        projectId: input.project_id,
+        ...(input.environment === undefined ? {} : { environment: input.environment }),
+        from: input.from,
+        to: input.to,
+        granularity: input.granularity,
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      }),
   );
   registerProductTool(
     server,
@@ -2719,7 +3071,7 @@ function safeFailure(error: unknown, commandPrefix: string): SafeFailure {
       code: "request_timeout",
       retryable: true,
       suggestedAction:
-        "The ohmyho.st API did not answer within 30 seconds. Call this tool again; for a change use the same idempotency_key, because it may already be under way.",
+        "The ohmyho.st API did not answer within 30 seconds. Call this tool again; for a change that takes an idempotency_key use the same key, because it may already be under way. A change without a key (webhook delete, test or replay, schedule set, delete or run) is repeated only after a read tool shows the current state.",
     };
   if (error instanceof Error) {
     const local = localFailure(error, commandPrefix);
@@ -2801,7 +3153,7 @@ function localFailure(error: Error, commandPrefix: string): SafeFailure | undefi
         code: "network_error",
         retryable: true,
         suggestedAction:
-          "The request did not reach the ohmyho.st API, or its answer was cut off. Call this tool again; for a change use the same idempotency_key, because it may already have been applied.",
+          "The request did not reach the ohmyho.st API, or its answer was cut off. Call this tool again; for a change that takes an idempotency_key use the same key, because it may already have been applied. A change without a key (webhook delete, test or replay, schedule set, delete or run) is repeated only after a read tool shows the current state.",
       };
     case "ResponseContractError":
       return {

@@ -164,6 +164,34 @@ export const PROBLEM_POLICY = {
       "List the project's database credentials and revoke one you no longer need, then request access again.",
     title: "Database access limit reached",
   },
+  database_webhook_limit: {
+    status: 409,
+    retryable: false,
+    action:
+      "List the project's database webhooks for this environment and delete one you no longer need, then create the webhook again.",
+    title: "Database webhook limit reached",
+  },
+  database_schedule_limit: {
+    status: 409,
+    retryable: false,
+    action:
+      "List the project's database schedules for this environment and delete one you no longer need, then set the schedule again.",
+    title: "Database schedule limit reached",
+  },
+  database_schedule_not_runnable: {
+    status: 409,
+    retryable: false,
+    action:
+      "Read the schedule and its runs. Enable a disabled schedule, or wait until the run already queued has finished, then request the run again.",
+    title: "Database schedule cannot run now",
+  },
+  database_webhook_delivery_pending: {
+    status: 409,
+    retryable: false,
+    action:
+      "The platform is still retrying this webhook delivery. Read the delivery in the delivery list; replay it only if it ends dead_lettered or the receiver needs the event again.",
+    title: "Webhook delivery still pending",
+  },
   project_notes_conflict: {
     status: 409,
     retryable: false,

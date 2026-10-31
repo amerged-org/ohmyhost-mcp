@@ -20,6 +20,36 @@ import {
   type ProjectDatabaseWriteReceipt,
 } from "@ohmyhost/contracts/database-access";
 import { assertDatabaseCompute, type DatabaseCompute } from "@ohmyhost/contracts/database-compute";
+import {
+  assertDatabaseExecutionUsagePage,
+  assertDatabaseSchedule,
+  assertDatabaseSchedulePage,
+  assertDatabaseScheduleDeleted,
+  assertDatabaseScheduleRunAccepted,
+  assertDatabaseScheduleRunPage,
+  assertDatabaseWebhook,
+  assertDatabaseWebhookCreated,
+  assertDatabaseWebhookDeleted,
+  assertDatabaseWebhookDeliveryPage,
+  assertDatabaseWebhookPage,
+  assertDatabaseWebhookReplayAccepted,
+  assertDatabaseWebhookTest,
+  type DatabaseExecutionUsagePage,
+  type DatabaseSchedule,
+  type DatabaseScheduleDeleted,
+  type DatabaseSchedulePage,
+  type DatabaseScheduleRunAccepted,
+  type DatabaseScheduleRunPage,
+  type DatabaseScheduleSetRequest,
+  type DatabaseWebhook,
+  type DatabaseWebhookCreated,
+  type DatabaseWebhookDeleted,
+  type DatabaseWebhookDeliveryPage,
+  type DatabaseWebhookEventType,
+  type DatabaseWebhookPage,
+  type DatabaseWebhookReplayAccepted,
+  type DatabaseWebhookTestResult,
+} from "@ohmyhost/contracts/database-events";
 import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
 import {
   assertProjectContext,
@@ -117,6 +147,20 @@ import {
   createProjectDatabaseAccess,
   listProjectDatabaseAccess,
   revokeProjectDatabaseAccess,
+  createProjectDatabaseWebhook,
+  listProjectDatabaseWebhooks,
+  getProjectDatabaseWebhook,
+  deleteProjectDatabaseWebhook,
+  testProjectDatabaseWebhook,
+  listProjectDatabaseWebhookDeliveries,
+  replayProjectDatabaseWebhookDelivery,
+  setProjectDatabaseSchedule,
+  listProjectDatabaseSchedules,
+  getProjectDatabaseSchedule,
+  deleteProjectDatabaseSchedule,
+  listProjectDatabaseScheduleRuns,
+  runProjectDatabaseSchedule,
+  getProjectDatabaseExecutionUsage,
   reconcileOperation,
   streamOperationEvents,
   type DeploymentPlan,
@@ -279,6 +323,85 @@ export interface ProductApi {
     readonly projectId: string;
     readonly accessId: string;
   }): Promise<ProjectDatabaseAccess>;
+  createProjectDatabaseWebhook(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly idempotencyKey: string;
+    readonly url: string;
+    readonly eventTypes: readonly DatabaseWebhookEventType[];
+    readonly headers: Readonly<Record<string, string>>;
+  }): Promise<DatabaseWebhookCreated>;
+  listProjectDatabaseWebhooks(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+  }): Promise<DatabaseWebhookPage>;
+  getProjectDatabaseWebhook(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly webhookId: string;
+  }): Promise<DatabaseWebhook>;
+  deleteProjectDatabaseWebhook(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly webhookId: string;
+  }): Promise<DatabaseWebhookDeleted>;
+  testProjectDatabaseWebhook(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly webhookId: string;
+  }): Promise<DatabaseWebhookTestResult>;
+  listProjectDatabaseWebhookDeliveries(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly webhookId?: string;
+    readonly limit?: number;
+    readonly cursor?: string;
+  }): Promise<DatabaseWebhookDeliveryPage>;
+  replayProjectDatabaseWebhookDelivery(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly deliveryId: string;
+  }): Promise<DatabaseWebhookReplayAccepted>;
+  setProjectDatabaseSchedule(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly name: string;
+    readonly request: DatabaseScheduleSetRequest;
+  }): Promise<DatabaseSchedule>;
+  listProjectDatabaseSchedules(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+  }): Promise<DatabaseSchedulePage>;
+  getProjectDatabaseSchedule(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly name: string;
+  }): Promise<DatabaseSchedule>;
+  deleteProjectDatabaseSchedule(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly name: string;
+  }): Promise<DatabaseScheduleDeleted>;
+  listProjectDatabaseScheduleRuns(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly name: string;
+    readonly limit?: number;
+  }): Promise<DatabaseScheduleRunPage>;
+  runProjectDatabaseSchedule(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly name: string;
+  }): Promise<DatabaseScheduleRunAccepted>;
+  getProjectDatabaseExecutionUsage(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly from: string;
+    readonly to: string;
+    readonly granularity: "hour" | "day";
+    readonly limit?: number;
+    readonly cursor?: string;
+  }): Promise<DatabaseExecutionUsagePage>;
   planPaidDomain(input: {
     readonly projectId: string;
     readonly hostname: string;
@@ -440,6 +563,11 @@ export interface ProductApi {
   sharedMail?(input: SharedMailCommand): Promise<unknown>;
   managedMail?(input: ManagedMailCommand): Promise<unknown>;
 }
+
+/** A webhook answer that names another environment, webhook or delivery than the request did. */
+const WEBHOOK_SCOPE_MISMATCH = "Webhook response scope mismatch";
+/** A schedule answer that names another environment or schedule than the request did. */
+const SCHEDULE_SCOPE_MISMATCH = "Schedule response scope mismatch";
 
 export class GeneratedSdkProductApi implements ProductApi {
   readonly #client: OhMyHostClient;
@@ -758,6 +886,241 @@ export class GeneratedSdkProductApi implements ProductApi {
       { client: this.#client },
     );
     assertProjectDatabaseAccess(value);
+    return value;
+  }
+
+  /** The signing secret exists only in this answer; the CLI prints it once and stores nothing. */
+  public async createProjectDatabaseWebhook(
+    input: Parameters<ProductApi["createProjectDatabaseWebhook"]>[0],
+  ): Promise<DatabaseWebhookCreated> {
+    const value = await createProjectDatabaseWebhook(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        "Idempotency-Key": input.idempotencyKey,
+        databaseWebhookCreateRequest: {
+          url: input.url,
+          event_types: [...input.eventTypes],
+          headers: { ...input.headers },
+        },
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookCreated(value);
+    if (value.environment !== input.environment) throw new TypeError(WEBHOOK_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async listProjectDatabaseWebhooks(
+    input: Parameters<ProductApi["listProjectDatabaseWebhooks"]>[0],
+  ): Promise<DatabaseWebhookPage> {
+    const value = await listProjectDatabaseWebhooks(
+      { project_id: input.projectId, environment: input.environment },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookPage(value);
+    if (value.items.some((item) => item.environment !== input.environment))
+      throw new TypeError(WEBHOOK_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async getProjectDatabaseWebhook(
+    input: Parameters<ProductApi["getProjectDatabaseWebhook"]>[0],
+  ): Promise<DatabaseWebhook> {
+    const value = await getProjectDatabaseWebhook(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        webhook_id: input.webhookId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhook(value);
+    if (value.id !== input.webhookId || value.environment !== input.environment)
+      throw new TypeError(WEBHOOK_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async deleteProjectDatabaseWebhook(
+    input: Parameters<ProductApi["deleteProjectDatabaseWebhook"]>[0],
+  ): Promise<DatabaseWebhookDeleted> {
+    const value = await deleteProjectDatabaseWebhook(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        webhook_id: input.webhookId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookDeleted(value);
+    if (value.id !== input.webhookId) throw new TypeError(WEBHOOK_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async testProjectDatabaseWebhook(
+    input: Parameters<ProductApi["testProjectDatabaseWebhook"]>[0],
+  ): Promise<DatabaseWebhookTestResult> {
+    const value = await testProjectDatabaseWebhook(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        webhook_id: input.webhookId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookTest(value);
+    return value;
+  }
+
+  public async listProjectDatabaseWebhookDeliveries(
+    input: Parameters<ProductApi["listProjectDatabaseWebhookDeliveries"]>[0],
+  ): Promise<DatabaseWebhookDeliveryPage> {
+    const value = await listProjectDatabaseWebhookDeliveries(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        ...(input.webhookId === undefined ? {} : { webhook_id: input.webhookId }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookDeliveryPage(value);
+    if (
+      input.webhookId !== undefined &&
+      value.items.some((item) => item.webhook_id !== input.webhookId)
+    )
+      throw new TypeError(WEBHOOK_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async replayProjectDatabaseWebhookDelivery(
+    input: Parameters<ProductApi["replayProjectDatabaseWebhookDelivery"]>[0],
+  ): Promise<DatabaseWebhookReplayAccepted> {
+    const value = await replayProjectDatabaseWebhookDelivery(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        delivery_id: input.deliveryId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookReplayAccepted(value);
+    if (value.delivery_id !== input.deliveryId) throw new TypeError(WEBHOOK_SCOPE_MISMATCH);
+    return value;
+  }
+
+  /** A schedule runs the statements as the application's runtime role; the request confirms it. */
+  public async setProjectDatabaseSchedule(
+    input: Parameters<ProductApi["setProjectDatabaseSchedule"]>[0],
+  ): Promise<DatabaseSchedule> {
+    const request = input.request;
+    const value = await setProjectDatabaseSchedule(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        name: input.name,
+        databaseScheduleSetRequest: {
+          ...(request.cron === null ? {} : { cron: request.cron }),
+          ...(request.every_seconds === null ? {} : { every_seconds: request.every_seconds }),
+          statements: [...request.statements],
+          timeout_ms: request.timeout_ms,
+          enabled: request.enabled,
+          confirm: true,
+        },
+      },
+      { client: this.#client },
+    );
+    assertDatabaseSchedule(value);
+    if (value.name !== input.name || value.environment !== input.environment)
+      throw new TypeError(SCHEDULE_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async listProjectDatabaseSchedules(
+    input: Parameters<ProductApi["listProjectDatabaseSchedules"]>[0],
+  ): Promise<DatabaseSchedulePage> {
+    const value = await listProjectDatabaseSchedules(
+      { project_id: input.projectId, environment: input.environment },
+      { client: this.#client },
+    );
+    assertDatabaseSchedulePage(value);
+    if (value.items.some((item) => item.environment !== input.environment))
+      throw new TypeError(SCHEDULE_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async getProjectDatabaseSchedule(
+    input: Parameters<ProductApi["getProjectDatabaseSchedule"]>[0],
+  ): Promise<DatabaseSchedule> {
+    const value = await getProjectDatabaseSchedule(
+      { project_id: input.projectId, environment: input.environment, name: input.name },
+      { client: this.#client },
+    );
+    assertDatabaseSchedule(value);
+    if (value.name !== input.name || value.environment !== input.environment)
+      throw new TypeError(SCHEDULE_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async deleteProjectDatabaseSchedule(
+    input: Parameters<ProductApi["deleteProjectDatabaseSchedule"]>[0],
+  ): Promise<DatabaseScheduleDeleted> {
+    const value = await deleteProjectDatabaseSchedule(
+      { project_id: input.projectId, environment: input.environment, name: input.name },
+      { client: this.#client },
+    );
+    assertDatabaseScheduleDeleted(value);
+    if (value.name !== input.name) throw new TypeError(SCHEDULE_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async listProjectDatabaseScheduleRuns(
+    input: Parameters<ProductApi["listProjectDatabaseScheduleRuns"]>[0],
+  ): Promise<DatabaseScheduleRunPage> {
+    const value = await listProjectDatabaseScheduleRuns(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        name: input.name,
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      },
+      { client: this.#client },
+    );
+    assertDatabaseScheduleRunPage(value);
+    if (value.items.some((item) => item.schedule !== input.name))
+      throw new TypeError(SCHEDULE_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async runProjectDatabaseSchedule(
+    input: Parameters<ProductApi["runProjectDatabaseSchedule"]>[0],
+  ): Promise<DatabaseScheduleRunAccepted> {
+    const value = await runProjectDatabaseSchedule(
+      { project_id: input.projectId, environment: input.environment, name: input.name },
+      { client: this.#client },
+    );
+    assertDatabaseScheduleRunAccepted(value);
+    if (value.schedule !== input.name) throw new TypeError(SCHEDULE_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async getProjectDatabaseExecutionUsage(
+    input: Parameters<ProductApi["getProjectDatabaseExecutionUsage"]>[0],
+  ): Promise<DatabaseExecutionUsagePage> {
+    const value = await getProjectDatabaseExecutionUsage(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        from: input.from,
+        to: input.to,
+        granularity: input.granularity,
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      },
+      { client: this.#client },
+    );
+    assertDatabaseExecutionUsagePage(value);
     return value;
   }
 

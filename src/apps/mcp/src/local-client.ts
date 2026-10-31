@@ -12,6 +12,20 @@ import {
 } from "@ohmyhost/contracts/database-access";
 import { assertOrganizationAccount } from "@ohmyhost/contracts/credit-pricing";
 import { assertDatabaseCompute } from "@ohmyhost/contracts/database-compute";
+import {
+  assertDatabaseExecutionUsagePage,
+  assertDatabaseSchedule,
+  assertDatabaseSchedulePage,
+  assertDatabaseScheduleDeleted,
+  assertDatabaseScheduleRunAccepted,
+  assertDatabaseScheduleRunPage,
+  assertDatabaseWebhookCreated,
+  assertDatabaseWebhookDeleted,
+  assertDatabaseWebhookDeliveryPage,
+  assertDatabaseWebhookPage,
+  assertDatabaseWebhookReplayAccepted,
+  assertDatabaseWebhookTest,
+} from "@ohmyhost/contracts/database-events";
 import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
 import {
   assertProjectContext,
@@ -98,6 +112,18 @@ import {
   createProjectDatabaseAccess,
   listProjectDatabaseAccess,
   revokeProjectDatabaseAccess,
+  createProjectDatabaseWebhook,
+  listProjectDatabaseWebhooks,
+  deleteProjectDatabaseWebhook,
+  testProjectDatabaseWebhook,
+  listProjectDatabaseWebhookDeliveries,
+  replayProjectDatabaseWebhookDelivery,
+  listProjectDatabaseSchedules,
+  setProjectDatabaseSchedule,
+  deleteProjectDatabaseSchedule,
+  listProjectDatabaseScheduleRuns,
+  runProjectDatabaseSchedule,
+  getProjectDatabaseExecutionUsage,
   planProjectDeletion,
   rollbackDeployment,
   reconcileOperation,
@@ -212,6 +238,11 @@ export async function createAuthenticatedLocalMcpClient(
       throw new SavedLoginCredentialError(error.code, read);
     throw error;
   }
+}
+
+/** A database event answer must belong to the environment and name that were asked for. */
+function requireScope(matches: boolean): void {
+  if (!matches) throw new TypeError("Database event scope mismatch");
 }
 
 export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
@@ -804,6 +835,194 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
       { client: this.#client },
     );
     assertProjectDatabaseAccess(value);
+    return value;
+  }
+  public async listDatabaseWebhooks(
+    input: Parameters<LocalMcpProductClient["listDatabaseWebhooks"]>[0],
+  ) {
+    const environment = input.environment ?? "dev";
+    const value = await listProjectDatabaseWebhooks(
+      { project_id: input.projectId, environment },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookPage(value);
+    requireScope(value.items.every((webhook) => webhook.environment === environment));
+    return value;
+  }
+  /** The signing secret exists only in this response and is never stored by the client. */
+  public async createDatabaseWebhook(
+    input: Parameters<LocalMcpProductClient["createDatabaseWebhook"]>[0],
+  ) {
+    const value = await createProjectDatabaseWebhook(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        "Idempotency-Key": input.idempotencyKey,
+        databaseWebhookCreateRequest: {
+          url: input.url,
+          event_types: [...input.eventTypes],
+          headers: { ...input.headers },
+        },
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookCreated(value);
+    requireScope(value.environment === input.environment);
+    return value;
+  }
+  public async testDatabaseWebhook(
+    input: Parameters<LocalMcpProductClient["testDatabaseWebhook"]>[0],
+  ) {
+    const value = await testProjectDatabaseWebhook(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        webhook_id: input.webhookId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookTest(value);
+    return value;
+  }
+  public async deleteDatabaseWebhook(
+    input: Parameters<LocalMcpProductClient["deleteDatabaseWebhook"]>[0],
+  ) {
+    const value = await deleteProjectDatabaseWebhook(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        webhook_id: input.webhookId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookDeleted(value);
+    requireScope(value.id === input.webhookId);
+    return value;
+  }
+  public async listDatabaseWebhookDeliveries(
+    input: Parameters<LocalMcpProductClient["listDatabaseWebhookDeliveries"]>[0],
+  ) {
+    const value = await listProjectDatabaseWebhookDeliveries(
+      {
+        project_id: input.projectId,
+        environment: input.environment ?? "dev",
+        ...(input.webhookId === undefined ? {} : { webhook_id: input.webhookId }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookDeliveryPage(value);
+    requireScope(
+      input.webhookId === undefined ||
+        value.items.every((delivery) => delivery.webhook_id === input.webhookId),
+    );
+    return value;
+  }
+  public async replayDatabaseWebhookDelivery(
+    input: Parameters<LocalMcpProductClient["replayDatabaseWebhookDelivery"]>[0],
+  ) {
+    const value = await replayProjectDatabaseWebhookDelivery(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        delivery_id: input.deliveryId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookReplayAccepted(value);
+    requireScope(value.delivery_id === input.deliveryId);
+    return value;
+  }
+  public async listDatabaseSchedules(
+    input: Parameters<LocalMcpProductClient["listDatabaseSchedules"]>[0],
+  ) {
+    const environment = input.environment ?? "dev";
+    const value = await listProjectDatabaseSchedules(
+      { project_id: input.projectId, environment },
+      { client: this.#client },
+    );
+    assertDatabaseSchedulePage(value);
+    requireScope(value.items.every((schedule) => schedule.environment === environment));
+    return value;
+  }
+  public async setDatabaseSchedule(
+    input: Parameters<LocalMcpProductClient["setDatabaseSchedule"]>[0],
+  ) {
+    const value = await setProjectDatabaseSchedule(
+      {
+        project_id: input.projectId,
+        name: input.name,
+        environment: input.environment,
+        databaseScheduleSetRequest: {
+          ...(input.cron === undefined ? {} : { cron: input.cron }),
+          ...(input.everySeconds === undefined ? {} : { every_seconds: input.everySeconds }),
+          statements: [...input.statements],
+          ...(input.timeoutMs === undefined ? {} : { timeout_ms: input.timeoutMs }),
+          ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+          confirm: true,
+        },
+      },
+      { client: this.#client },
+    );
+    assertDatabaseSchedule(value);
+    requireScope(value.name === input.name && value.environment === input.environment);
+    return value;
+  }
+  public async deleteDatabaseSchedule(
+    input: Parameters<LocalMcpProductClient["deleteDatabaseSchedule"]>[0],
+  ) {
+    const value = await deleteProjectDatabaseSchedule(
+      { project_id: input.projectId, name: input.name, environment: input.environment },
+      { client: this.#client },
+    );
+    assertDatabaseScheduleDeleted(value);
+    requireScope(value.name === input.name);
+    return value;
+  }
+  public async listDatabaseScheduleRuns(
+    input: Parameters<LocalMcpProductClient["listDatabaseScheduleRuns"]>[0],
+  ) {
+    const value = await listProjectDatabaseScheduleRuns(
+      {
+        project_id: input.projectId,
+        name: input.name,
+        environment: input.environment ?? "dev",
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      },
+      { client: this.#client },
+    );
+    assertDatabaseScheduleRunPage(value);
+    requireScope(value.items.every((run) => run.schedule === input.name));
+    return value;
+  }
+  public async runDatabaseSchedule(
+    input: Parameters<LocalMcpProductClient["runDatabaseSchedule"]>[0],
+  ) {
+    const value = await runProjectDatabaseSchedule(
+      { project_id: input.projectId, name: input.name, environment: input.environment },
+      { client: this.#client },
+    );
+    assertDatabaseScheduleRunAccepted(value);
+    requireScope(value.schedule === input.name);
+    return value;
+  }
+  public async getDatabaseExecutionUsage(
+    input: Parameters<LocalMcpProductClient["getDatabaseExecutionUsage"]>[0],
+  ) {
+    const value = await getProjectDatabaseExecutionUsage(
+      {
+        project_id: input.projectId,
+        environment: input.environment ?? "dev",
+        from: input.from,
+        to: input.to,
+        granularity: input.granularity,
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      },
+      { client: this.#client },
+    );
+    assertDatabaseExecutionUsagePage(value);
     return value;
   }
   public planPromotion(input: Parameters<LocalMcpProductClient["planPromotion"]>[0]) {

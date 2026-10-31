@@ -29,7 +29,8 @@ import {
   cliMetadataResult,
   CREDENTIAL_STORE_UNAVAILABLE_ACTION,
   endedLoginAction,
-  INTERNAL_ERROR_ACTION,
+  helpTopicKnown,
+  internalErrorAction,
   invalidCommandAction,
   refreshFailedAction,
   NetworkTransportError,
@@ -642,7 +643,7 @@ export const runProductionCli = async (
             1,
             "internal_error",
             false,
-            INTERNAL_ERROR_ACTION,
+            internalErrorAction(recognizedCommandLabel(args)),
           );
     if (!(error instanceof InvalidCommandError)) {
       diagnostics.record({
@@ -683,6 +684,8 @@ export const runProductionCli = async (
       );
     }
   }
+  if (command.kind === "help" && command.topic !== undefined && !helpTopicKnown(command.topic))
+    return written(invalidCommandFailure(args, environment));
   if (command.kind === "help" || command.kind === "version") {
     return written(
       cliMetadataResult(command.kind, command.kind === "help" ? command.topic : undefined),
@@ -1135,7 +1138,7 @@ const runOfflineInit = async (
       exitCode,
       code,
       false,
-      known ? initFailureAction(error) : INTERNAL_ERROR_ACTION,
+      known ? initFailureAction(error) : internalErrorAction("init"),
     );
     io.writeStdout(result.stdout);
     return result.exitCode;

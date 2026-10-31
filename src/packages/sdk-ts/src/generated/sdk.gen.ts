@@ -60,6 +60,8 @@ import type {
   CreateOrganizationResponses,
   CreateProjectDatabaseAccessErrors,
   CreateProjectDatabaseAccessResponses,
+  CreateProjectDatabaseWebhookErrors,
+  CreateProjectDatabaseWebhookResponses,
   CreateProjectDataChangeErrors,
   CreateProjectDataChangeResponses,
   CreateProjectDevAccessTicketErrors,
@@ -74,6 +76,8 @@ import type {
   CreateWorkspaceMailDomainErrors,
   CreateWorkspaceMailDomainRequest,
   CreateWorkspaceMailDomainResponses,
+  DatabaseScheduleSetRequest,
+  DatabaseWebhookCreateRequest,
   DeclareApplicationDomainIdentityErrors,
   DeclareApplicationDomainIdentityResponses,
   DeleteEnvironmentSecretErrors,
@@ -82,6 +86,10 @@ import type {
   DeleteManagedMailDomainResponses,
   DeletePaidProjectDomainErrors,
   DeletePaidProjectDomainResponses,
+  DeleteProjectDatabaseScheduleErrors,
+  DeleteProjectDatabaseScheduleResponses,
+  DeleteProjectDatabaseWebhookErrors,
+  DeleteProjectDatabaseWebhookResponses,
   DeleteProjectErrors,
   DeleteProjectResponses,
   DetachProjectMailDomainBindingErrors,
@@ -143,6 +151,12 @@ import type {
   GetProjectContextResponses,
   GetProjectCreditBudgetErrors,
   GetProjectCreditBudgetResponses,
+  GetProjectDatabaseExecutionUsageErrors,
+  GetProjectDatabaseExecutionUsageResponses,
+  GetProjectDatabaseScheduleErrors,
+  GetProjectDatabaseScheduleResponses,
+  GetProjectDatabaseWebhookErrors,
+  GetProjectDatabaseWebhookResponses,
   GetProjectErrors,
   GetProjectExportErrors,
   GetProjectExportResponses,
@@ -186,6 +200,14 @@ import type {
   ListManagedSourceVersionsResponses,
   ListProjectDatabaseAccessErrors,
   ListProjectDatabaseAccessResponses,
+  ListProjectDatabaseScheduleRunsErrors,
+  ListProjectDatabaseScheduleRunsResponses,
+  ListProjectDatabaseSchedulesErrors,
+  ListProjectDatabaseSchedulesResponses,
+  ListProjectDatabaseWebhookDeliveriesErrors,
+  ListProjectDatabaseWebhookDeliveriesResponses,
+  ListProjectDatabaseWebhooksErrors,
+  ListProjectDatabaseWebhooksResponses,
   ListProjectsErrors,
   ListProjectsResponses,
   ListUserApiKeysErrors,
@@ -241,6 +263,8 @@ import type {
   RecordSignupSourceResponses,
   RegisterFeatureInterestErrors,
   RegisterFeatureInterestResponses,
+  ReplayProjectDatabaseWebhookDeliveryErrors,
+  ReplayProjectDatabaseWebhookDeliveryResponses,
   RestoreManagedSourceErrors,
   RestoreManagedSourceResponses,
   RetireWorkspaceMailDomainErrors,
@@ -265,11 +289,15 @@ import type {
   RollbackDeploymentResponses,
   RotateProjectDevShareLinkErrors,
   RotateProjectDevShareLinkResponses,
+  RunProjectDatabaseScheduleErrors,
+  RunProjectDatabaseScheduleResponses,
   SetDevAccessModeRequest,
   SetPoweredByFlagRequest,
   SetProjectCreditBudgetErrors,
   SetProjectCreditBudgetRequest,
   SetProjectCreditBudgetResponses,
+  SetProjectDatabaseScheduleErrors,
+  SetProjectDatabaseScheduleResponses,
   SetProjectDevAccessModeErrors,
   SetProjectDevAccessModeResponses,
   SetProjectNotesErrors,
@@ -289,6 +317,8 @@ import type {
   SubmitFeedbackResponses,
   SwitchManagedSourceErrors,
   SwitchManagedSourceResponses,
+  TestProjectDatabaseWebhookErrors,
+  TestProjectDatabaseWebhookResponses,
   Ulid,
   UserApiKeyId,
   VerifyApplicationDomainIdentityErrors,
@@ -4724,6 +4754,672 @@ export const revokeProjectDatabaseAccess = <ThrowOnError extends boolean = true>
     responseStyle: "data",
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/projects/{project_id}/database/access/{access_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * List the project's database webhooks
+ *
+ * Returns every webhook of the selected environment without signing secrets.
+ */
+export const listProjectDatabaseWebhooks = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment?: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ListProjectDatabaseWebhooksResponses,
+  ListProjectDatabaseWebhooksErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    ListProjectDatabaseWebhooksResponses,
+    ListProjectDatabaseWebhooksErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/webhooks",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Create a signed webhook for database lifecycle events
+ *
+ * Subscribes one HTTPS receiver to database lifecycle events of one environment. The signing secret is returned exactly once and is never retrievable again. Deliveries are retried and end dead-lettered when retries stop. At most five webhooks exist per project environment.
+ */
+export const createProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment: "dev" | "prod";
+    databaseWebhookCreateRequest: DatabaseWebhookCreateRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateProjectDatabaseWebhookResponses,
+  CreateProjectDatabaseWebhookErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "environment" },
+          { key: "databaseWebhookCreateRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateProjectDatabaseWebhookResponses,
+    CreateProjectDatabaseWebhookErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/webhooks",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Delete one database webhook
+ *
+ * Stops deliveries to the webhook. Deleting an already deleted webhook answers not found.
+ */
+export const deleteProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    webhook_id: string;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  DeleteProjectDatabaseWebhookResponses,
+  DeleteProjectDatabaseWebhookErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "webhook_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    DeleteProjectDatabaseWebhookResponses,
+    DeleteProjectDatabaseWebhookErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/webhooks/{webhook_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Read one database webhook
+ *
+ * Returns one webhook without its signing secret.
+ */
+export const getProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    webhook_id: string;
+    environment?: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetProjectDatabaseWebhookResponses,
+  GetProjectDatabaseWebhookErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "webhook_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetProjectDatabaseWebhookResponses,
+    GetProjectDatabaseWebhookErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/webhooks/{webhook_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Send one test delivery to a database webhook
+ *
+ * Sends one signed test request to the webhook URL and reports the outcome synchronously. Each call sends one request; the platform allows one test per webhook every five seconds.
+ */
+export const testProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    webhook_id: string;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  TestProjectDatabaseWebhookResponses,
+  TestProjectDatabaseWebhookErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "webhook_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    TestProjectDatabaseWebhookResponses,
+    TestProjectDatabaseWebhookErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/webhooks/{webhook_id}/test",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * List database webhook deliveries
+ *
+ * Returns the newest deliveries first, optionally for one webhook, with the state of each delivery and its last attempt.
+ */
+export const listProjectDatabaseWebhookDeliveries = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment?: "dev" | "prod";
+    webhook_id?: string;
+    limit?: number;
+    cursor?: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ListProjectDatabaseWebhookDeliveriesResponses,
+  ListProjectDatabaseWebhookDeliveriesErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "environment" },
+          { in: "query", key: "webhook_id" },
+          { in: "query", key: "limit" },
+          { in: "query", key: "cursor" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    ListProjectDatabaseWebhookDeliveriesResponses,
+    ListProjectDatabaseWebhookDeliveriesErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/webhook-deliveries",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Replay one database webhook delivery
+ *
+ * Queues a new attempt for a delivery that is no longer being retried. Each call queues one more attempt, and the delivery returns to pending until it is delivered or dead-lettered again.
+ */
+export const replayProjectDatabaseWebhookDelivery = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    delivery_id: string;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ReplayProjectDatabaseWebhookDeliveryResponses,
+  ReplayProjectDatabaseWebhookDeliveryErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "delivery_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    ReplayProjectDatabaseWebhookDeliveryResponses,
+    ReplayProjectDatabaseWebhookDeliveryErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/webhook-deliveries/{delivery_id}/replay",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * List the project's database schedules
+ *
+ * Returns every schedule of the selected environment.
+ */
+export const listProjectDatabaseSchedules = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment?: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ListProjectDatabaseSchedulesResponses,
+  ListProjectDatabaseSchedulesErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    ListProjectDatabaseSchedulesResponses,
+    ListProjectDatabaseSchedulesErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/schedules",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Delete one database schedule
+ *
+ * Removes the schedule.
+ */
+export const deleteProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    name: string;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  DeleteProjectDatabaseScheduleResponses,
+  DeleteProjectDatabaseScheduleErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "name" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    DeleteProjectDatabaseScheduleResponses,
+    DeleteProjectDatabaseScheduleErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/schedules/{name}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Read one database schedule
+ */
+export const getProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    name: string;
+    environment?: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetProjectDatabaseScheduleResponses,
+  GetProjectDatabaseScheduleErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "name" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetProjectDatabaseScheduleResponses,
+    GetProjectDatabaseScheduleErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/schedules/{name}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Create or replace one database schedule
+ *
+ * Creates the named schedule or replaces it. Each run executes the statements as the application's own runtime role, so row-level security applies as for the application. A run that does not finish within timeout_ms is cancelled.
+ */
+export const setProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    name: string;
+    environment: "dev" | "prod";
+    databaseScheduleSetRequest: DatabaseScheduleSetRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  SetProjectDatabaseScheduleResponses,
+  SetProjectDatabaseScheduleErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "name" },
+          { in: "query", key: "environment" },
+          { key: "databaseScheduleSetRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).put<
+    SetProjectDatabaseScheduleResponses,
+    SetProjectDatabaseScheduleErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/schedules/{name}",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * List the recent runs of one database schedule
+ *
+ * Returns the newest runs first, with the outcome of each run.
+ */
+export const listProjectDatabaseScheduleRuns = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    name: string;
+    environment?: "dev" | "prod";
+    limit?: number;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ListProjectDatabaseScheduleRunsResponses,
+  ListProjectDatabaseScheduleRunsErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "name" },
+          { in: "query", key: "environment" },
+          { in: "query", key: "limit" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    ListProjectDatabaseScheduleRunsResponses,
+    ListProjectDatabaseScheduleRunsErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/schedules/{name}/runs",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Queue one immediate run of a database schedule
+ *
+ * Queues one manual run. The run is refused while the schedule is disabled or while a run is already queued.
+ */
+export const runProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    name: string;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RunProjectDatabaseScheduleResponses,
+  RunProjectDatabaseScheduleErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "name" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    RunProjectDatabaseScheduleResponses,
+    RunProjectDatabaseScheduleErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/schedules/{name}/run",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Read metered database execution usage
+ *
+ * Returns schedule runs and webhook attempts per time window. Only completed windows are final; the current window may still change. Windows are UTC and at most 31 days long. Rejected, skipped, event and delivery counts are reported but not billed.
+ */
+export const getProjectDatabaseExecutionUsage = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment?: "dev" | "prod";
+    from: string;
+    to: string;
+    granularity: "hour" | "day";
+    limit?: number;
+    cursor?: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetProjectDatabaseExecutionUsageResponses,
+  GetProjectDatabaseExecutionUsageErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "environment" },
+          { in: "query", key: "from" },
+          { in: "query", key: "to" },
+          { in: "query", key: "granularity" },
+          { in: "query", key: "limit" },
+          { in: "query", key: "cursor" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetProjectDatabaseExecutionUsageResponses,
+    GetProjectDatabaseExecutionUsageErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/execution-usage",
     ...options,
     ...params,
   });
