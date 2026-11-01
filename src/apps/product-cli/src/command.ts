@@ -6,9 +6,12 @@ import {
   parseDatabaseListLimit,
   parseDatabaseScheduleName,
   parseDatabaseUsageWindow,
+  parseDatabaseWatchCreateRequest,
+  parseDatabaseWatchId,
   parseDatabaseWebhookCreateRequest,
   parseDatabaseWebhookId,
-  type DatabaseWebhookEventType,
+  type DatabaseWatchRequest,
+  type DatabaseWebhookEventPattern,
 } from "@ohmyhost/contracts/database-events";
 import {
   databaseSizeForMemory,
@@ -405,11 +408,35 @@ export type ProductCliCommand =
       readonly credentialStore: "native";
     }
   | {
+      readonly kind: "database-watch-create";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly request: DatabaseWatchRequest;
+      readonly idempotencyKey: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-watch-list";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-watch-delete";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly watchId: string;
+      readonly idempotencyKey: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
       readonly kind: "database-webhook-create";
       readonly projectId: string;
       readonly environment: "dev" | "prod";
       readonly url: string;
-      readonly eventTypes: readonly DatabaseWebhookEventType[];
+      readonly eventTypes: readonly DatabaseWebhookEventPattern[];
       readonly headersFile: string | null;
       readonly idempotencyKey: string;
       readonly yes: true;
@@ -1003,6 +1030,9 @@ export type RecognizedCommandLabel =
   | "database access create"
   | "database access list"
   | "database access revoke"
+  | "database watch create"
+  | "database watch list"
+  | "database watch delete"
   | "database webhook create"
   | "database webhook list"
   | "database webhook get"
@@ -1173,6 +1203,11 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
       if (values[1] === "create") return "database access create";
       if (values[1] === "list") return "database access list";
       if (values[1] === "revoke") return "database access revoke";
+    }
+    if (value === "database" && values[0] === "watch") {
+      if (values[1] === "create") return "database watch create";
+      if (values[1] === "list") return "database watch list";
+      if (values[1] === "delete") return "database watch delete";
     }
     if (value === "database" && values[0] === "webhook") {
       if (values[1] === "create") return "database webhook create";
@@ -2057,6 +2092,92 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
         kind: "database-access-revoke",
         projectId: options["--project"],
         accessId: options["--access"],
+        yes: true,
+        credentialStore,
+      };
+    }
+    throw new InvalidCommandError();
+  }
+  if (first === "database" && values[0] === "watch") {
+    values.shift();
+    const subcommand = values.shift();
+    if (subcommand === "create") {
+      if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, [
+        "--project",
+        "--environment",
+        "--table",
+        "--schema",
+        "--columns",
+        "--operations",
+        "--idempotency-key",
+      ]);
+      const projectId = options["--project"],
+        environment = options["--environment"],
+        table = options["--table"],
+        schema = options["--schema"],
+        columns = options["--columns"],
+        operations = options["--operations"],
+        idempotencyKey = options["--idempotency-key"];
+      if (
+        !isValue(projectId) ||
+        !isValue(idempotencyKey) ||
+        !isValue(table) ||
+        !isValue(columns) ||
+        (environment !== "dev" && environment !== "prod")
+      )
+        throw new InvalidCommandError();
+      const request = contractValue(() =>
+        parseDatabaseWatchCreateRequest({
+          schema,
+          table,
+          columns: columns.split(","),
+          ...(operations === undefined ? {} : { operations: operations.split(",") }),
+        }),
+      );
+      return {
+        kind: "database-watch-create",
+        projectId,
+        environment,
+        request,
+        idempotencyKey,
+        yes: true,
+        credentialStore,
+      };
+    }
+    if (subcommand === "list") {
+      if (yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, ["--project", "--environment"]);
+      const projectId = options["--project"],
+        environment = options["--environment"] ?? "dev";
+      if (!isValue(projectId) || (environment !== "dev" && environment !== "prod"))
+        throw new InvalidCommandError();
+      return { kind: "database-watch-list", projectId, environment, credentialStore };
+    }
+    if (subcommand === "delete") {
+      if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, [
+        "--project",
+        "--environment",
+        "--watch",
+        "--idempotency-key",
+      ]);
+      const projectId = options["--project"],
+        environment = options["--environment"],
+        watchId = options["--watch"],
+        idempotencyKey = options["--idempotency-key"];
+      if (
+        !isValue(projectId) ||
+        !isValue(idempotencyKey) ||
+        (environment !== "dev" && environment !== "prod")
+      )
+        throw new InvalidCommandError();
+      return {
+        kind: "database-watch-delete",
+        projectId,
+        environment,
+        watchId: contractValue(() => parseDatabaseWatchId(watchId)),
+        idempotencyKey,
         yes: true,
         credentialStore,
       };

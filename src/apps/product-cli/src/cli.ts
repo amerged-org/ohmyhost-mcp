@@ -419,8 +419,14 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost database access list --project ULID [--environment dev|prod] --json",
   "database access revoke":
     "ohmyhost database access revoke --project ULID --access ULID --yes --json",
+  "database watch create":
+    "ohmyhost database watch create --project ULID --environment dev|prod --table NAME [--schema public] --columns COL[,COL] [--operations insert,update,delete] --idempotency-key KEY --yes --json (publishes only the listed columns, at most 32, of each row change as the event type data.<topic> printed in this answer; the table must exist as an ordinary table of the application; a sleeping database wakes; next, subscribe with 'ohmyhost database webhook create ... --event-types data.<topic>')",
+  "database watch list":
+    "ohmyhost database watch list --project ULID [--environment dev|prod] --json (dev when omitted; a sleeping database wakes)",
+  "database watch delete":
+    "ohmyhost database watch delete --project ULID --environment dev|prod --watch ID --idempotency-key KEY --yes --json",
   "database webhook create":
-    "ohmyhost database webhook create --project ULID --environment dev|prod --url HTTPS_URL --event-types TYPE[,TYPE] [--headers-file PATH] --idempotency-key KEY --yes --json (the signing secret is shown once in this answer; types: database.created, database.ready, database.woke, database.slept, database.suspended, database.resized, database.deleted; the headers file is a UTF-8 JSON object of at most 8 KiB)",
+    "ohmyhost database webhook create --project ULID --environment dev|prod --url HTTPS_URL --event-types TYPE[,TYPE] [--headers-file PATH] --idempotency-key KEY --yes --json (the signing secret is shown once in this answer; types: database.created, database.ready, database.woke, database.slept, database.suspended, database.resized, database.deleted, data.<topic> for the rows of one watched table printed by database watch create, or data.* for every watched table; a bare * is not accepted and does not include data events; the headers file is a UTF-8 JSON object of at most 8 KiB)",
   "database webhook list":
     "ohmyhost database webhook list --project ULID [--environment dev|prod] --json (dev when omitted; the secret is never listed)",
   "database webhook get":
@@ -1191,6 +1197,12 @@ export class ProductCli {
         return await this.listDatabaseAccess(command, signal);
       if (command.kind === "database-access-revoke")
         return await this.revokeDatabaseAccess(command, signal);
+      if (command.kind === "database-watch-create")
+        return await this.createDatabaseWatch(command, signal);
+      if (command.kind === "database-watch-list")
+        return await this.listDatabaseWatches(command, signal);
+      if (command.kind === "database-watch-delete")
+        return await this.deleteDatabaseWatch(command, signal);
       if (command.kind === "database-webhook-create")
         return await this.createDatabaseWebhook(command, signal);
       if (command.kind === "database-webhook-list")
@@ -1950,6 +1962,51 @@ export class ProductCli {
     });
     assertProjectDatabaseAccess(access);
     return success("database access revoke", { status: "succeeded", access });
+  }
+
+  /** The answer names the event type to subscribe to; the watch already carries the columns and the topic. */
+  private async createDatabaseWatch(
+    command: Extract<ProductCliCommand, { kind: "database-watch-create" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const watch = await api.createProjectDatabaseWatch({
+      projectId: command.projectId,
+      environment: command.environment,
+      idempotencyKey: command.idempotencyKey,
+      request: command.request,
+    });
+    return success("database watch create", {
+      status: "succeeded",
+      watch,
+      next_action: `Run '${this.dependencies.commandPrefix} database webhook create --project ${command.projectId} --environment ${command.environment} --url HTTPS_URL --event-types ${watch.event_type} --idempotency-key KEY --yes --json' to receive ${watch.event_type} events at an HTTPS receiver.`,
+    });
+  }
+
+  private async listDatabaseWatches(
+    command: Extract<ProductCliCommand, { kind: "database-watch-list" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const page = await api.listProjectDatabaseWatches({
+      projectId: command.projectId,
+      environment: command.environment,
+    });
+    return success("database watch list", { status: "succeeded", watch: page.items });
+  }
+
+  private async deleteDatabaseWatch(
+    command: Extract<ProductCliCommand, { kind: "database-watch-delete" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const deleted = await api.deleteProjectDatabaseWatch({
+      projectId: command.projectId,
+      environment: command.environment,
+      idempotencyKey: command.idempotencyKey,
+      watchId: command.watchId,
+    });
+    return success("database watch delete", { status: "succeeded", deleted });
   }
 
   /** The signing secret is returned by create only; every other answer carries no secret. */
@@ -3526,6 +3583,9 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "database-access-list") return "database access list";
   if (command.kind === "database-access-revoke") return "database access revoke";
   if (command.kind === "database-psql") return "database psql";
+  if (command.kind === "database-watch-create") return "database watch create";
+  if (command.kind === "database-watch-list") return "database watch list";
+  if (command.kind === "database-watch-delete") return "database watch delete";
   if (command.kind === "database-webhook-create") return "database webhook create";
   if (command.kind === "database-webhook-list") return "database webhook list";
   if (command.kind === "database-webhook-get") return "database webhook get";

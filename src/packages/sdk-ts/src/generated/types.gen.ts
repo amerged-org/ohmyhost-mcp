@@ -957,12 +957,63 @@ export type DatabaseWebhookEventType =
   | "database.resized"
   | "database.deleted";
 
+/**
+ * A platform event type, data.<topic> for the rows of one watched table, or data.* for every watched table. A bare * is not accepted and never matches data events.
+ */
+export type DatabaseWebhookEventPattern = DatabaseWebhookEventType | string;
+
+export type DatabaseWatchCreateRequest = {
+  environment: "dev" | "prod";
+  /**
+   * Schema of the table, public when omitted. The schemas pgcf, ohmyhost, information_schema and pg_* cannot be watched.
+   */
+  schema?: string;
+  /**
+   * Ordinary table owned by the application, created by a deployed migration.
+   */
+  table: string;
+  /**
+   * Columns published with every event, exactly as written; names are case-sensitive.
+   */
+  columns: Array<string>;
+  /**
+   * Row changes that publish an event; all three when omitted.
+   */
+  operations?: Array<"insert" | "update" | "delete">;
+};
+
+export type DatabaseWatch = {
+  id: string;
+  environment: "dev" | "prod";
+  schema: string;
+  table: string;
+  columns: Array<string>;
+  operations: Array<"insert" | "update" | "delete">;
+  /**
+   * Topic of the watched table, derived by the platform from its name.
+   */
+  topic: string;
+  /**
+   * Event type of the rows of the table; pass it to a database webhook.
+   */
+  event_type: string;
+};
+
+export type DatabaseWatchPage = {
+  items: Array<DatabaseWatch>;
+};
+
+export type DatabaseWatchDeleted = {
+  id: string;
+  deleted: true;
+};
+
 export type DatabaseWebhookCreateRequest = {
   /**
    * HTTPS receiver URL.
    */
   url: string;
-  event_types: Array<DatabaseWebhookEventType>;
+  event_types: Array<DatabaseWebhookEventPattern>;
   /**
    * Extra headers sent with every delivery. Names are case-insensitive and must be unique; content-type, host, content-length, connection, transfer-encoding, user-agent, te, upgrade, expect and any name starting with pgcf-, cf- or x-forwarded- are refused.
    */
@@ -975,7 +1026,7 @@ export type DatabaseWebhook = {
   id: string;
   environment: "dev" | "prod";
   url: string;
-  event_types: Array<DatabaseWebhookEventType>;
+  event_types: Array<DatabaseWebhookEventPattern>;
   /**
    * Names of the extra headers only; their values are never returned.
    */
@@ -987,7 +1038,7 @@ export type DatabaseWebhookCreated = {
   id: string;
   environment: "dev" | "prod";
   url: string;
-  event_types: Array<DatabaseWebhookEventType>;
+  event_types: Array<DatabaseWebhookEventPattern>;
   header_names: Array<string>;
   created_at: string;
   /**
@@ -1008,7 +1059,7 @@ export type DatabaseWebhookDeleted = {
 export type DatabaseWebhookDelivery = {
   id: string;
   event_id: string;
-  event_type: DatabaseWebhookEventType;
+  event_type: DatabaseWebhookEventType | string;
   webhook_id: string;
   state: "pending" | "delivered" | "dead_lettered";
   attempts: number;
@@ -1605,6 +1656,11 @@ export type ProblemDetails = {
     | "database_schedule_limit"
     | "database_schedule_not_runnable"
     | "database_webhook_delivery_pending"
+    | "database_watch_limit"
+    | "database_watch_table_unavailable"
+    | "database_watch_column_unavailable"
+    | "database_watch_events_unavailable"
+    | "database_watch_conflict"
     | "compute_change_pending"
     | "compute_change_conflict"
     | "billing_purchase_conflict"
@@ -1911,6 +1967,11 @@ export type ProjectDataChangePlan = {
 };
 
 /**
+ * A platform event type, data.<topic> for the rows of one watched table, or data.* for every watched table. A bare * is not accepted and never matches data events.
+ */
+export type DatabaseWebhookEventPatternWritable = DatabaseWebhookEventType | string;
+
+/**
  * Immutable pre-build deployment plan. It expires exactly 24 hours after creation.
  */
 export type DeploymentPlanWritable = {
@@ -2003,6 +2064,11 @@ export type DatabaseWebhookId = string;
  * Database webhook delivery identifier.
  */
 export type DatabaseWebhookDeliveryId = string;
+
+/**
+ * Database watch identifier, derived from the watched schema and table.
+ */
+export type DatabaseWatchId = string;
 
 /**
  * Database schedule name, unique per project environment.
@@ -8115,6 +8181,202 @@ export type RevokeProjectDatabaseAccessResponses = {
 
 export type RevokeProjectDatabaseAccessResponse =
   RevokeProjectDatabaseAccessResponses[keyof RevokeProjectDatabaseAccessResponses];
+
+export type ListProjectDatabaseWatchesData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: {
+    /**
+     * Application environment to read; dev when omitted.
+     */
+    environment?: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/watches";
+};
+
+export type ListProjectDatabaseWatchesErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListProjectDatabaseWatchesError =
+  ListProjectDatabaseWatchesErrors[keyof ListProjectDatabaseWatchesErrors];
+
+export type ListProjectDatabaseWatchesResponses = {
+  /**
+   * The database watches of the environment.
+   */
+  200: DatabaseWatchPage;
+};
+
+export type ListProjectDatabaseWatchesResponse =
+  ListProjectDatabaseWatchesResponses[keyof ListProjectDatabaseWatchesResponses];
+
+export type CreateProjectDatabaseWatchData = {
+  body: DatabaseWatchCreateRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/database/watches";
+};
+
+export type CreateProjectDatabaseWatchErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateProjectDatabaseWatchError =
+  CreateProjectDatabaseWatchErrors[keyof CreateProjectDatabaseWatchErrors];
+
+export type CreateProjectDatabaseWatchResponses = {
+  /**
+   * The watch with the event type its deliveries carry.
+   */
+  201: DatabaseWatch;
+};
+
+export type CreateProjectDatabaseWatchResponse =
+  CreateProjectDatabaseWatchResponses[keyof CreateProjectDatabaseWatchResponses];
+
+export type DeleteProjectDatabaseWatchData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Database watch identifier, derived from the watched schema and table.
+     */
+    watch_id: string;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/watches/{watch_id}";
+};
+
+export type DeleteProjectDatabaseWatchErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DeleteProjectDatabaseWatchError =
+  DeleteProjectDatabaseWatchErrors[keyof DeleteProjectDatabaseWatchErrors];
+
+export type DeleteProjectDatabaseWatchResponses = {
+  /**
+   * The identifier of the deleted watch.
+   */
+  200: DatabaseWatchDeleted;
+};
+
+export type DeleteProjectDatabaseWatchResponse =
+  DeleteProjectDatabaseWatchResponses[keyof DeleteProjectDatabaseWatchResponses];
 
 export type ListProjectDatabaseWebhooksData = {
   body?: never;

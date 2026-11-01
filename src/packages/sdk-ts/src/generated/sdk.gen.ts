@@ -60,6 +60,8 @@ import type {
   CreateOrganizationResponses,
   CreateProjectDatabaseAccessErrors,
   CreateProjectDatabaseAccessResponses,
+  CreateProjectDatabaseWatchErrors,
+  CreateProjectDatabaseWatchResponses,
   CreateProjectDatabaseWebhookErrors,
   CreateProjectDatabaseWebhookResponses,
   CreateProjectDataChangeErrors,
@@ -77,6 +79,7 @@ import type {
   CreateWorkspaceMailDomainRequest,
   CreateWorkspaceMailDomainResponses,
   DatabaseScheduleSetRequest,
+  DatabaseWatchCreateRequest,
   DatabaseWebhookCreateRequest,
   DeclareApplicationDomainIdentityErrors,
   DeclareApplicationDomainIdentityResponses,
@@ -88,6 +91,8 @@ import type {
   DeletePaidProjectDomainResponses,
   DeleteProjectDatabaseScheduleErrors,
   DeleteProjectDatabaseScheduleResponses,
+  DeleteProjectDatabaseWatchErrors,
+  DeleteProjectDatabaseWatchResponses,
   DeleteProjectDatabaseWebhookErrors,
   DeleteProjectDatabaseWebhookResponses,
   DeleteProjectErrors,
@@ -204,6 +209,8 @@ import type {
   ListProjectDatabaseScheduleRunsResponses,
   ListProjectDatabaseSchedulesErrors,
   ListProjectDatabaseSchedulesResponses,
+  ListProjectDatabaseWatchesErrors,
+  ListProjectDatabaseWatchesResponses,
   ListProjectDatabaseWebhookDeliveriesErrors,
   ListProjectDatabaseWebhookDeliveriesResponses,
   ListProjectDatabaseWebhooksErrors,
@@ -4754,6 +4761,149 @@ export const revokeProjectDatabaseAccess = <ThrowOnError extends boolean = true>
     responseStyle: "data",
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/projects/{project_id}/database/access/{access_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * List the project's database watches
+ *
+ * Returns every watch of the selected environment. Listing wakes a sleeping database.
+ */
+export const listProjectDatabaseWatches = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment?: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ListProjectDatabaseWatchesResponses,
+  ListProjectDatabaseWatchesErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    ListProjectDatabaseWatchesResponses,
+    ListProjectDatabaseWatchesErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/watches",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Watch the columns of one table for data events
+ *
+ * Attaches the pgcf.capture trigger that publishes only the listed columns of the table as data events of one environment. Subscribe to the returned event_type with a database webhook. The request wakes a sleeping database. Repeating an identical request leaves the watch unchanged; repeating it with other columns or operations replaces the trigger. A reached Stop budget refuses with project_budget_exceeded (402). At most 100 watches exist per database.
+ */
+export const createProjectDatabaseWatch = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    databaseWatchCreateRequest: DatabaseWatchCreateRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateProjectDatabaseWatchResponses,
+  CreateProjectDatabaseWatchErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "databaseWatchCreateRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateProjectDatabaseWatchResponses,
+    CreateProjectDatabaseWatchErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/watches",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Delete one database watch
+ *
+ * Removes the capture trigger of the watch, so its table publishes no more data events. Deleting an already deleted watch answers not found. A reached Stop budget refuses with project_budget_exceeded (402).
+ */
+export const deleteProjectDatabaseWatch = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    watch_id: string;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  DeleteProjectDatabaseWatchResponses,
+  DeleteProjectDatabaseWatchErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "watch_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    DeleteProjectDatabaseWatchResponses,
+    DeleteProjectDatabaseWatchErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/watches/{watch_id}",
     ...options,
     ...params,
   });

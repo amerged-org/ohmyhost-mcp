@@ -11,6 +11,13 @@ export const DATABASE_WEBHOOK_EVENT_TYPES = [
   "database.deleted",
 ] as const;
 export type DatabaseWebhookEventType = (typeof DATABASE_WEBHOOK_EVENT_TYPES)[number];
+/** Row-change events of a watched table; the topic is derived from the table name by dataEventTopic. */
+export type DatabaseDataEventType = `data.${string}`;
+export type DatabaseWebhookEventPattern = DatabaseWebhookEventType | DatabaseDataEventType;
+export const DATABASE_WATCH_OPERATIONS = ["insert", "update", "delete"] as const;
+export type DatabaseWatchOperation = (typeof DATABASE_WATCH_OPERATIONS)[number];
+export const DATABASE_WATCH_MAX_COLUMNS = 32;
+export const DATABASE_WATCH_DEFAULT_SCHEMA = "public";
 /** Per environment; the platform-wide provider cap is shared by every customer. */
 export const DATABASE_WEBHOOK_LIMIT = 5;
 export const DATABASE_WEBHOOK_MAX_EVENT_TYPES = 16;
@@ -66,9 +73,41 @@ export type DatabaseWebhookDeliveryState = "pending" | "delivered" | "dead_lette
 export type DatabaseWebhookDeliveryError = "timeout" | "network" | "http" | "expired" | "permanent";
 export type DatabaseWebhookTestError = "timeout" | "network" | "http";
 
+export interface DatabaseWatchRequest {
+  readonly schema: string;
+  readonly table: string;
+  readonly columns: readonly string[];
+  readonly operations: readonly DatabaseWatchOperation[];
+}
+
+export interface DatabaseWatchTarget {
+  readonly schema: string;
+  readonly table: string;
+}
+
+export interface DatabaseWatch {
+  readonly id: string;
+  readonly environment: DatabaseEnvironment;
+  readonly schema: string;
+  readonly table: string;
+  readonly columns: readonly string[];
+  readonly operations: readonly DatabaseWatchOperation[];
+  readonly topic: string;
+  readonly event_type: DatabaseDataEventType;
+}
+
+export interface DatabaseWatchPage {
+  readonly items: readonly DatabaseWatch[];
+}
+
+export interface DatabaseWatchDeleted {
+  readonly id: string;
+  readonly deleted: true;
+}
+
 export interface DatabaseWebhookCreateRequest {
   readonly url: string;
-  readonly event_types: readonly DatabaseWebhookEventType[];
+  readonly event_types: readonly DatabaseWebhookEventPattern[];
   readonly headers: Readonly<Record<string, string>>;
 }
 
@@ -90,7 +129,7 @@ export interface DatabaseWebhook {
   readonly id: string;
   readonly environment: DatabaseEnvironment;
   readonly url: string;
-  readonly event_types: readonly DatabaseWebhookEventType[];
+  readonly event_types: readonly DatabaseWebhookEventPattern[];
   readonly header_names: readonly string[];
   readonly created_at: string;
 }
@@ -112,7 +151,7 @@ export interface DatabaseWebhookDeleted {
 export interface DatabaseWebhookDelivery {
   readonly id: string;
   readonly event_id: string;
-  readonly event_type: DatabaseWebhookEventType;
+  readonly event_type: DatabaseWebhookEventType | DatabaseDataEventType;
   readonly webhook_id: string;
   readonly state: DatabaseWebhookDeliveryState;
   readonly attempts: number;
@@ -197,7 +236,23 @@ export interface DatabaseExecutionUsagePage {
 const WEBHOOK_KEYS = ["id", "environment", "url", "event_types", "header_names", "created_at"];
 const WEBHOOK_ID_PATTERN = /^whk_[a-z0-9]{20}$/u;
 const DELIVERY_ID_PATTERN = /^dlv_[0-9a-f]{20}$/u;
-const EVENT_ID_PATTERN = /^evt_[0-9a-f]{20}$/u;
+const EVENT_ID_PATTERN =
+  /^(?:evt_[0-9a-f]{20}|[a-z][a-z0-9]{19}:[1-9][0-9]{0,15}:[1-9][0-9]{0,15})$/u;
+const DATA_SUBSCRIPTION_PATTERN = /^data\.(?:\*|[a-z][a-z0-9_]{0,47})$/u;
+const DATA_EVENT_TYPE_PATTERN = /^data\.[a-z][a-z0-9_]{0,47}$/u;
+const DATABASE_WATCH_ID_PATTERN = /^pgcf_watch_[0-9a-f]{8}$/u;
+const DATABASE_WATCH_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/u;
+const DATABASE_WATCH_FORBIDDEN_SCHEMAS = ["information_schema", "pgcf", "ohmyhost"];
+const DATABASE_WATCH_KEYS = [
+  "id",
+  "environment",
+  "schema",
+  "table",
+  "columns",
+  "operations",
+  "topic",
+  "event_type",
+];
 const SCHEDULE_NAME_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/u;
 const CURSOR_PATTERN = /^[A-Za-z0-9._|:=+/-]{1,200}$/u;
 const HEADER_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9-]{0,63}$/u;
@@ -225,9 +280,77 @@ export function parseDatabaseWebhookId(value: unknown): string {
   return value;
 }
 
+export function parseDatabaseWatchId(value: unknown): string {
+  if (!isDatabaseWatchTriggerName(value)) throw new TypeError("Invalid database watch id");
+  return value;
+}
+
 export function parseDatabaseDeliveryId(value: unknown): string {
   if (!matches(value, DELIVERY_ID_PATTERN)) throw new TypeError("Invalid database delivery id");
   return value;
+}
+
+/** The trigger names of the watch service; migrations may not create them, so the watch count stays exact. */
+export function isDatabaseWatchTriggerName(value: unknown): value is string {
+  return matches(value, DATABASE_WATCH_ID_PATTERN);
+}
+
+/** Identifiers are plain SQL names: no quotes, dots or spaces; the caller quotes them. */
+export function isDatabaseWatchIdentifier(value: unknown): value is string {
+  return matches(value, DATABASE_WATCH_IDENTIFIER_PATTERN);
+}
+
+/** Reserved platform schemas stay out of reach; the check ignores case like PostgreSQL does. */
+export function isDatabaseWatchSchema(value: unknown): value is string {
+  if (!isDatabaseWatchIdentifier(value)) return false;
+  const lower = value.toLowerCase();
+  return !lower.startsWith("pg_") && !DATABASE_WATCH_FORBIDDEN_SCHEMAS.includes(lower);
+}
+
+/**
+ * The topic of a watched table, the same rule pgcf.capture applies in SQL: lower-case, every
+ * character outside [a-z0-9_] becomes '_', 't_' before a name that does not start with a letter,
+ * at most 48 characters. Lower-casing is per character, like PostgreSQL's simple lower() of the
+ * builtin C.UTF-8 locale that PGCF's initdb uses (SELECT lower(U&'\0130'), lower(U&'\212A') answers 'i' and 'k').
+ */
+export function dataEventTopic(tableName: string): string {
+  const mapped = Array.from(tableName, (character) => {
+    const lower = Array.from(character.toLowerCase())[0] ?? "_";
+    return /^[a-z0-9_]$/u.test(lower) ? lower : "_";
+  }).join("");
+  const topic = /^[a-z]/u.test(mapped) ? mapped : `t_${mapped}`;
+  return topic.slice(0, 48);
+}
+
+export function parseDatabaseWatchCreateRequest(value: unknown): DatabaseWatchRequest {
+  if (
+    !record(value) ||
+    !onlyKeys(value, ["schema", "table", "columns", "operations"]) ||
+    !isDatabaseWatchIdentifier(value["table"]) ||
+    !Array.isArray(value["columns"]) ||
+    value["columns"].length < 1 ||
+    value["columns"].length > DATABASE_WATCH_MAX_COLUMNS ||
+    !value["columns"].every(isDatabaseWatchIdentifier) ||
+    new Set(value["columns"]).size !== value["columns"].length
+  )
+    throw new TypeError("Invalid database watch request");
+  return {
+    ...parseDatabaseWatchTarget({ schema: value["schema"], table: value["table"] }),
+    columns: value["columns"] as string[],
+    operations: parseWatchOperations(value["operations"]),
+  };
+}
+
+export function parseDatabaseWatchTarget(value: unknown): DatabaseWatchTarget {
+  if (
+    !record(value) ||
+    !onlyKeys(value, ["schema", "table"]) ||
+    !isDatabaseWatchIdentifier(value["table"])
+  )
+    throw new TypeError("Invalid database watch target");
+  const schema = value["schema"] === undefined ? DATABASE_WATCH_DEFAULT_SCHEMA : value["schema"];
+  if (!isDatabaseWatchSchema(schema)) throw new TypeError("Invalid database watch target");
+  return { schema, table: value["table"] };
 }
 
 export function parseDatabaseScheduleName(value: unknown): string {
@@ -307,6 +430,41 @@ export function assertDatabaseWebhook(value: unknown): asserts value is Database
   assertWebhookFields(value);
 }
 
+export function assertDatabaseWatch(value: unknown): asserts value is DatabaseWatch {
+  if (
+    !record(value) ||
+    !exact(value, DATABASE_WATCH_KEYS) ||
+    !matches(value["id"], DATABASE_WATCH_ID_PATTERN) ||
+    !oneOf(["dev", "prod"] as const, value["environment"]) ||
+    !isDatabaseWatchSchema(value["schema"]) ||
+    !isDatabaseWatchIdentifier(value["table"]) ||
+    !Array.isArray(value["columns"]) ||
+    value["columns"].length < 1 ||
+    value["columns"].length > DATABASE_WATCH_MAX_COLUMNS ||
+    !value["columns"].every(isDatabaseWatchIdentifier) ||
+    !isCanonicalOperations(value["operations"]) ||
+    value["topic"] !== dataEventTopic(value["table"]) ||
+    value["event_type"] !== `data.${value["topic"]}`
+  )
+    throw new TypeError("Invalid database watch");
+}
+
+export function assertDatabaseWatchPage(value: unknown): asserts value is DatabaseWatchPage {
+  if (!record(value) || !exact(value, ["items"]) || !pageItems(value["items"]))
+    throw new TypeError("Invalid database watch page");
+  for (const item of value["items"]) assertDatabaseWatch(item);
+}
+
+export function assertDatabaseWatchDeleted(value: unknown): asserts value is DatabaseWatchDeleted {
+  if (
+    !record(value) ||
+    !exact(value, ["id", "deleted"]) ||
+    !matches(value["id"], DATABASE_WATCH_ID_PATTERN) ||
+    value["deleted"] !== true
+  )
+    throw new TypeError("Invalid database watch deletion");
+}
+
 export function assertDatabaseWebhookCreated(
   value: unknown,
 ): asserts value is DatabaseWebhookCreated {
@@ -358,7 +516,7 @@ export function assertDatabaseWebhookDelivery(
     ]) ||
     !matches(value["id"], DELIVERY_ID_PATTERN) ||
     !matches(value["event_id"], EVENT_ID_PATTERN) ||
-    !oneOf(DATABASE_WEBHOOK_EVENT_TYPES, value["event_type"]) ||
+    !isDeliveredEventType(value["event_type"]) ||
     !matches(value["webhook_id"], WEBHOOK_ID_PATTERN) ||
     !oneOf(["pending", "delivered", "dead_lettered"] as const, value["state"]) ||
     !nonNegativeInteger(value["attempts"]) ||
@@ -538,7 +696,7 @@ function assertWebhookFields(value: Record<string, unknown>): void {
     !Array.isArray(value["event_types"]) ||
     value["event_types"].length < 1 ||
     value["event_types"].length > DATABASE_WEBHOOK_MAX_EVENT_TYPES ||
-    !value["event_types"].every((type) => oneOf(DATABASE_WEBHOOK_EVENT_TYPES, type)) ||
+    !value["event_types"].every(isDatabaseWebhookEventPattern) ||
     !Array.isArray(value["header_names"]) ||
     value["header_names"].length > DATABASE_WEBHOOK_MAX_HEADERS ||
     !value["header_names"].every((name) => matches(name, HEADER_NAME_PATTERN)) ||
@@ -561,16 +719,55 @@ function isHttpsUrl(value: unknown): value is string {
   }
 }
 
-function parseEventTypes(value: unknown): readonly DatabaseWebhookEventType[] {
+export function isDatabaseWebhookEventPattern(
+  value: unknown,
+): value is DatabaseWebhookEventPattern {
+  return oneOf(DATABASE_WEBHOOK_EVENT_TYPES, value) || matches(value, DATA_SUBSCRIPTION_PATTERN);
+}
+
+/** A delivery names one concrete event: a platform type or one data topic, never a wildcard. */
+function isDeliveredEventType(
+  value: unknown,
+): value is DatabaseWebhookEventType | DatabaseDataEventType {
+  return oneOf(DATABASE_WEBHOOK_EVENT_TYPES, value) || matches(value, DATA_EVENT_TYPE_PATTERN);
+}
+
+/** Event types of one webhook: 1 to 16 distinct patterns; a bare `*` is not among them. */
+export function isDatabaseWebhookEventTypes(
+  value: unknown,
+): value is readonly DatabaseWebhookEventPattern[] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 1 &&
+    value.length <= DATABASE_WEBHOOK_MAX_EVENT_TYPES &&
+    value.every(isDatabaseWebhookEventPattern) &&
+    new Set(value).size === value.length
+  );
+}
+
+function parseEventTypes(value: unknown): readonly DatabaseWebhookEventPattern[] {
+  if (!isDatabaseWebhookEventTypes(value))
+    throw new TypeError("Invalid database webhook event types");
+  return value;
+}
+
+function parseWatchOperations(value: unknown): readonly DatabaseWatchOperation[] {
+  if (value === undefined) return DATABASE_WATCH_OPERATIONS;
   if (
     !Array.isArray(value) ||
     value.length < 1 ||
-    value.length > DATABASE_WEBHOOK_MAX_EVENT_TYPES ||
-    !value.every((type) => oneOf(DATABASE_WEBHOOK_EVENT_TYPES, type)) ||
+    !value.every((operation) => oneOf(DATABASE_WATCH_OPERATIONS, operation)) ||
     new Set(value).size !== value.length
   )
-    throw new TypeError("Invalid database webhook event types");
-  return value as DatabaseWebhookEventType[];
+    throw new TypeError("Invalid database watch request");
+  return DATABASE_WATCH_OPERATIONS.filter((operation) => value.includes(operation));
+}
+
+/** Operations are stored and asserted in the canonical order insert, update, delete. */
+function isCanonicalOperations(value: unknown): value is DatabaseWatchOperation[] {
+  if (!Array.isArray(value) || value.length < 1) return false;
+  const canonical = DATABASE_WATCH_OPERATIONS.filter((operation) => value.includes(operation));
+  return canonical.length === value.length && canonical.every((op, index) => op === value[index]);
 }
 
 function parseHeaders(value: unknown): Record<string, string> {

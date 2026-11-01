@@ -20,6 +20,10 @@ import {
   assertDatabaseScheduleRunAccepted,
   assertDatabaseScheduleRunPage,
   assertDatabaseWebhookCreated,
+  assertDatabaseWatch,
+  assertDatabaseWatchDeleted,
+  assertDatabaseWatchPage,
+  DATABASE_WATCH_DEFAULT_SCHEMA,
   assertDatabaseWebhookDeleted,
   assertDatabaseWebhookDeliveryPage,
   assertDatabaseWebhookPage,
@@ -115,6 +119,9 @@ import {
   createProjectDatabaseWebhook,
   listProjectDatabaseWebhooks,
   deleteProjectDatabaseWebhook,
+  createProjectDatabaseWatch,
+  listProjectDatabaseWatches,
+  deleteProjectDatabaseWatch,
   testProjectDatabaseWebhook,
   listProjectDatabaseWebhookDeliveries,
   replayProjectDatabaseWebhookDelivery,
@@ -847,6 +854,59 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
     );
     assertDatabaseWebhookPage(value);
     requireScope(value.items.every((webhook) => webhook.environment === environment));
+    return value;
+  }
+  public async listDatabaseWatches(
+    input: Parameters<LocalMcpProductClient["listDatabaseWatches"]>[0],
+  ) {
+    const environment = input.environment ?? "dev";
+    const value = await listProjectDatabaseWatches(
+      { project_id: input.projectId, environment },
+      { client: this.#client },
+    );
+    assertDatabaseWatchPage(value);
+    requireScope(value.items.every((watch) => watch.environment === environment));
+    return value;
+  }
+  public async createDatabaseWatch(
+    input: Parameters<LocalMcpProductClient["createDatabaseWatch"]>[0],
+  ) {
+    const value = await createProjectDatabaseWatch(
+      {
+        project_id: input.projectId,
+        "Idempotency-Key": input.idempotencyKey,
+        databaseWatchCreateRequest: {
+          environment: input.environment,
+          ...(input.schema === undefined ? {} : { schema: input.schema }),
+          table: input.table,
+          columns: [...input.columns],
+          ...(input.operations === undefined ? {} : { operations: [...input.operations] }),
+        },
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWatch(value);
+    requireScope(
+      value.environment === input.environment &&
+        value.table === input.table &&
+        value.schema === (input.schema ?? DATABASE_WATCH_DEFAULT_SCHEMA),
+    );
+    return value;
+  }
+  public async deleteDatabaseWatch(
+    input: Parameters<LocalMcpProductClient["deleteDatabaseWatch"]>[0],
+  ) {
+    const value = await deleteProjectDatabaseWatch(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        "Idempotency-Key": input.idempotencyKey,
+        watch_id: input.watchId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWatchDeleted(value);
+    requireScope(value.id === input.watchId);
     return value;
   }
   /** The signing secret exists only in this response and is never stored by the client. */

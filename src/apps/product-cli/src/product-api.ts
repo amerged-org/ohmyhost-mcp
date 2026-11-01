@@ -33,6 +33,9 @@ import {
   assertDatabaseWebhookDeliveryPage,
   assertDatabaseWebhookPage,
   assertDatabaseWebhookReplayAccepted,
+  assertDatabaseWatch,
+  assertDatabaseWatchDeleted,
+  assertDatabaseWatchPage,
   assertDatabaseWebhookTest,
   type DatabaseExecutionUsagePage,
   type DatabaseSchedule,
@@ -45,7 +48,11 @@ import {
   type DatabaseWebhookCreated,
   type DatabaseWebhookDeleted,
   type DatabaseWebhookDeliveryPage,
-  type DatabaseWebhookEventType,
+  type DatabaseWatch,
+  type DatabaseWatchDeleted,
+  type DatabaseWatchPage,
+  type DatabaseWatchRequest,
+  type DatabaseWebhookEventPattern,
   type DatabaseWebhookPage,
   type DatabaseWebhookReplayAccepted,
   type DatabaseWebhookTestResult,
@@ -152,6 +159,9 @@ import {
   getProjectDatabaseWebhook,
   deleteProjectDatabaseWebhook,
   testProjectDatabaseWebhook,
+  createProjectDatabaseWatch,
+  listProjectDatabaseWatches,
+  deleteProjectDatabaseWatch,
   listProjectDatabaseWebhookDeliveries,
   replayProjectDatabaseWebhookDelivery,
   setProjectDatabaseSchedule,
@@ -328,7 +338,7 @@ export interface ProductApi {
     readonly environment: "dev" | "prod";
     readonly idempotencyKey: string;
     readonly url: string;
-    readonly eventTypes: readonly DatabaseWebhookEventType[];
+    readonly eventTypes: readonly DatabaseWebhookEventPattern[];
     readonly headers: Readonly<Record<string, string>>;
   }): Promise<DatabaseWebhookCreated>;
   listProjectDatabaseWebhooks(input: {
@@ -350,6 +360,22 @@ export interface ProductApi {
     readonly environment: "dev" | "prod";
     readonly webhookId: string;
   }): Promise<DatabaseWebhookTestResult>;
+  createProjectDatabaseWatch(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly idempotencyKey: string;
+    readonly request: DatabaseWatchRequest;
+  }): Promise<DatabaseWatch>;
+  listProjectDatabaseWatches(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+  }): Promise<DatabaseWatchPage>;
+  deleteProjectDatabaseWatch(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly idempotencyKey: string;
+    readonly watchId: string;
+  }): Promise<DatabaseWatchDeleted>;
   listProjectDatabaseWebhookDeliveries(input: {
     readonly projectId: string;
     readonly environment: "dev" | "prod";
@@ -566,6 +592,7 @@ export interface ProductApi {
 
 /** A webhook answer that names another environment, webhook or delivery than the request did. */
 const WEBHOOK_SCOPE_MISMATCH = "Webhook response scope mismatch";
+const WATCH_SCOPE_MISMATCH = "Watch response scope mismatch";
 /** A schedule answer that names another environment or schedule than the request did. */
 const SCHEDULE_SCOPE_MISMATCH = "Schedule response scope mismatch";
 
@@ -886,6 +913,63 @@ export class GeneratedSdkProductApi implements ProductApi {
       { client: this.#client },
     );
     assertProjectDatabaseAccess(value);
+    return value;
+  }
+
+  public async createProjectDatabaseWatch(
+    input: Parameters<ProductApi["createProjectDatabaseWatch"]>[0],
+  ): Promise<DatabaseWatch> {
+    const value = await createProjectDatabaseWatch(
+      {
+        project_id: input.projectId,
+        "Idempotency-Key": input.idempotencyKey,
+        databaseWatchCreateRequest: {
+          environment: input.environment,
+          schema: input.request.schema,
+          table: input.request.table,
+          columns: [...input.request.columns],
+          operations: [...input.request.operations],
+        },
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWatch(value);
+    if (
+      value.environment !== input.environment ||
+      value.schema !== input.request.schema ||
+      value.table !== input.request.table
+    )
+      throw new TypeError(WATCH_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async listProjectDatabaseWatches(
+    input: Parameters<ProductApi["listProjectDatabaseWatches"]>[0],
+  ): Promise<DatabaseWatchPage> {
+    const value = await listProjectDatabaseWatches(
+      { project_id: input.projectId, environment: input.environment },
+      { client: this.#client },
+    );
+    assertDatabaseWatchPage(value);
+    if (value.items.some((item) => item.environment !== input.environment))
+      throw new TypeError(WATCH_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async deleteProjectDatabaseWatch(
+    input: Parameters<ProductApi["deleteProjectDatabaseWatch"]>[0],
+  ): Promise<DatabaseWatchDeleted> {
+    const value = await deleteProjectDatabaseWatch(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        "Idempotency-Key": input.idempotencyKey,
+        watch_id: input.watchId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWatchDeleted(value);
+    if (value.id !== input.watchId) throw new TypeError(WATCH_SCOPE_MISMATCH);
     return value;
   }
 

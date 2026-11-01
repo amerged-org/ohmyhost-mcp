@@ -144,6 +144,7 @@ export function rejectMigrationSqlReferences(
     const token = tokens[index];
     if (token?.kind !== "word" && token?.kind !== "identifier") continue;
     const value = token.value.toLowerCase();
+    if (value === "pgcf") throw new DatabaseMigrationAdmissionError("unsupported");
     if (value === "ohmyhost") {
       if (
         allowIdentityHelpers &&

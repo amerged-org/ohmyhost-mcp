@@ -192,6 +192,41 @@ export const PROBLEM_POLICY = {
       "The platform is still retrying this webhook delivery. Read the delivery in the delivery list; replay it only if it ends dead_lettered or the receiver needs the event again.",
     title: "Webhook delivery still pending",
   },
+  database_watch_limit: {
+    status: 409,
+    retryable: false,
+    action:
+      "List the project's database watches for this environment and delete one you no longer need, then create the watch again.",
+    title: "Database watch limit reached",
+  },
+  database_watch_table_unavailable: {
+    status: 409,
+    retryable: false,
+    action:
+      "The table must exist as an ordinary table owned by the application, created by a deployed migration; views, partitions, temporary tables and the schemas pgcf, ohmyhost, information_schema and pg_* cannot be watched. Fix the name or deploy the migration, then create the watch again.",
+    title: "Table cannot be watched",
+  },
+  database_watch_column_unavailable: {
+    status: 409,
+    retryable: false,
+    action:
+      "List only existing column names exactly as written, names are case-sensitive. Delete the watch before a migration drops a published column, because the write would fail.",
+    title: "Watched column does not exist",
+  },
+  database_watch_events_unavailable: {
+    status: 409,
+    retryable: false,
+    action:
+      "The platform event schema is installed when the database wakes: run any query against that environment, wait for the answer, then create the watch again. If it still fails, report the request_id through feedback.",
+    title: "Database events not installed yet",
+  },
+  database_watch_conflict: {
+    status: 409,
+    retryable: false,
+    action:
+      "A migration already attaches a capture trigger to this table: keep it and skip the watch, or remove it from the migrations, deploy and create the watch again. A table carries one capture trigger.",
+    title: "Table already has a capture trigger",
+  },
   project_notes_conflict: {
     status: 409,
     retryable: false,
@@ -502,7 +537,7 @@ export const PROBLEM_POLICY = {
     status: 503,
     retryable: false,
     action:
-      "Report the platform user-key permission configuration through feedback. Repeated login or creation will not fix it.",
+      "Report the platform user-key permission configuration through feedback with this request_id; it affects every token the same way, whatever the integration. Repeated login does not fix it. After the platform confirms the fix, repeat the same create with the same name and Idempotency-Key.",
     title: "Token permissions unavailable",
   },
   reconciliation_exhausted: {

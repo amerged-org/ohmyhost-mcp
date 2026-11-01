@@ -8,16 +8,22 @@ import {
   DATABASE_SCHEDULE_MIN_EVERY_SECONDS,
   DATABASE_SCHEDULE_MIN_TIMEOUT_MS,
   DATABASE_SCHEDULE_STATEMENT_MAX_BYTES,
+  DATABASE_WATCH_OPERATIONS,
+  isDatabaseWatchSchema,
+  isDatabaseWebhookEventPattern,
   type DatabaseExecutionUsagePage,
   type DatabaseSchedule,
   type DatabaseSchedulePage,
   type DatabaseScheduleDeleted,
   type DatabaseScheduleRunAccepted,
   type DatabaseScheduleRunPage,
+  type DatabaseWatch,
+  type DatabaseWatchDeleted,
+  type DatabaseWatchPage,
   type DatabaseWebhookCreated,
   type DatabaseWebhookDeleted,
   type DatabaseWebhookDeliveryPage,
-  type DatabaseWebhookEventType,
+  type DatabaseWebhookEventPattern,
   type DatabaseWebhookPage,
   type DatabaseWebhookReplayAccepted,
   type DatabaseWebhookTestResult,
@@ -323,11 +329,30 @@ export interface LocalMcpProductClient {
     readonly projectId: string;
     readonly environment?: DatabaseEnvironment;
   }): Promise<DatabaseWebhookPage>;
+  listDatabaseWatches(input: {
+    readonly projectId: string;
+    readonly environment?: DatabaseEnvironment;
+  }): Promise<DatabaseWatchPage>;
+  createDatabaseWatch(input: {
+    readonly projectId: string;
+    readonly environment: DatabaseEnvironment;
+    readonly schema?: string;
+    readonly table: string;
+    readonly columns: readonly string[];
+    readonly operations?: readonly (typeof DATABASE_WATCH_OPERATIONS)[number][];
+    readonly idempotencyKey: string;
+  }): Promise<DatabaseWatch>;
+  deleteDatabaseWatch(input: {
+    readonly projectId: string;
+    readonly environment: DatabaseEnvironment;
+    readonly watchId: string;
+    readonly idempotencyKey: string;
+  }): Promise<DatabaseWatchDeleted>;
   createDatabaseWebhook(input: {
     readonly projectId: string;
     readonly environment: DatabaseEnvironment;
     readonly url: string;
-    readonly eventTypes: readonly DatabaseWebhookEventType[];
+    readonly eventTypes: readonly DatabaseWebhookEventPattern[];
     readonly headers: Readonly<Record<string, string>>;
     readonly idempotencyKey: string;
   }): Promise<DatabaseWebhookCreated>;
@@ -539,6 +564,8 @@ interface ProjectDeleteInput {
 const identifier = z.string().min(1).max(256);
 const databaseEnvironment = z.enum(["dev", "prod"]);
 const databaseWebhookId = z.string().regex(/^whk_[a-z0-9]{20}$/u);
+const databaseWatchId = z.string().regex(/^pgcf_watch_[0-9a-f]{8}$/u);
+const databaseIdentifier = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,62}$/u);
 const databaseDeliveryId = z.string().regex(/^dlv_[0-9a-f]{20}$/u);
 const databaseScheduleName = z.string().regex(/^[a-z][a-z0-9_-]{0,62}$/u);
 /** Every product tool accepts the saved login to act as; it is an alias, never a credential. */
@@ -1125,6 +1152,75 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
   registerProductTool(
     server,
     dependencies,
+    "database_watch_list",
+    "List this project's database watches of one Dev or Prod environment (dev when omitted). Each watch shows its table, columns, operations and the event type data.<topic> it publishes. Listing wakes a sleeping database.",
+    z.object({ project_id: identifier, environment: databaseEnvironment.optional() }),
+    (client, input) =>
+      client.listDatabaseWatches({
+        projectId: input.project_id,
+        ...(input.environment === undefined ? {} : { environment: input.environment }),
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_watch_create",
+    "Publish row changes of one table of a Dev or Prod database as data events: only the listed columns (at most 32) of each insert, update or delete are published, with the event type data.<topic> returned by this call. Pass that event type to database_webhook_create. The table must exist as an ordinary table of the application, created by a deployed migration; a sleeping database wakes. Rows written before the watch exists are not published, and a published column must not be dropped while the watch exists. Requires confirmed: true and an idempotency key. Refused with project_budget_exceeded while the Stop budget is reached.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      schema: databaseIdentifier.refine(isDatabaseWatchSchema).optional(),
+      table: databaseIdentifier,
+      columns: z
+        .array(databaseIdentifier)
+        .min(1)
+        .max(32)
+        .refine((columns) => new Set(columns).size === columns.length),
+      operations: z
+        .array(z.enum(DATABASE_WATCH_OPERATIONS))
+        .min(1)
+        .max(3)
+        .refine((operations) => new Set(operations).size === operations.length)
+        .optional(),
+      idempotency_key: idempotencyKey,
+      confirmed: z.literal(true),
+    }),
+    (client, input) =>
+      client.createDatabaseWatch({
+        projectId: input.project_id,
+        environment: input.environment,
+        ...(input.schema === undefined ? {} : { schema: input.schema }),
+        table: input.table,
+        columns: input.columns,
+        ...(input.operations === undefined ? {} : { operations: input.operations }),
+        idempotencyKey: input.idempotency_key,
+      }),
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_watch_delete",
+    "Remove the capture trigger of one database watch: its table publishes no more data events. Destructive: requires confirmed: true and an idempotency key. Deleting an already deleted watch answers not found.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      watch_id: databaseWatchId,
+      idempotency_key: idempotencyKey,
+      confirmed: z.literal(true),
+    }),
+    (client, input) =>
+      client.deleteDatabaseWatch({
+        projectId: input.project_id,
+        environment: input.environment,
+        watchId: input.watch_id,
+        idempotencyKey: input.idempotency_key,
+      }),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
     "database_webhook_list",
     "List this project's database webhooks of one Dev or Prod environment (dev when omitted), without signing secrets. Each webhook lists its event types and header names only.",
     z.object({ project_id: identifier, environment: databaseEnvironment.optional() }),
@@ -1138,7 +1234,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_webhook_create",
-    "Subscribe one HTTPS receiver to database lifecycle events (database.created, ready, woke, slept, suspended, resized, deleted) of one Dev or Prod database. The signing secret is RETURNED EXACTLY ONCE: store it in a secret manager and never write it into files, notes, source, commit messages or later messages. Deliveries are signed, retried and dead-lettered when retries stop. At most five webhooks exist per project environment. Requires confirmed: true and an idempotency key; the same key with the same request returns the stored answer.",
+    "Subscribe one HTTPS receiver to database lifecycle events (database.created, ready, woke, slept, suspended, resized, deleted) of one Dev or Prod database, or to data events: data.<topic> for the rows of one watched table (the event type database_watch_create returns) or data.* for every watched table; a bare * never matches data events. The signing secret is RETURNED EXACTLY ONCE: store it in a secret manager and never write it into files, notes, source, commit messages or later messages. Deliveries are signed, retried and dead-lettered when retries stop. At most five webhooks exist per project environment. Requires confirmed: true and an idempotency key; the same key with the same request returns the stored answer.",
     z.object({
       project_id: identifier,
       environment: databaseEnvironment,
@@ -1146,7 +1242,18 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
         .string()
         .max(2048)
         .regex(/^https:\/\//u),
-      event_types: z.array(z.enum(DATABASE_WEBHOOK_EVENT_TYPES)).min(1).max(16),
+      event_types: z
+        .array(
+          z.union([
+            z.enum(DATABASE_WEBHOOK_EVENT_TYPES),
+            z
+              .string()
+              .regex(/^data\.(?:\*|[a-z][a-z0-9_]{0,47})$/u)
+              .refine(isDatabaseWebhookEventPattern),
+          ]),
+        )
+        .min(1)
+        .max(16),
       headers: z.record(z.string(), z.string()).optional(),
       idempotency_key: idempotencyKey,
       confirmed: z.literal(true),

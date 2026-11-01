@@ -1,4 +1,9 @@
+import { isDatabaseWatchTriggerName } from "./database-events.js";
 import { DatabaseMigrationAdmissionError } from "./database-migration-errors.js";
+import {
+  readMigrationCaptureTrigger,
+  type DatabaseMigrationCaptureTrigger,
+} from "./database-migration-capture.js";
 import {
   readMigrationSql,
   rejectMigrationSqlReferences,
@@ -11,6 +16,7 @@ import {
 
 export { DatabaseMigrationAdmissionError } from "./database-migration-errors.js";
 export type { DatabaseMigrationAdmissionReason } from "./database-migration-errors.js";
+export type { DatabaseMigrationCaptureTrigger } from "./database-migration-capture.js";
 export type { DatabaseMigrationRlsTarget } from "./database-migration-policies.js";
 
 const MAX_MIGRATION_COUNT = 128;
@@ -68,6 +74,16 @@ export function admitExpandOnlyMigrations(
       throw new DatabaseMigrationAdmissionError("invalid");
     }
     const statements = parseDatabaseMigrationStatements(sql);
+    // The watch service alone creates triggers under its reserved names, so the watch count stays exact.
+    if (
+      statements.some(
+        (statement) =>
+          statement.captureTrigger !== undefined &&
+          isDatabaseWatchTriggerName(statement.captureTrigger.trigger),
+      )
+    ) {
+      throw new DatabaseMigrationAdmissionError("unsupported");
+    }
     statementCount += statements.length;
     return Object.freeze({ path: migration.path, statementCount: statements.length });
   });
@@ -77,6 +93,7 @@ export function admitExpandOnlyMigrations(
 export interface DatabaseMigrationStatement {
   readonly sql: string;
   readonly rlsTarget?: DatabaseMigrationRlsTarget;
+  readonly captureTrigger?: DatabaseMigrationCaptureTrigger;
 }
 
 export function parseDatabaseMigrationStatements(
@@ -94,6 +111,11 @@ export function parseDatabaseMigrationStatements(
   if (statements.length === 0) throw new DatabaseMigrationAdmissionError("invalid");
   return Object.freeze(
     statements.map((statement) => {
+      const capture = readMigrationCaptureTrigger(statement.tokens);
+      if (capture !== undefined) {
+        rejectMigrationSqlReferences(capture.header);
+        return Object.freeze({ sql: statement.sql, captureTrigger: capture.target });
+      }
       // Provider references are forbidden throughout executable policy SQL, while
       // the native helper exception is narrowed by the policy reader below.
       rejectMigrationSqlReferences(statement.tokens, true);
