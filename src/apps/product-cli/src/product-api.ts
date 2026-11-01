@@ -21,6 +21,13 @@ import {
 } from "@ohmyhost/contracts/database-access";
 import { assertDatabaseCompute, type DatabaseCompute } from "@ohmyhost/contracts/database-compute";
 import {
+  DATABASE_TABLE_COLUMN_TYPES,
+  DATABASE_TABLE_DEFAULTS,
+  isDatabaseTableIdentifier,
+  type DatabaseTableColumnType,
+  type DatabaseTableDefault,
+} from "@ohmyhost/contracts/database-tables";
+import {
   assertDatabaseExecutionUsagePage,
   assertDatabaseSchedule,
   assertDatabaseSchedulePage,
@@ -162,6 +169,7 @@ import {
   createProjectDatabaseWatch,
   listProjectDatabaseWatches,
   deleteProjectDatabaseWatch,
+  createProjectDatabaseTable,
   listProjectDatabaseWebhookDeliveries,
   replayProjectDatabaseWebhookDelivery,
   setProjectDatabaseSchedule,
@@ -213,6 +221,39 @@ export interface ProjectCreateInput {
   readonly devAccessMode?: "protected" | "public";
   readonly region?: "us" | "eu";
   readonly idempotencyKey: string;
+}
+
+/** One column of a table to create; nullable, identity and default are optional as the REST body allows. */
+export interface DatabaseTableColumnInput {
+  readonly name: string;
+  readonly type: DatabaseTableColumnType;
+  readonly nullable?: boolean;
+  readonly identity?: boolean;
+  readonly default?: DatabaseTableDefault;
+}
+
+export interface DatabaseTableCreateInput {
+  readonly table: string;
+  readonly columns: readonly DatabaseTableColumnInput[];
+  readonly primaryKey: readonly string[];
+}
+
+/** The created or identical existing table, every column with its concrete nullability and default. */
+export interface DatabaseTableAnswer {
+  readonly table: {
+    readonly environment: "dev" | "prod";
+    readonly schema: "public";
+    readonly table: string;
+    readonly columns: readonly {
+      readonly name: string;
+      readonly type: DatabaseTableColumnType;
+      readonly nullable: boolean;
+      readonly identity: boolean;
+      readonly default: DatabaseTableDefault | null;
+    }[];
+    readonly primary_key: readonly string[];
+    readonly created: boolean;
+  };
 }
 
 export interface ProductApi {
@@ -376,6 +417,12 @@ export interface ProductApi {
     readonly idempotencyKey: string;
     readonly watchId: string;
   }): Promise<DatabaseWatchDeleted>;
+  createProjectDatabaseTable(input: {
+    readonly projectId: string;
+    readonly environment: "dev" | "prod";
+    readonly idempotencyKey: string;
+    readonly request: DatabaseTableCreateInput;
+  }): Promise<DatabaseTableAnswer>;
   listProjectDatabaseWebhookDeliveries(input: {
     readonly projectId: string;
     readonly environment: "dev" | "prod";
@@ -593,8 +640,53 @@ export interface ProductApi {
 /** A webhook answer that names another environment, webhook or delivery than the request did. */
 const WEBHOOK_SCOPE_MISMATCH = "Webhook response scope mismatch";
 const WATCH_SCOPE_MISMATCH = "Watch response scope mismatch";
+const TABLE_SCOPE_MISMATCH = "Table response scope mismatch";
 /** A schedule answer that names another environment or schedule than the request did. */
 const SCHEDULE_SCOPE_MISMATCH = "Schedule response scope mismatch";
+
+/** The REST answer read exactly: no extra keys, closed column types and defaults, keys among the columns. */
+export function assertDatabaseTableAnswer(value: unknown): asserts value is DatabaseTableAnswer {
+  const table = isRecordValue(value) ? value["table"] : undefined;
+  const columns = isRecordValue(table) ? table["columns"] : undefined;
+  const primaryKey = isRecordValue(table) ? table["primary_key"] : undefined;
+  if (
+    !isRecordValue(table) ||
+    !hasExactKeys(table, ["environment", "schema", "table", "columns", "primary_key", "created"]) ||
+    (table["environment"] !== "dev" && table["environment"] !== "prod") ||
+    table["schema"] !== "public" ||
+    !isDatabaseTableIdentifier(table["table"]) ||
+    typeof table["created"] !== "boolean" ||
+    !Array.isArray(columns) ||
+    columns.length < 1 ||
+    !columns.every(isDatabaseTableAnswerColumn) ||
+    !Array.isArray(primaryKey) ||
+    !primaryKey.every((name: unknown) =>
+      columns.some((column: Record<string, unknown>) => column["name"] === name),
+    )
+  )
+    throw new TypeError("Invalid database table answer");
+}
+
+function isDatabaseTableAnswerColumn(value: unknown): boolean {
+  return (
+    isRecordValue(value) &&
+    hasExactKeys(value, ["name", "type", "nullable", "identity", "default"]) &&
+    isDatabaseTableIdentifier(value["name"]) &&
+    (DATABASE_TABLE_COLUMN_TYPES as readonly unknown[]).includes(value["type"]) &&
+    typeof value["nullable"] === "boolean" &&
+    typeof value["identity"] === "boolean" &&
+    (value["default"] === null ||
+      (DATABASE_TABLE_DEFAULTS as readonly unknown[]).includes(value["default"]))
+  );
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+}
 
 export class GeneratedSdkProductApi implements ProductApi {
   readonly #client: OhMyHostClient;
@@ -970,6 +1062,30 @@ export class GeneratedSdkProductApi implements ProductApi {
     );
     assertDatabaseWatchDeleted(value);
     if (value.id !== input.watchId) throw new TypeError(WATCH_SCOPE_MISMATCH);
+    return value;
+  }
+
+  public async createProjectDatabaseTable(
+    input: Parameters<ProductApi["createProjectDatabaseTable"]>[0],
+  ): Promise<DatabaseTableAnswer> {
+    const value = await createProjectDatabaseTable(
+      {
+        project_id: input.projectId,
+        "Idempotency-Key": input.idempotencyKey,
+        databaseTableCreateRequest: {
+          environment: input.environment,
+          table: input.request.table,
+          columns: [...input.request.columns],
+          ...(input.request.primaryKey.length === 0
+            ? {}
+            : { primary_key: [...input.request.primaryKey] }),
+        },
+      },
+      { client: this.#client },
+    );
+    assertDatabaseTableAnswer(value);
+    if (value.table.environment !== input.environment || value.table.table !== input.request.table)
+      throw new TypeError(TABLE_SCOPE_MISMATCH);
     return value;
   }
 

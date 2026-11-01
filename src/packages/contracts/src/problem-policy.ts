@@ -227,6 +227,20 @@ export const PROBLEM_POLICY = {
       "A migration already attaches a capture trigger to this table: keep it and skip the watch, or remove it from the migrations, deploy and create the watch again. A table carries one capture trigger.",
     title: "Table already has a capture trigger",
   },
+  database_table_conflict: {
+    status: 409,
+    retryable: false,
+    action:
+      "A table with this name already exists with another definition. Choose another table name, or create the table again with the same columns, types, nullability, identity, defaults and primary key it has.",
+    title: "Table already exists with another definition",
+  },
+  database_table_limit: {
+    status: 409,
+    retryable: false,
+    action:
+      "This database already holds the maximum number of tables in its public schema, so no table can be added. Use an existing table, or remove a table you no longer need through a deployed migration, then create the table again.",
+    title: "Database table limit reached",
+  },
   project_notes_conflict: {
     status: 409,
     retryable: false,

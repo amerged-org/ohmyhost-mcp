@@ -962,6 +962,75 @@ export type DatabaseWebhookEventType =
  */
 export type DatabaseWebhookEventPattern = DatabaseWebhookEventType | string;
 
+export type DatabaseTableCreateRequest = {
+  environment: "dev" | "prod";
+  /**
+   * Name of the new table in the public schema. Lower-case, not a PostgreSQL reserved word and not starting with pg_.
+   */
+  table: string;
+  /**
+   * Columns in the order written. Names are unique, and at most one column is an identity column.
+   */
+  columns: Array<DatabaseTableColumnRequest>;
+  /**
+   * Columns of the primary key, each one of the table's columns. Identity and primary key columns are NOT NULL; omitted when the table has no primary key.
+   */
+  primary_key?: Array<string>;
+};
+
+export type DatabaseTableColumnRequest = {
+  name: string;
+  type: DatabaseTableColumnType;
+  /**
+   * Whether the column accepts NULL. Identity and primary key columns never do.
+   */
+  nullable?: boolean;
+  /**
+   * Generated always as identity. Only integer and bigint columns can be identity columns, and an identity column has no default.
+   */
+  identity?: boolean;
+  /**
+   * now is now() on a timestamptz column; uuid is gen_random_uuid() on a uuid column. Omitted when the column has no default.
+   */
+  default?: "now" | "uuid";
+};
+
+export type DatabaseTableColumnType =
+  | "text"
+  | "integer"
+  | "bigint"
+  | "boolean"
+  | "numeric"
+  | "double precision"
+  | "timestamptz"
+  | "date"
+  | "uuid"
+  | "jsonb";
+
+export type DatabaseTableColumn = {
+  name: string;
+  type: DatabaseTableColumnType;
+  nullable: boolean;
+  identity: boolean;
+  default: "now" | "uuid" | null;
+};
+
+export type DatabaseTable = {
+  environment: "dev" | "prod";
+  schema: "public";
+  table: string;
+  columns: Array<DatabaseTableColumn>;
+  primary_key: Array<string>;
+  /**
+   * true when this request created the table, false when an identical table already existed.
+   */
+  created: boolean;
+};
+
+export type DatabaseTableCreated = {
+  table: DatabaseTable;
+};
+
 export type DatabaseWatchCreateRequest = {
   environment: "dev" | "prod";
   /**
@@ -1661,6 +1730,8 @@ export type ProblemDetails = {
     | "database_watch_column_unavailable"
     | "database_watch_events_unavailable"
     | "database_watch_conflict"
+    | "database_table_conflict"
+    | "database_table_limit"
     | "compute_change_pending"
     | "compute_change_conflict"
     | "billing_purchase_conflict"
@@ -8181,6 +8252,76 @@ export type RevokeProjectDatabaseAccessResponses = {
 
 export type RevokeProjectDatabaseAccessResponse =
   RevokeProjectDatabaseAccessResponses[keyof RevokeProjectDatabaseAccessResponses];
+
+export type CreateProjectDatabaseTableData = {
+  body: DatabaseTableCreateRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/database/tables";
+};
+
+export type CreateProjectDatabaseTableErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateProjectDatabaseTableError =
+  CreateProjectDatabaseTableErrors[keyof CreateProjectDatabaseTableErrors];
+
+export type CreateProjectDatabaseTableResponses = {
+  /**
+   * The table already exists with the same columns, types, nullability, identity, defaults and primary key.
+   */
+  200: DatabaseTableCreated;
+  /**
+   * The table this request created.
+   */
+  201: DatabaseTableCreated;
+};
+
+export type CreateProjectDatabaseTableResponse =
+  CreateProjectDatabaseTableResponses[keyof CreateProjectDatabaseTableResponses];
 
 export type ListProjectDatabaseWatchesData = {
   body?: never;

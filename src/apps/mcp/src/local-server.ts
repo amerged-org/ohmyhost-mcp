@@ -82,6 +82,15 @@ import {
   type ProfileRequestInput,
 } from "@ohmyhost/product-cli";
 import { createOhmyhostMcpServer } from "./index.js";
+import type { DatabaseTableAnswer, DatabaseTableColumnInput } from "@ohmyhost/product-cli";
+import {
+  DATABASE_TABLE_COLUMN_TYPES,
+  DATABASE_TABLE_DEFAULTS,
+  DATABASE_TABLE_MAX_COLUMNS,
+  DATABASE_TABLE_MAX_PRIMARY_KEY_COLUMNS,
+  isDatabaseTableIdentifier,
+  parseDatabaseTableCreateRequest,
+} from "@ohmyhost/contracts/database-tables";
 
 import type {
   CurrentIdentity,
@@ -329,6 +338,14 @@ export interface LocalMcpProductClient {
     readonly projectId: string;
     readonly environment?: DatabaseEnvironment;
   }): Promise<DatabaseWebhookPage>;
+  createDatabaseTable(input: {
+    readonly projectId: string;
+    readonly environment: DatabaseEnvironment;
+    readonly table: string;
+    readonly columns: readonly DatabaseTableColumnInput[];
+    readonly primaryKey?: readonly string[];
+    readonly idempotencyKey: string;
+  }): Promise<DatabaseTableAnswer>;
   listDatabaseWatches(input: {
     readonly projectId: string;
     readonly environment?: DatabaseEnvironment;
@@ -567,6 +584,7 @@ const databaseWebhookId = z.string().regex(/^whk_[a-z0-9]{20}$/u);
 const databaseWatchId = z.string().regex(/^pgcf_watch_[0-9a-f]{8}$/u);
 const databaseIdentifier = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,62}$/u);
 const databaseDeliveryId = z.string().regex(/^dlv_[0-9a-f]{20}$/u);
+const databaseTableIdentifier = z.string().refine(isDatabaseTableIdentifier);
 const databaseScheduleName = z.string().regex(/^[a-z][a-z0-9_-]{0,62}$/u);
 /** Every product tool accepts the saved login to act as; it is an alias, never a credential. */
 const profileName = z
@@ -1217,6 +1235,53 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
         idempotencyKey: input.idempotency_key,
       }),
     destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_table_create",
+    "Create one ordinary table in the public schema of a Dev or Prod database, as the migration role with the same access as migration tables, so a database_watch_create can attach later. Each column has a lower-case name, a type (text, integer, bigint, boolean, numeric, double precision, timestamptz, date, uuid or jsonb) and optional nullable, identity (integer or bigint only) and default (now for timestamptz, uuid for uuid); at most 64 columns, 8 primary-key columns and 100 tables per database. An identical repeat answers created: false; a table of the same name with another definition is refused with database_table_conflict. Tables created this way are not in the repository's migration files: record them in project notes and add a migration when the source should reproduce the database. Requires confirmed: true and an idempotency key. Refused with project_budget_exceeded while the Stop budget is reached.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      table: databaseTableIdentifier,
+      columns: z
+        .array(
+          z.object({
+            name: databaseTableIdentifier,
+            type: z.enum(DATABASE_TABLE_COLUMN_TYPES),
+            nullable: z.boolean().optional(),
+            identity: z.boolean().optional(),
+            default: z.enum(DATABASE_TABLE_DEFAULTS).optional(),
+          }),
+        )
+        .min(1)
+        .max(DATABASE_TABLE_MAX_COLUMNS),
+      primary_key: z
+        .array(databaseTableIdentifier)
+        .min(1)
+        .max(DATABASE_TABLE_MAX_PRIMARY_KEY_COLUMNS)
+        .optional(),
+      idempotency_key: idempotencyKey,
+      confirmed: z.literal(true),
+    }),
+    (client, input) => {
+      // The contract checks the column types, identity and defaults, unique names and key columns before any call.
+      const request = parseDatabaseTableCreateRequest({
+        table: input.table,
+        columns: input.columns,
+        ...(input.primary_key === undefined ? {} : { primaryKey: input.primary_key }),
+      });
+      return client.createDatabaseTable({
+        projectId: input.project_id,
+        environment: input.environment,
+        table: request.table,
+        columns: input.columns,
+        ...(request.primaryKey.length === 0 ? {} : { primaryKey: request.primaryKey }),
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
   );
   registerProductTool(
     server,

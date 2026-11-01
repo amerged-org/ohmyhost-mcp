@@ -119,6 +119,7 @@ import {
   createProjectDatabaseWebhook,
   listProjectDatabaseWebhooks,
   deleteProjectDatabaseWebhook,
+  createProjectDatabaseTable,
   createProjectDatabaseWatch,
   listProjectDatabaseWatches,
   deleteProjectDatabaseWatch,
@@ -184,6 +185,8 @@ import {
   type LocalProfile,
   type ProfileRegistry,
   type WorkspaceSession,
+  type DatabaseTableAnswer,
+  assertDatabaseTableAnswer,
 } from "@ohmyhost/product-cli";
 
 export class OperationEventsUnavailableError extends Error {
@@ -890,6 +893,30 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
       value.environment === input.environment &&
         value.table === input.table &&
         value.schema === (input.schema ?? DATABASE_WATCH_DEFAULT_SCHEMA),
+    );
+    return value;
+  }
+  public async createDatabaseTable(
+    input: Parameters<LocalMcpProductClient["createDatabaseTable"]>[0],
+  ): Promise<DatabaseTableAnswer> {
+    const value = await createProjectDatabaseTable(
+      {
+        project_id: input.projectId,
+        "Idempotency-Key": input.idempotencyKey,
+        databaseTableCreateRequest: {
+          environment: input.environment,
+          table: input.table,
+          columns: [...input.columns],
+          ...(input.primaryKey === undefined || input.primaryKey.length === 0
+            ? {}
+            : { primary_key: [...input.primaryKey] }),
+        },
+      },
+      { client: this.#client },
+    );
+    assertDatabaseTableAnswer(value);
+    requireScope(
+      value.table.environment === input.environment && value.table.table === input.table,
     );
     return value;
   }

@@ -14,6 +14,10 @@ import {
   type DatabaseWebhookEventPattern,
 } from "@ohmyhost/contracts/database-events";
 import {
+  DATABASE_TABLE_MAX_PRIMARY_KEY_COLUMNS,
+  isDatabaseTableIdentifier,
+} from "@ohmyhost/contracts/database-tables";
+import {
   databaseSizeForMemory,
   type DatabaseComputeSelection,
 } from "@ohmyhost/contracts/database-sizes";
@@ -412,6 +416,17 @@ export type ProductCliCommand =
       readonly projectId: string;
       readonly environment: "dev" | "prod";
       readonly request: DatabaseWatchRequest;
+      readonly idempotencyKey: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-table-create";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly table: string;
+      readonly columnsFile: string;
+      readonly primaryKey: readonly string[];
       readonly idempotencyKey: string;
       readonly yes: true;
       readonly credentialStore: "native";
@@ -1033,6 +1048,7 @@ export type RecognizedCommandLabel =
   | "database watch create"
   | "database watch list"
   | "database watch delete"
+  | "database table create"
   | "database webhook create"
   | "database webhook list"
   | "database webhook get"
@@ -1209,6 +1225,8 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
       if (values[1] === "list") return "database watch list";
       if (values[1] === "delete") return "database watch delete";
     }
+    if (value === "database" && values[0] === "table" && values[1] === "create")
+      return "database table create";
     if (value === "database" && values[0] === "webhook") {
       if (values[1] === "create") return "database webhook create";
       if (values[1] === "list") return "database webhook list";
@@ -2177,6 +2195,51 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
         projectId,
         environment,
         watchId: contractValue(() => parseDatabaseWatchId(watchId)),
+        idempotencyKey,
+        yes: true,
+        credentialStore,
+      };
+    }
+    throw new InvalidCommandError();
+  }
+  if (first === "database" && values[0] === "table") {
+    values.shift();
+    const subcommand = values.shift();
+    if (subcommand === "create") {
+      if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, [
+        "--project",
+        "--environment",
+        "--table",
+        "--columns-file",
+        "--primary-key",
+        "--idempotency-key",
+      ]);
+      const projectId = options["--project"],
+        environment = options["--environment"],
+        table = options["--table"],
+        columnsFile = options["--columns-file"],
+        primaryKey = options["--primary-key"],
+        idempotencyKey = options["--idempotency-key"];
+      const keyNames = primaryKey === undefined ? [] : primaryKey.split(",");
+      if (
+        !isValue(projectId) ||
+        !isValue(idempotencyKey) ||
+        !isValue(table) ||
+        !isValue(columnsFile) ||
+        (primaryKey !== undefined && !keyNames.every(isDatabaseTableIdentifier)) ||
+        keyNames.length > DATABASE_TABLE_MAX_PRIMARY_KEY_COLUMNS ||
+        !isDatabaseTableIdentifier(table) ||
+        (environment !== "dev" && environment !== "prod")
+      )
+        throw new InvalidCommandError();
+      return {
+        kind: "database-table-create",
+        projectId,
+        environment,
+        table,
+        columnsFile,
+        primaryKey: keyNames,
         idempotencyKey,
         yes: true,
         credentialStore,

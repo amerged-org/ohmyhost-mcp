@@ -60,6 +60,8 @@ import type {
   CreateOrganizationResponses,
   CreateProjectDatabaseAccessErrors,
   CreateProjectDatabaseAccessResponses,
+  CreateProjectDatabaseTableErrors,
+  CreateProjectDatabaseTableResponses,
   CreateProjectDatabaseWatchErrors,
   CreateProjectDatabaseWatchResponses,
   CreateProjectDatabaseWebhookErrors,
@@ -79,6 +81,7 @@ import type {
   CreateWorkspaceMailDomainRequest,
   CreateWorkspaceMailDomainResponses,
   DatabaseScheduleSetRequest,
+  DatabaseTableCreateRequest,
   DatabaseWatchCreateRequest,
   DatabaseWebhookCreateRequest,
   DeclareApplicationDomainIdentityErrors,
@@ -4763,6 +4766,57 @@ export const revokeProjectDatabaseAccess = <ThrowOnError extends boolean = true>
     url: "/v1/projects/{project_id}/database/access/{access_id}",
     ...options,
     ...params,
+  });
+};
+
+/**
+ * Create a table in the project's database
+ *
+ * Creates one ordinary table in the public schema of one environment's database, with the columns and the primary key the request names. Repeating an identical request answers the existing table with 200; a table of the same name with another definition is refused with database_table_conflict (409). The request wakes a sleeping database. A reached Stop budget refuses with project_budget_exceeded (402). At most 100 tables exist per database.
+ */
+export const createProjectDatabaseTable = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    databaseTableCreateRequest: DatabaseTableCreateRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateProjectDatabaseTableResponses,
+  CreateProjectDatabaseTableErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "databaseTableCreateRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateProjectDatabaseTableResponses,
+    CreateProjectDatabaseTableErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/tables",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
   });
 };
 

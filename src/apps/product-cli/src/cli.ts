@@ -68,7 +68,15 @@ import {
   type CurrentCredential,
   type StoredCredential,
 } from "./credential-store.js";
-import type { ProductApi } from "./product-api.js";
+import type {
+  DatabaseTableColumnInput,
+  DatabaseTableCreateInput,
+  ProductApi,
+} from "./product-api.js";
+import {
+  parseDatabaseTableCreateRequest,
+  type DatabaseTableColumn,
+} from "@ohmyhost/contracts/database-tables";
 import {
   defaultProfileName,
   isProfileUserId,
@@ -425,6 +433,8 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost database watch list --project ULID [--environment dev|prod] --json (dev when omitted; a sleeping database wakes)",
   "database watch delete":
     "ohmyhost database watch delete --project ULID --environment dev|prod --watch ID --idempotency-key KEY --yes --json",
+  "database table create":
+    "ohmyhost database table create --project ULID --environment dev|prod --table NAME --columns-file PATH [--primary-key COL[,COL]] --idempotency-key KEY --yes --json (the table is created in the public schema as the migration role, with the same access as migration tables, so a database watch can attach later; the columns file is a UTF-8 JSON array of 1 to 64 column objects, at most 64 KiB, each with name, type and optional nullable, identity and default; types: text, integer, bigint, boolean, numeric, double precision, timestamptz, date, uuid, jsonb; identity needs integer or bigint; default now needs timestamptz and default uuid needs uuid; identical repeats answer created false; at most 100 tables, 64 columns per table)",
   "database webhook create":
     "ohmyhost database webhook create --project ULID --environment dev|prod --url HTTPS_URL --event-types TYPE[,TYPE] [--headers-file PATH] --idempotency-key KEY --yes --json (the signing secret is shown once in this answer; types: database.created, database.ready, database.woke, database.slept, database.suspended, database.resized, database.deleted, data.<topic> for the rows of one watched table printed by database watch create, or data.* for every watched table; a bare * is not accepted and does not include data events; the headers file is a UTF-8 JSON object of at most 8 KiB)",
   "database webhook list":
@@ -664,6 +674,9 @@ const SCHEDULE_STATEMENTS_FILE_INVALID_ACTION =
 
 const SCHEDULE_INVALID_ACTION =
   "Check the schedule request: --cron takes five fields in UTC (9 to 120 characters), or --every-seconds takes 60 to 2678400, never both; --timeout-ms takes 1000 to 30000; the statements file must hold 1 to 20 non-blank SQL strings of at most 16 KiB each and 64 KiB in total. Nothing was saved; fix it and run the command again.";
+
+const COLUMNS_FILE_INVALID_ACTION =
+  "Put one JSON array of 1 to 64 column objects in the file named by --columns-file: UTF-8, at most 64 KiB, each with a lower-case name, a type (text, integer, bigint, boolean, numeric, double precision, timestamptz, date, uuid or jsonb) and optional nullable, identity (integer or bigint only) and default (now for timestamptz, uuid for uuid). Each --primary-key column must be one of them, at most 8 names. Nothing was created; fix the file or the flags and run the command again.";
 
 const STATEMENT_FILE_INVALID_ACTION =
   "Put one INSERT, UPDATE or DELETE statement that starts with that keyword (no leading comment or WITH), UTF-8, at most 64 KiB, in the file named by --statement-file, then rerun with the same --idempotency-key.";
@@ -1203,6 +1216,8 @@ export class ProductCli {
         return await this.listDatabaseWatches(command, signal);
       if (command.kind === "database-watch-delete")
         return await this.deleteDatabaseWatch(command, signal);
+      if (command.kind === "database-table-create")
+        return await this.createDatabaseTable(command, signal);
       if (command.kind === "database-webhook-create")
         return await this.createDatabaseWebhook(command, signal);
       if (command.kind === "database-webhook-list")
@@ -2007,6 +2022,22 @@ export class ProductCli {
       watchId: command.watchId,
     });
     return success("database watch delete", { status: "succeeded", deleted });
+  }
+
+  /** The columns file and the key are checked before any request; a repeat answers the same table with created false. */
+  private async createDatabaseTable(
+    command: Extract<ProductCliCommand, { kind: "database-table-create" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const request = await tableCreateRequest(command);
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const answer = await api.createProjectDatabaseTable({
+      projectId: command.projectId,
+      environment: command.environment,
+      idempotencyKey: command.idempotencyKey,
+      request,
+    });
+    return success("database table create", { status: "succeeded", table: answer.table });
   }
 
   /** The signing secret is returned by create only; every other answer carries no secret. */
@@ -3479,6 +3510,49 @@ const scheduleSetRequest = async (
   }
 };
 
+/**
+ * The table of `database table create`: the columns file is a UTF-8 JSON array, and the table, the
+ * columns and the key are checked by the contract the service uses. A refused file sends nothing.
+ */
+const tableCreateRequest = async (
+  command: Extract<ProductCliCommand, { kind: "database-table-create" }>,
+): Promise<DatabaseTableCreateInput> => {
+  const columnsFailure = () =>
+    new ProductCliFailure(2, "columns_file_invalid", false, COLUMNS_FILE_INVALID_ACTION);
+  const columns = await readBoundedUtf8File(command.columnsFile, 65_536, columnsFailure).then(
+    (text: string): unknown => {
+      try {
+        return JSON.parse(text) as unknown;
+      } catch {
+        throw columnsFailure();
+      }
+    },
+  );
+  try {
+    const parsed = parseDatabaseTableCreateRequest({
+      table: command.table,
+      columns,
+      ...(command.primaryKey.length === 0 ? {} : { primaryKey: command.primaryKey }),
+    });
+    return {
+      table: parsed.table,
+      columns: parsed.columns.map(tableColumnInput),
+      primaryKey: parsed.primaryKey,
+    };
+  } catch {
+    throw columnsFailure();
+  }
+};
+
+/** The checked column as the REST body names it; a default that is not set is left out, not sent as null. */
+const tableColumnInput = (column: DatabaseTableColumn): DatabaseTableColumnInput => ({
+  name: column.name,
+  type: column.type,
+  nullable: column.nullable,
+  identity: column.identity,
+  ...(column.default === null ? {} : { default: column.default }),
+});
+
 const psqlUnavailable = (): CliResult =>
   failure(
     "database psql",
@@ -3586,6 +3660,7 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "database-watch-create") return "database watch create";
   if (command.kind === "database-watch-list") return "database watch list";
   if (command.kind === "database-watch-delete") return "database watch delete";
+  if (command.kind === "database-table-create") return "database table create";
   if (command.kind === "database-webhook-create") return "database webhook create";
   if (command.kind === "database-webhook-list") return "database webhook list";
   if (command.kind === "database-webhook-get") return "database webhook get";

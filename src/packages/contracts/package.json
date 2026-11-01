@@ -132,6 +132,11 @@
       "types": "./dist/database-events.d.ts",
       "import": "./dist/database-events.js"
     },
+    "./database-tables": {
+      "source": "./src/database-tables.ts",
+      "types": "./dist/database-tables.d.ts",
+      "import": "./dist/database-tables.js"
+    },
     "./functions": {
       "source": "./src/functions.ts",
       "types": "./dist/functions.d.ts",
