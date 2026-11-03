@@ -56,6 +56,11 @@ export interface OhmyhostConfig {
     jurisdiction: "us" | "eu";
     public: false;
   }>;
+  /** `jurisdiction` is required when `enabled` is true; it has no default. */
+  readonly ai?: Readonly<{
+    enabled: boolean;
+    jurisdiction?: "eu" | "any";
+  }>;
   readonly functions?: Readonly<{ crons: readonly string[] }>;
   readonly credits?: Readonly<{
     monthly_budget: number;
@@ -123,6 +128,14 @@ export function parseOhmyhostConfig(value: unknown): OhmyhostConfig {
             provider: input.storage.provider,
             jurisdiction: input.storage.jurisdiction,
             public: input.storage.public,
+          }),
+        }),
+    ...(input.ai === undefined
+      ? {}
+      : {
+          ai: Object.freeze({
+            enabled: input.ai.enabled,
+            ...(input.ai.jurisdiction === undefined ? {} : { jurisdiction: input.ai.jurisdiction }),
           }),
         }),
     ...(input.functions === undefined

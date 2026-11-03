@@ -209,6 +209,7 @@ export function viteCompanionRequired(configuration: OhmyhostConfig): boolean {
     configuration.database?.enabled === true ||
     configuration.auth?.provider === "better-auth" ||
     configuration.mail?.enabled === true ||
+    configuration.ai?.enabled === true ||
     configuration.storage !== undefined ||
     (configuration.functions?.crons.length ?? 0) > 0
   );
@@ -637,12 +638,19 @@ function runtimeModeAdmitted(
         configuration.storage === undefined &&
         configuration.database?.enabled !== true &&
         configuration.mail?.enabled !== true &&
+        configuration.ai?.enabled !== true &&
         configuration.auth?.provider !== "better-auth")
     );
   if (framework === "nextjs") return mode === "edge";
   if (framework === "vite-static")
     return mode === (viteCompanionRequired(configuration) ? "edge" : "static");
-  return mode === "edge" || (mode === "static" && !crons && configuration.storage === undefined);
+  return (
+    mode === "edge" ||
+    (mode === "static" &&
+      !crons &&
+      configuration.storage === undefined &&
+      configuration.ai?.enabled !== true)
+  );
 }
 
 function betterAuthFindings(

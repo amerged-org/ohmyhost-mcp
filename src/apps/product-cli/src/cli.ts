@@ -616,7 +616,7 @@ export const invalidCommandAction = (argv: readonly string[], commandPrefix: str
     if (name !== undefined && !isUserSecretName(name, action))
       return action === "set"
         ? "Choose a customer secret name of at most 128 uppercase letters, digits and underscores, starting with a letter. OHMYHOST_* and DATABASE_URL, HYPERDRIVE, BETTER_AUTH_SECRET, BETTER_AUTH_URL, ASSETS, FILES, IMAGES and STORAGE are reserved for the platform. Rename the application's own variable and its source references; platform bindings are installed automatically. Nothing was sent; changing only the idempotency key will not help."
-        : "Choose an existing customer secret name of at most 128 uppercase letters, digits and underscores, starting with a letter. The installed platform keys OHMYHOST_STORAGE_KEY, OHMYHOST_MAIL_KEY and BETTER_AUTH_SECRET cannot be deleted. Older reserved-name collisions can be removed with secret delete; deployed platform keys stay managed by ohmyho.st. Nothing was sent; changing only the idempotency key will not help.";
+        : "Choose an existing customer secret name of at most 128 uppercase letters, digits and underscores, starting with a letter. The installed platform keys OHMYHOST_STORAGE_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_AI_KEY and BETTER_AUTH_SECRET cannot be deleted. Older reserved-name collisions can be removed with secret delete; deployed platform keys stay managed by ohmyho.st. Nothing was sent; changing only the idempotency key will not help.";
   }
   const usage = Object.hasOwn(HELP_USAGE, label)
     ? HELP_USAGE[label as CustomerCommandLabel].split("\n")[0]

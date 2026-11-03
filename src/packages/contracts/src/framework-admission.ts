@@ -509,8 +509,8 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
         text: {
           nextjs: "runtime.mode: edge",
           "vite-static":
-            "runtime.mode: edge with src/ohmyhost/companion.ts when database, auth, mail, storage or functions.crons is set, and static otherwise",
-          "tanstack-start": "runtime.mode: edge, or static without functions.crons and storage",
+            "runtime.mode: edge with src/ohmyhost/companion.ts when database, auth, mail, ai, storage or functions.crons is set, and static otherwise",
+          "tanstack-start": "runtime.mode: edge, or static without functions.crons, storage and ai",
           astro: "runtime.mode: static for prerendered sites, or edge with the Cloudflare adapter",
         },
       },
@@ -580,7 +580,7 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
   companion_entry_required: {
     paths: ["module"],
     template:
-      '"{{path}}" is missing. A Vite app with runtime.mode: edge or with database, auth, mail, storage or functions.crons needs this Worker module with export default { fetch }. Add it, or use runtime.mode: static without those settings; commit and push the change, then plan the new commit.',
+      '"{{path}}" is missing. A Vite app with runtime.mode: edge or with database, auth, mail, ai, storage or functions.crons needs this Worker module with export default { fetch }. Add it, or use runtime.mode: static without those settings; commit and push the change, then plan the new commit.',
   },
   worker_module_required: {
     paths: ["module"],
