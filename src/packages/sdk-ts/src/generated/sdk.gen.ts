@@ -6105,11 +6105,12 @@ export const streamOperationEvents = <ThrowOnError extends boolean = true>(
 /**
  * List audit events
  *
- * Returns events visible to the authenticated organization in stable descending order.
+ * Returns events visible in an authorized workspace in stable descending order. Select a workspace when the credential has multiple workspaces and no active workspace context.
  */
 export const listAuditEvents = <ThrowOnError extends boolean = true>(
   parameters?: {
     "X-Request-Id"?: string;
+    organization_id?: Ulid;
     project_id?: Ulid;
     operation_id?: Ulid;
     cursor?: string;
@@ -6123,6 +6124,7 @@ export const listAuditEvents = <ThrowOnError extends boolean = true>(
       {
         args: [
           { in: "headers", key: "X-Request-Id" },
+          { in: "query", key: "organization_id" },
           { in: "query", key: "project_id" },
           { in: "query", key: "operation_id" },
           { in: "query", key: "cursor" },

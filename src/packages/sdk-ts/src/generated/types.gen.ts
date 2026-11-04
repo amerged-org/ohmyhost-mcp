@@ -10189,6 +10189,10 @@ export type ListAuditEventsData = {
   path?: never;
   query?: {
     /**
+     * Authorized workspace to query; defaults to the active or only workspace.
+     */
+    organization_id?: Ulid;
+    /**
      * Restricts the page to one visible project.
      */
     project_id?: Ulid;

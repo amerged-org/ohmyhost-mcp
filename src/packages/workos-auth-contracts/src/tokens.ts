@@ -56,6 +56,7 @@ export interface WorkosConnectUserClaims {
   readonly issuedAt: number;
   readonly notBefore?: number;
   readonly scopes: readonly string[];
+  readonly authorizationRestriction?: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface WorkosRsaJwk {
@@ -186,6 +187,26 @@ export function parseWorkosTokenClaims(
       throw new WorkosContractError("invalid_consent", "Connect consent identifier is invalid");
     }
     const tokenId = expectString(input["jti"], "jti", { optional: true });
+    const restriction = input["ohmyhost_authorization"];
+    let authorizationRestriction: Record<string, readonly string[]> | undefined;
+    if (restriction !== undefined) {
+      const raw = expectRecord(restriction, "invalid_claim");
+      const keys = ["actions", "organizationIds", "projectIds", "mailDomainIds"];
+      authorizationRestriction = {};
+      for (const [key, value] of Object.entries(raw)) {
+        if (
+          !keys.includes(key) ||
+          !Array.isArray(value) ||
+          value.length > 1000 ||
+          !value.every((item) => typeof item === "string" && item.length > 0 && item.length <= 128)
+        )
+          throw new WorkosContractError(
+            "invalid_claim",
+            "Token authorization restriction is invalid",
+          );
+        authorizationRestriction[key] = [...new Set(value as string[])].sort();
+      }
+    }
     return {
       kind,
       ...common,
@@ -196,6 +217,7 @@ export function parseWorkosTokenClaims(
       ...(tokenId === undefined ? {} : { tokenId }),
       ...(notBefore === undefined ? {} : { notBefore }),
       scopes: parseScopes(input["scope"]),
+      ...(authorizationRestriction === undefined ? {} : { authorizationRestriction }),
     };
   }
   if (kind === "m2m") {
