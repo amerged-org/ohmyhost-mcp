@@ -348,6 +348,11 @@ const VITE_BUILD_SCRIPT =
 // Each sentence names the file, the rule and the exact change. Render and parse both derive from
 // the template, so a client maps a detail back to exactly one typed diagnostic.
 const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
+  native_auth_route_conflict: {
+    paths: ["module"],
+    template:
+      '"{{path}}" declares a route in the reserved /api/auth/v1 namespace. Move the route or select a different authentication provider. Commit and push the change, then plan the new commit.',
+  },
   astro_template_import_unsupported: {
     paths: ["module"],
     template:

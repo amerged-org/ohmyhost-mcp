@@ -518,6 +518,7 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost function runs --project ULID --environment ENVIRONMENT_ULID [--limit 1-100] --json",
   "secret set":
     "printf '%s' \"$SECRET_VALUE\" | ohmyhost secret set NAME --project ULID --environment ENVIRONMENT_ULID --idempotency-key KEY [--profile-user USER_ID --profile-organization ULID | --token-user USER_ID --token-organization ULID] --stdin [--wait] --json (with --profile-user and --profile-organization the saved login that runs it must belong to that user and organization; with --token-user and --token-organization it runs only with an OHMYHOST_TOKEN of that user and organization, never with a saved login)",
+  auth: "ohmyhost auth config get|set --project ULID --environment ULID [--revision N --enabled true|false --signup-policy open|invite-only --application-name NAME --idempotency-key KEY] [--canonical-origin URL|primary] [--allowed-redirect-paths JSON_ARRAY --reset-password-path PATH --invitation-path PATH]; auth provider get|set --project ULID --environment ULID --provider google|github [--revision N --enabled true|false --client-id ID --idempotency-key KEY --stdin]; auth users list --project ULID --environment ULID [--limit N --cursor CURSOR --search TEXT]; auth user create|get|delete|invite|suspend|reactivate|revoke-sessions --project ULID --environment ULID [--email EMAIL | --user UUID] [--idempotency-key KEY]. Provider secrets are read only from stdin; use --json.",
   "secret delete":
     "ohmyhost secret delete NAME --project ULID --environment ENVIRONMENT_ULID --idempotency-key KEY [--wait] --json",
   "mail workspace list": "ohmyhost mail workspace list --organization ULID --json",
@@ -1276,6 +1277,26 @@ export class ProductCli {
       if (command.kind === "secret-list") return await this.listEnvironmentSecrets(command, signal);
       if (command.kind === "function-runs") return await this.listFunctionRuns(command, signal);
       if (command.kind === "secret-set") return await this.putEnvironmentSecret(command, signal);
+      if (command.kind === "native-auth") {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        if (!api.nativeAuth) throw new Error("Native Auth unavailable");
+        if (command.stdin && command.request.action === "provider_set") {
+          const secret = await this.dependencies.readSecretValue(signal);
+          const bytes = new TextEncoder().encode(secret);
+          if (bytes.length === 0 || bytes.length > 5120) {
+            bytes.fill(0);
+            throw new SecretInputError();
+          }
+          try {
+            return success("auth", {
+              auth: await api.nativeAuth({ ...command.request, clientSecret: secret }),
+            });
+          } finally {
+            bytes.fill(0);
+          }
+        }
+        return success("auth", { auth: await api.nativeAuth(command.request) });
+      }
       if (command.kind === "shared-mail") {
         const api = await this.authenticatedApi(command.credentialStore, signal);
         if (!api.sharedMail) throw new Error("Shared mail unavailable");
@@ -3693,6 +3714,7 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "function-runs") return "function runs";
   if (command.kind === "secret-set") return "secret set";
   if (command.kind === "secret-delete") return "secret delete";
+  if (command.kind === "native-auth") return "auth";
   if (command.kind === "shared-mail" || command.kind === "managed-mail") return command.label;
   if (command.kind === "profile-list") return "profile list";
   return command.kind;

@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.49; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.50; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.49 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.50 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -106,6 +106,19 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `mail_webhook_disable`: Disable receiving on the project's Prod mail domain and remove its webhook; existing message content becomes inaccessible.
 - `mail_webhook_set`: Set the required HTTPS endpoint on the project's Prod application using its Prod environment ID.
 - `mail_webhook_verify`: Send a signed test to the Prod application endpoint and enable receiving after it accepts the event.
+- `native_auth_config_get`: Read Owner Native Auth configuration and readiness.
+- `native_auth_config_set`: Update Owner Native Auth configuration at the current revision.
+- `native_auth_provider_get`: Read provider setup without its secret.
+- `native_auth_provider_secret_input_request`: Return an account-bound stdin-only command; never place a provider secret in MCP arguments.
+- `native_auth_provider_set`: Update provider settings without submitting a secret.
+- `native_auth_user_create`: Create and invite a Native Auth user without choosing a password.
+- `native_auth_user_delete`: Delete an Owner-authorized Native Auth user.
+- `native_auth_user_get`: Read a Native Auth user.
+- `native_auth_user_invite`: Resend an Owner-authorized Native Auth user's invitation.
+- `native_auth_user_reactivate`: Reactivate an Owner-authorized Native Auth user.
+- `native_auth_user_revoke_sessions`: Revoke an Owner-authorized Native Auth user's sessions.
+- `native_auth_user_suspend`: Suspend an Owner-authorized Native Auth user.
+- `native_auth_users_list`: List Native Auth users with bounded pagination.
 - `operation_get`: Get durable operation status and current deployment progress/reconciliation guidance.
 - `operation_logs`: Read available operation events for at most ten seconds, stopping earlier at max_events or a terminal event.
 - `operation_reconcile`: Start an explicitly confirmed provider reconciliation attempt
@@ -181,7 +194,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.49 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.50 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

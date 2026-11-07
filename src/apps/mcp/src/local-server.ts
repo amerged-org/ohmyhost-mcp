@@ -1,4 +1,5 @@
 import { isUserSecretName, USER_SECRET_NAME_PATTERN } from "@ohmyhost/contracts/secret-names";
+import { isNativeAuthRedirectPath } from "@ohmyhost/contracts/native-auth";
 import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
 import {
   DATABASE_WEBHOOK_EVENT_TYPES,
@@ -136,6 +137,7 @@ interface DatabaseScheduleSetInput extends DatabaseScheduleTarget {
 }
 
 export interface LocalMcpProductClient {
+  nativeAuth?(input: import("@ohmyhost/product-cli").NativeAuthCommand): Promise<unknown>;
   readonly managedSource?: ManagedSourceApi;
   readonly productApiOrigin?: string;
   checkProjectHandle(input: { handle: string }): Promise<unknown>;
@@ -1952,7 +1954,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "deployment_plan",
-    "Plan an immutable deployment. Preserve the customer's existing authentication integration, such as Better Auth or WorkOS, and use the same generic Next.js/Vite/TanStack runtime contract. ohmyho.st login is separate. Read the app Skill's auth guidance and report actual plan blockers, required secret names/callback configuration and unverified runtime compatibility. The explicitly selected managed Better Auth bridge requires the managed database; managed mail is optional, and its verification or password-reset send actions require a configured platform sender. Application-owned Better Auth handlers can use their own sender, including Resend, with auth.provider set to none. Never assume a working platform login proves application login or silently replace its auth provider. The plan builds into Dev unless environment is prod; prod builds straight into Prod without a Dev deployment (a project with shared data and a database must deploy to Dev and promote instead). The plan stays valid for 24 hours.",
+    "Plan an immutable deployment. Preserve the customer's existing authentication integration, such as Better Auth or WorkOS, and use the same generic Next.js/Vite/TanStack runtime contract. ohmyho.st login is separate. Read the app Skill's auth guidance and report actual plan blockers, required secret names/callback configuration and unverified runtime compatibility. The explicitly selected managed Better Auth bridge requires the managed database; managed mail is optional, and its verification or password-reset send actions require a configured platform sender. Application-owned Better Auth handlers can use their own sender, including Resend, with auth.provider set to none. The unreleased omh-native capability is an explicit choice requiring Paid access, a verified sender and its separately metered Auth database; verify readiness and hosted support before claiming it works. Never assume a working platform login proves application login or silently replace its auth provider. The plan builds into Dev unless environment is prod; prod builds straight into Prod without a Dev deployment (a project with shared data and a database must deploy to Dev and promote instead). The plan stays valid for 24 hours.",
     z.object({
       project_id: identifier,
       commit_sha: commitSha,
@@ -2653,6 +2655,310 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     },
     destructiveAnnotations(),
   );
+  const nativeScope = { project_id: identifier, environment_id: identifier };
+  const nativeProvider = z.enum(["google", "github"]);
+  const nativeRun = (
+    client: LocalMcpProductClient,
+    command: import("@ohmyhost/product-cli").NativeAuthCommand,
+  ) => {
+    if (!client.nativeAuth) throw new Error("Native Auth unavailable");
+    return client.nativeAuth(command);
+  };
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_config_get",
+    "Read Owner Native Auth configuration and readiness.",
+    z.object(nativeScope),
+    (client, input) =>
+      nativeRun(client, {
+        action: "config_get",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_config_set",
+    "Update Owner Native Auth configuration at the current revision.",
+    z.object({
+      ...nativeScope,
+      configuration_revision: z.number().int().min(0),
+      enabled: z.boolean(),
+      signup_policy: z.enum(["open", "invite-only"]),
+      application_name: z
+        .string()
+        .trim()
+        .min(1)
+        .max(128)
+        .refine((value) => !/\p{Cc}/u.test(value)),
+      canonical_origin: z
+        .string()
+        .url()
+        .refine((value) => {
+          try {
+            const url = new URL(value);
+            return (
+              url.protocol === "https:" && url.origin === value && !url.username && !url.password
+            );
+          } catch {
+            return false;
+          }
+        })
+        .nullable()
+        .optional(),
+      allowed_redirect_paths: z
+        .array(z.string().refine(isNativeAuthRedirectPath))
+        .min(1)
+        .max(16)
+        .refine((paths) => new Set(paths).size === paths.length)
+        .optional(),
+      reset_password_path: z.string().refine(isNativeAuthRedirectPath).optional(),
+      invitation_path: z.string().refine(isNativeAuthRedirectPath).optional(),
+      idempotency_key: idempotencyKey,
+    }),
+    (client, input) => {
+      const paths = input.allowed_redirect_paths;
+      if (
+        paths &&
+        [input.reset_password_path, input.invitation_path].some(
+          (path) => path !== undefined && !paths.includes(path),
+        )
+      )
+        throw new TypeError("Native Auth form path must be in the redirect allowlist");
+      return nativeRun(client, {
+        action: "config_set",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        configurationRevision: input.configuration_revision,
+        enabled: input.enabled,
+        signupPolicy: input.signup_policy,
+        applicationName: input.application_name,
+        ...(input.canonical_origin === undefined
+          ? {}
+          : { canonicalOrigin: input.canonical_origin }),
+        ...(input.allowed_redirect_paths === undefined
+          ? {}
+          : { allowedRedirectPaths: input.allowed_redirect_paths }),
+        ...(input.reset_password_path === undefined
+          ? {}
+          : { resetPasswordPath: input.reset_password_path }),
+        ...(input.invitation_path === undefined ? {} : { invitationPath: input.invitation_path }),
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_provider_get",
+    "Read provider setup without its secret.",
+    z.object({ ...nativeScope, provider: nativeProvider }),
+    (client, input) =>
+      nativeRun(client, {
+        action: "provider_get",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        provider: input.provider,
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_provider_set",
+    "Update provider settings without submitting a secret.",
+    z
+      .object({
+        ...nativeScope,
+        provider: nativeProvider,
+        configuration_revision: z.number().int().min(0),
+        enabled: z.boolean(),
+        client_id: z.string().min(1).max(1024).optional(),
+        idempotency_key: idempotencyKey,
+      })
+      .strict(),
+    (client, input) =>
+      nativeRun(client, {
+        action: "provider_set",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        provider: input.provider,
+        configurationRevision: input.configuration_revision,
+        enabled: input.enabled,
+        ...(input.client_id === undefined ? {} : { clientId: input.client_id }),
+        idempotencyKey: input.idempotency_key,
+      }),
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_users_list",
+    "List Native Auth users with bounded pagination.",
+    z.object({
+      ...nativeScope,
+      limit: z.number().int().min(1).max(100).optional(),
+      cursor: z.string().min(1).max(512).optional(),
+      search: z.string().min(1).max(320).optional(),
+    }),
+    (client, input) =>
+      nativeRun(client, {
+        action: "users_list",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+        ...(input.search === undefined ? {} : { search: input.search }),
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_user_create",
+    "Create and invite a Native Auth user without choosing a password.",
+    z.object({
+      ...nativeScope,
+      email: z.string().email().max(254),
+      idempotency_key: idempotencyKey,
+    }),
+    (client, input) =>
+      nativeRun(client, {
+        action: "user_create",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        email: input.email,
+        idempotencyKey: input.idempotency_key,
+      }),
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_user_get",
+    "Read a Native Auth user.",
+    z.object({ ...nativeScope, user_id: z.string().uuid() }),
+    (client, input) =>
+      nativeRun(client, {
+        action: "user_get",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        userId: input.user_id,
+      }),
+  );
+  const nativeUserActionInput = z.object({
+    ...nativeScope,
+    user_id: z.string().uuid(),
+    idempotency_key: idempotencyKey,
+    confirm: z.literal(true),
+  });
+  const nativeUserAction =
+    (
+      action:
+        | "user_delete"
+        | "user_invite"
+        | "user_suspend"
+        | "user_reactivate"
+        | "user_revoke_sessions",
+    ) =>
+    (client: LocalMcpProductClient, input: z.infer<typeof nativeUserActionInput>) =>
+      nativeRun(client, {
+        action,
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        userId: input.user_id,
+        idempotencyKey: input.idempotency_key,
+      });
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_user_delete",
+    "Delete an Owner-authorized Native Auth user.",
+    nativeUserActionInput,
+    nativeUserAction("user_delete"),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_user_invite",
+    "Resend an Owner-authorized Native Auth user's invitation.",
+    nativeUserActionInput,
+    nativeUserAction("user_invite"),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_user_suspend",
+    "Suspend an Owner-authorized Native Auth user.",
+    nativeUserActionInput,
+    nativeUserAction("user_suspend"),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_user_reactivate",
+    "Reactivate an Owner-authorized Native Auth user.",
+    nativeUserActionInput,
+    nativeUserAction("user_reactivate"),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_user_revoke_sessions",
+    "Revoke an Owner-authorized Native Auth user's sessions.",
+    nativeUserActionInput,
+    nativeUserAction("user_revoke_sessions"),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "native_auth_provider_secret_input_request",
+    "Return an account-bound stdin-only command; never place a provider secret in MCP arguments.",
+    z
+      .object({
+        ...nativeScope,
+        provider: nativeProvider,
+        configuration_revision: z.number().int().min(0),
+        enabled: z.boolean(),
+        client_id: z.string().min(1).max(1024).optional(),
+        idempotency_key: idempotencyKey,
+      })
+      .strict(),
+    async (client, input, signal) => {
+      await client.getProject(input.project_id);
+      const account = await handoverAccount(client, signal);
+      return {
+        command: [
+          `${commandPrefix} auth provider set`,
+          "--project",
+          shellQuote(input.project_id),
+          "--environment",
+          shellQuote(input.environment_id),
+          "--provider",
+          input.provider,
+          "--revision",
+          String(input.configuration_revision),
+          "--enabled",
+          String(input.enabled),
+          ...(input.client_id === undefined ? [] : ["--client-id", shellQuote(input.client_id)]),
+          "--idempotency-key",
+          shellQuote(input.idempotency_key),
+          ...account.flags,
+          "--stdin",
+          "--json",
+        ].join(" "),
+        acting_as: client.actingAs?.() ?? null,
+        instruction: `Pass the provider secret on stdin in a local terminal; ${account.runs}. Never put it in MCP, arguments, source, or logs.`,
+      };
+    },
+  );
+
   registerProductTool(
     server,
     dependencies,

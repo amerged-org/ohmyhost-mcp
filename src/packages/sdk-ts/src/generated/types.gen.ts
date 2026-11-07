@@ -4,6 +4,92 @@ export type ClientOptions = {
   baseUrl: "https://app.ohmyho.st" | "https://dev.app.ohmyho.st" | (string & {});
 };
 
+export type NativeAuthConfiguration = {
+  /**
+   * Persistent Owner setting; source deployment cannot clear a pause.
+   */
+  enabled: boolean;
+  configurationRevision: number;
+  revocationEpoch: number;
+  signupPolicy: "open" | "invite-only";
+  canonicalOrigin: string | null;
+  applicationName: string;
+  allowedRedirectPaths: Array<NativeAuthRedirectPath>;
+  resetPasswordPath: NativeAuthRedirectPath;
+  invitationPath: NativeAuthRedirectPath;
+  readiness: {
+    paid: boolean;
+    sender: boolean;
+    origin: boolean;
+    storage: boolean;
+  };
+};
+
+/**
+ * The revision must match current configuration; a stale write returns 409. Omitted optional values are preserved. A null canonicalOrigin selects the primary origin; explicit origins must be currently approved for this project and environment. Changing origin advances the revocation epoch. Both form paths must be in the resulting redirect allowlist.
+ */
+export type NativeAuthConfigurationUpdate = {
+  configurationRevision: number;
+  enabled: boolean;
+  signupPolicy: "open" | "invite-only";
+  applicationName: string;
+  canonicalOrigin?: string | null;
+  allowedRedirectPaths?: Array<NativeAuthRedirectPath>;
+  resetPasswordPath?: NativeAuthRedirectPath;
+  invitationPath?: NativeAuthRedirectPath;
+};
+
+/**
+ * Absolute application path without query, fragment, percent escapes, backslashes or dot segments.
+ */
+export type NativeAuthRedirectPath = string;
+
+/**
+ * Configuration presence does not establish provider approval or a successful flow.
+ */
+export type NativeAuthProviderStatus = {
+  provider: "google" | "github";
+  enabled: boolean;
+  configured: boolean;
+  clientId: string | null;
+  secretPresent: boolean;
+  /**
+   * Null until a canonical origin is ready.
+   */
+  callbackUrl: string | null;
+  scopes: Array<string>;
+  lastSuccessfulFlowAt: string | null;
+};
+
+/**
+ * The revision must match current configuration. Secrets are write-only and never echoed in responses or replay receipts.
+ */
+export type NativeAuthProviderUpdate = {
+  configurationRevision: number;
+  enabled: boolean;
+  clientId?: string;
+};
+
+export type NativeAuthUser = {
+  id: string;
+  email: string;
+  status: "pending" | "active" | "suspended";
+  recoveryAvailable: boolean;
+  createdAt: string;
+};
+
+/**
+ * Creates a pending user and sends an invitation; never accepts an operator-chosen password.
+ */
+export type NativeAuthUserCreate = {
+  email: string;
+};
+
+export type NativeAuthUserPage = {
+  items: Array<NativeAuthUser>;
+  nextCursor: string | null;
+};
+
 export type WorkspaceMailDomain = {
   domain_id: Ulid;
   organization_id: Ulid;
@@ -1756,7 +1842,8 @@ export type ProblemDetails = {
     | "data_change_in_progress"
     | "data_change_not_applicable"
     | "rollback_target_data_changed"
-    | "project_domain_delete_required";
+    | "project_domain_delete_required"
+    | "native_domain_sync_pending";
   request_id: string;
   retryable: boolean;
   /**
@@ -1922,9 +2009,18 @@ export type ProjectExportArchive = {
   bytes: number;
   sha256: string;
   /**
-   * dev.sql and/or prod.sql for isolated data, or shared.sql alone.
+   * dev.sql and/or prod.sql for isolated data, or shared.sql for shared data; auth.sql may accompany either or stand alone.
    */
-  sql_files: Array<"dev.sql" | "prod.sql" | "shared.sql">;
+  sql_files:
+    | ["dev.sql"]
+    | ["prod.sql"]
+    | ["dev.sql", "prod.sql"]
+    | ["shared.sql"]
+    | ["auth.sql"]
+    | ["dev.sql", "auth.sql"]
+    | ["prod.sql", "auth.sql"]
+    | ["dev.sql", "prod.sql", "auth.sql"]
+    | ["shared.sql", "auth.sql"];
   captured_at: string;
   expires_at: string;
   download_url: string | null;
@@ -2035,6 +2131,19 @@ export type ProjectDataChangePlan = {
   confirmation_token: ConfirmationToken;
   created_at: string;
   expires_at: string;
+};
+
+/**
+ * The revision must match current configuration. Secrets are write-only and never echoed in responses or replay receipts.
+ */
+export type NativeAuthProviderUpdateWritable = {
+  configurationRevision: number;
+  enabled: boolean;
+  clientId?: string;
+  /**
+   * At most 5120 UTF-8 bytes. The value is accepted only by this write-only operation.
+   */
+  clientSecret?: string;
 };
 
 /**
@@ -2210,6 +2319,888 @@ export type ProjectFilter = Ulid;
  * Restricts the page to one visible operation.
  */
 export type OperationFilter = Ulid;
+
+export type GetNativeAuthConfigurationData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth";
+};
+
+export type GetNativeAuthConfigurationErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetNativeAuthConfigurationError =
+  GetNativeAuthConfigurationErrors[keyof GetNativeAuthConfigurationErrors];
+
+export type GetNativeAuthConfigurationResponses = {
+  /**
+   * Current authorized resource.
+   */
+  200: NativeAuthConfiguration;
+};
+
+export type GetNativeAuthConfigurationResponse =
+  GetNativeAuthConfigurationResponses[keyof GetNativeAuthConfigurationResponses];
+
+export type UpdateNativeAuthConfigurationData = {
+  body: NativeAuthConfigurationUpdate;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth";
+};
+
+export type UpdateNativeAuthConfigurationErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type UpdateNativeAuthConfigurationError =
+  UpdateNativeAuthConfigurationErrors[keyof UpdateNativeAuthConfigurationErrors];
+
+export type UpdateNativeAuthConfigurationResponses = {
+  /**
+   * Current authorized resource.
+   */
+  200: NativeAuthConfiguration;
+};
+
+export type UpdateNativeAuthConfigurationResponse =
+  UpdateNativeAuthConfigurationResponses[keyof UpdateNativeAuthConfigurationResponses];
+
+export type GetNativeAuthProviderData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    provider: "google" | "github";
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth/providers/{provider}";
+};
+
+export type GetNativeAuthProviderErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetNativeAuthProviderError =
+  GetNativeAuthProviderErrors[keyof GetNativeAuthProviderErrors];
+
+export type GetNativeAuthProviderResponses = {
+  /**
+   * Current authorized resource.
+   */
+  200: NativeAuthProviderStatus;
+};
+
+export type GetNativeAuthProviderResponse =
+  GetNativeAuthProviderResponses[keyof GetNativeAuthProviderResponses];
+
+export type UpdateNativeAuthProviderData = {
+  body: NativeAuthProviderUpdateWritable;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    provider: "google" | "github";
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth/providers/{provider}";
+};
+
+export type UpdateNativeAuthProviderErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type UpdateNativeAuthProviderError =
+  UpdateNativeAuthProviderErrors[keyof UpdateNativeAuthProviderErrors];
+
+export type UpdateNativeAuthProviderResponses = {
+  /**
+   * Current authorized resource.
+   */
+  200: NativeAuthProviderStatus;
+};
+
+export type UpdateNativeAuthProviderResponse =
+  UpdateNativeAuthProviderResponses[keyof UpdateNativeAuthProviderResponses];
+
+export type ListNativeAuthUsersData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+  };
+  query?: {
+    limit?: number;
+    cursor?: string;
+    search?: string;
+  };
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users";
+};
+
+export type ListNativeAuthUsersErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListNativeAuthUsersError = ListNativeAuthUsersErrors[keyof ListNativeAuthUsersErrors];
+
+export type ListNativeAuthUsersResponses = {
+  /**
+   * Current authorized resource.
+   */
+  200: NativeAuthUserPage;
+};
+
+export type ListNativeAuthUsersResponse =
+  ListNativeAuthUsersResponses[keyof ListNativeAuthUsersResponses];
+
+export type CreateNativeAuthUserData = {
+  body: NativeAuthUserCreate;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users";
+};
+
+export type CreateNativeAuthUserErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateNativeAuthUserError =
+  CreateNativeAuthUserErrors[keyof CreateNativeAuthUserErrors];
+
+export type CreateNativeAuthUserResponses = {
+  /**
+   * Current authorized resource.
+   */
+  201: NativeAuthUser;
+};
+
+export type CreateNativeAuthUserResponse =
+  CreateNativeAuthUserResponses[keyof CreateNativeAuthUserResponses];
+
+export type DeleteNativeAuthUserData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    user_id: string;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}";
+};
+
+export type DeleteNativeAuthUserErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DeleteNativeAuthUserError =
+  DeleteNativeAuthUserErrors[keyof DeleteNativeAuthUserErrors];
+
+export type DeleteNativeAuthUserResponses = {
+  /**
+   * User deleted and sessions revoked.
+   */
+  204: void;
+};
+
+export type DeleteNativeAuthUserResponse =
+  DeleteNativeAuthUserResponses[keyof DeleteNativeAuthUserResponses];
+
+export type GetNativeAuthUserData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    user_id: string;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}";
+};
+
+export type GetNativeAuthUserErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetNativeAuthUserError = GetNativeAuthUserErrors[keyof GetNativeAuthUserErrors];
+
+export type GetNativeAuthUserResponses = {
+  /**
+   * Current authorized resource.
+   */
+  200: NativeAuthUser;
+};
+
+export type GetNativeAuthUserResponse =
+  GetNativeAuthUserResponses[keyof GetNativeAuthUserResponses];
+
+export type ResendNativeAuthInvitationData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    user_id: string;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/invite";
+};
+
+export type ResendNativeAuthInvitationErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ResendNativeAuthInvitationError =
+  ResendNativeAuthInvitationErrors[keyof ResendNativeAuthInvitationErrors];
+
+export type ResendNativeAuthInvitationResponses = {
+  /**
+   * Current authorized resource.
+   */
+  200: NativeAuthUser;
+};
+
+export type ResendNativeAuthInvitationResponse =
+  ResendNativeAuthInvitationResponses[keyof ResendNativeAuthInvitationResponses];
+
+export type SuspendNativeAuthUserData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    user_id: string;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/suspend";
+};
+
+export type SuspendNativeAuthUserErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type SuspendNativeAuthUserError =
+  SuspendNativeAuthUserErrors[keyof SuspendNativeAuthUserErrors];
+
+export type SuspendNativeAuthUserResponses = {
+  /**
+   * Current authorized resource.
+   */
+  200: NativeAuthUser;
+};
+
+export type SuspendNativeAuthUserResponse =
+  SuspendNativeAuthUserResponses[keyof SuspendNativeAuthUserResponses];
+
+export type ReactivateNativeAuthUserData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    user_id: string;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/reactivate";
+};
+
+export type ReactivateNativeAuthUserErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ReactivateNativeAuthUserError =
+  ReactivateNativeAuthUserErrors[keyof ReactivateNativeAuthUserErrors];
+
+export type ReactivateNativeAuthUserResponses = {
+  /**
+   * Current authorized resource.
+   */
+  200: NativeAuthUser;
+};
+
+export type ReactivateNativeAuthUserResponse =
+  ReactivateNativeAuthUserResponses[keyof ReactivateNativeAuthUserResponses];
+
+export type RevokeNativeAuthUserSessionsData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    user_id: string;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/revoke-sessions";
+};
+
+export type RevokeNativeAuthUserSessionsErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RevokeNativeAuthUserSessionsError =
+  RevokeNativeAuthUserSessionsErrors[keyof RevokeNativeAuthUserSessionsErrors];
+
+export type RevokeNativeAuthUserSessionsResponses = {
+  /**
+   * Current authorized resource.
+   */
+  200: NativeAuthUser;
+};
+
+export type RevokeNativeAuthUserSessionsResponse =
+  RevokeNativeAuthUserSessionsResponses[keyof RevokeNativeAuthUserSessionsResponses];
 
 export type ListWorkspaceMailDomainsData = {
   body?: never;

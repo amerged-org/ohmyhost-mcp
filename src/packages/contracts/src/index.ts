@@ -45,7 +45,7 @@ export interface OhmyhostConfig {
     migrations?: string;
   }>;
   readonly auth?: Readonly<{
-    provider: "none" | "better-auth";
+    provider: "none" | "better-auth" | "omh-native";
   }>;
   readonly mail?: Readonly<{
     enabled: boolean;

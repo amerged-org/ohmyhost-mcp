@@ -330,7 +330,7 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: true,
     action:
-      "Wait for the running operation to finish, read the project again, then rename with the new ETag.",
+      "Read project status and finish or retry any pending Native Auth deployment or other operation. Once preparation is complete, read the project again and rename with its current ETag.",
     title: "Project address change blocked",
   },
   project_identity_unavailable: {
@@ -637,6 +637,13 @@ export const PROBLEM_POLICY = {
     title: "Remove the project domain first",
     action:
       "This project still has a live or pending custom-domain connection. Read 'ohmyhost domain paid status --project ULID --json', remove that connection with 'ohmyhost domain paid delete --project ULID --hostname HOST --yes --json', then create a fresh project deletion plan. Repeating while it remains connected cannot work.",
+  },
+  native_domain_sync_pending: {
+    status: 409,
+    retryable: false,
+    title: "Complete the pending domain change",
+    action:
+      "Read project status and Paid domain status to identify the pending change. If a Paid domain removal is pending, retry it as a current owner with a new idempotency key. If a project address change is pending, submit a fresh address change as a current owner. After it finishes, create a new project deletion plan.",
   },
 } as const;
 

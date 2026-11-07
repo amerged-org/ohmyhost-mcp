@@ -4,6 +4,7 @@ import {
   type ManagedMailCommand,
   type SharedMailCommand,
 } from "@ohmyhost/sdk-ts";
+import { executeNativeAuth, type NativeAuthCommand } from "@ohmyhost/product-cli";
 import {
   assertProjectDatabaseAccess,
   assertProjectDatabaseAccessCredential,
@@ -1155,6 +1156,10 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
 
   public managedMail(input: ManagedMailCommand) {
     return executeManagedMail(this.#client, input);
+  }
+
+  public nativeAuth(input: NativeAuthCommand) {
+    return executeNativeAuth(this.#client, input);
   }
   public planDelete(projectId: string) {
     return planProjectDeletion({ project_id: projectId }, { client: this.#client });

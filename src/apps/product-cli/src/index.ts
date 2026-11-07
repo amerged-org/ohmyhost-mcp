@@ -33,3 +33,4 @@ export {
 } from "./runtime-contract.js";
 
 export * from "./user-token-file.js";
+export * from "./native-auth.js";

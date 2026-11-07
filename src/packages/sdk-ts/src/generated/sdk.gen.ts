@@ -55,6 +55,8 @@ import type {
   CreateDeploymentResponses,
   CreateManagedSourceUploadErrors,
   CreateManagedSourceUploadResponses,
+  CreateNativeAuthUserErrors,
+  CreateNativeAuthUserResponses,
   CreateOrganizationErrors,
   CreateOrganizationRequest,
   CreateOrganizationResponses,
@@ -90,6 +92,8 @@ import type {
   DeleteEnvironmentSecretResponses,
   DeleteManagedMailDomainErrors,
   DeleteManagedMailDomainResponses,
+  DeleteNativeAuthUserErrors,
+  DeleteNativeAuthUserResponses,
   DeletePaidProjectDomainErrors,
   DeletePaidProjectDomainResponses,
   DeleteProjectDatabaseScheduleErrors,
@@ -143,6 +147,12 @@ import type {
   GetManagedMailMessageResponses,
   GetManagedSourceUploadErrors,
   GetManagedSourceUploadResponses,
+  GetNativeAuthConfigurationErrors,
+  GetNativeAuthConfigurationResponses,
+  GetNativeAuthProviderErrors,
+  GetNativeAuthProviderResponses,
+  GetNativeAuthUserErrors,
+  GetNativeAuthUserResponses,
   GetOperationErrors,
   GetOperationResponses,
   GetOrganizationAccountErrors,
@@ -206,6 +216,8 @@ import type {
   ListManagedSourceFilesResponses,
   ListManagedSourceVersionsErrors,
   ListManagedSourceVersionsResponses,
+  ListNativeAuthUsersErrors,
+  ListNativeAuthUsersResponses,
   ListProjectDatabaseAccessErrors,
   ListProjectDatabaseAccessResponses,
   ListProjectDatabaseScheduleRunsErrors,
@@ -235,6 +247,9 @@ import type {
   ManagedSourceRestoreRequest,
   ManagedSourceSwitchRequest,
   ManagedSourceUploadRequest,
+  NativeAuthConfigurationUpdate,
+  NativeAuthProviderUpdateWritable,
+  NativeAuthUserCreate,
   PaidDomainRequest,
   PlanDeploymentErrors,
   PlanDeploymentPromotionErrors,
@@ -267,6 +282,8 @@ import type {
   PutProjectMailDomainBindingResponses,
   QueryProjectDatabaseErrors,
   QueryProjectDatabaseResponses,
+  ReactivateNativeAuthUserErrors,
+  ReactivateNativeAuthUserResponses,
   ReconcileOperationErrors,
   ReconcileOperationResponses,
   RecordSignupSourceErrors,
@@ -275,6 +292,8 @@ import type {
   RegisterFeatureInterestResponses,
   ReplayProjectDatabaseWebhookDeliveryErrors,
   ReplayProjectDatabaseWebhookDeliveryResponses,
+  ResendNativeAuthInvitationErrors,
+  ResendNativeAuthInvitationResponses,
   RestoreManagedSourceErrors,
   RestoreManagedSourceResponses,
   RetireWorkspaceMailDomainErrors,
@@ -287,6 +306,8 @@ import type {
   RevokeApplicationDomainIdentityResponses,
   RevokeCurrentSessionErrors,
   RevokeCurrentSessionResponses,
+  RevokeNativeAuthUserSessionsErrors,
+  RevokeNativeAuthUserSessionsResponses,
   RevokeProjectDatabaseAccessErrors,
   RevokeProjectDatabaseAccessResponses,
   RevokeProjectDevShareLinkErrors,
@@ -325,11 +346,17 @@ import type {
   SubmitContactRequestResponses,
   SubmitFeedbackErrors,
   SubmitFeedbackResponses,
+  SuspendNativeAuthUserErrors,
+  SuspendNativeAuthUserResponses,
   SwitchManagedSourceErrors,
   SwitchManagedSourceResponses,
   TestProjectDatabaseWebhookErrors,
   TestProjectDatabaseWebhookResponses,
   Ulid,
+  UpdateNativeAuthConfigurationErrors,
+  UpdateNativeAuthConfigurationResponses,
+  UpdateNativeAuthProviderErrors,
+  UpdateNativeAuthProviderResponses,
   UserApiKeyId,
   VerifyApplicationDomainIdentityErrors,
   VerifyApplicationDomainIdentityResponses,
@@ -355,6 +382,583 @@ export type Options<
    * used to access values that aren't defined as part of the SDK function.
    */
   meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
+};
+
+/**
+ * Read Native Auth configuration
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const getNativeAuthConfiguration = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetNativeAuthConfigurationResponses,
+  GetNativeAuthConfigurationErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetNativeAuthConfigurationResponses,
+    GetNativeAuthConfigurationErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Update Native Auth configuration
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const updateNativeAuthConfiguration = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    nativeAuthConfigurationUpdate: NativeAuthConfigurationUpdate;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  UpdateNativeAuthConfigurationResponses,
+  UpdateNativeAuthConfigurationErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { key: "nativeAuthConfigurationUpdate", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).put<
+    UpdateNativeAuthConfigurationResponses,
+    UpdateNativeAuthConfigurationErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read a Native Auth provider
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const getNativeAuthProvider = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    provider: "google" | "github";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetNativeAuthProviderResponses,
+  GetNativeAuthProviderErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "provider" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetNativeAuthProviderResponses,
+    GetNativeAuthProviderErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth/providers/{provider}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Update a Native Auth provider
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const updateNativeAuthProvider = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    provider: "google" | "github";
+    nativeAuthProviderUpdateWritable: NativeAuthProviderUpdateWritable;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  UpdateNativeAuthProviderResponses,
+  UpdateNativeAuthProviderErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "provider" },
+          { key: "nativeAuthProviderUpdateWritable", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).put<
+    UpdateNativeAuthProviderResponses,
+    UpdateNativeAuthProviderErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth/providers/{provider}",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * List Native Auth users
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const listNativeAuthUsers = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    limit?: number;
+    cursor?: string;
+    search?: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<ListNativeAuthUsersResponses, ListNativeAuthUsersErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "query", key: "limit" },
+          { in: "query", key: "cursor" },
+          { in: "query", key: "search" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    ListNativeAuthUsersResponses,
+    ListNativeAuthUsersErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Create and invite a Native Auth user
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const createNativeAuthUser = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    nativeAuthUserCreate: NativeAuthUserCreate;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateNativeAuthUserResponses,
+  CreateNativeAuthUserErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { key: "nativeAuthUserCreate", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateNativeAuthUserResponses,
+    CreateNativeAuthUserErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Delete a Native Auth user
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const deleteNativeAuthUser = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    user_id: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  DeleteNativeAuthUserResponses,
+  DeleteNativeAuthUserErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "user_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    DeleteNativeAuthUserResponses,
+    DeleteNativeAuthUserErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Read a Native Auth user
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const getNativeAuthUser = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    user_id: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<GetNativeAuthUserResponses, GetNativeAuthUserErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "user_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetNativeAuthUserResponses,
+    GetNativeAuthUserErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Resend an invitation
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const resendNativeAuthInvitation = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    user_id: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ResendNativeAuthInvitationResponses,
+  ResendNativeAuthInvitationErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "user_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    ResendNativeAuthInvitationResponses,
+    ResendNativeAuthInvitationErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/invite",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Suspend a Native Auth user
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const suspendNativeAuthUser = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    user_id: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  SuspendNativeAuthUserResponses,
+  SuspendNativeAuthUserErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "user_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    SuspendNativeAuthUserResponses,
+    SuspendNativeAuthUserErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/suspend",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Reactivate a Native Auth user
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const reactivateNativeAuthUser = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    user_id: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ReactivateNativeAuthUserResponses,
+  ReactivateNativeAuthUserErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "user_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    ReactivateNativeAuthUserResponses,
+    ReactivateNativeAuthUserErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/reactivate",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Revoke a Native Auth user's sessions
+ *
+ * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ */
+export const revokeNativeAuthUserSessions = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    user_id: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RevokeNativeAuthUserSessionsResponses,
+  RevokeNativeAuthUserSessionsErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "user_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    RevokeNativeAuthUserSessionsResponses,
+    RevokeNativeAuthUserSessionsErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/revoke-sessions",
+    ...options,
+    ...params,
+  });
 };
 
 /**

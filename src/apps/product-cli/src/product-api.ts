@@ -4,6 +4,7 @@ import {
   type ManagedMailCommand,
   type SharedMailCommand,
 } from "@ohmyhost/sdk-ts";
+import { executeNativeAuth, type NativeAuthCommand } from "./native-auth.js";
 import type {
   ProjectDataChangeKind,
   ProjectDataChangePlan,
@@ -257,6 +258,7 @@ export interface DatabaseTableAnswer {
 }
 
 export interface ProductApi {
+  nativeAuth?(input: NativeAuthCommand): Promise<unknown>;
   readonly managedSource?: ManagedSourceApi;
   planProjectDataChange(input: {
     projectId: string;
@@ -1809,5 +1811,9 @@ export class GeneratedSdkProductApi implements ProductApi {
 
   public managedMail(input: ManagedMailCommand) {
     return executeManagedMail(this.#client, input);
+  }
+
+  public nativeAuth(input: NativeAuthCommand) {
+    return executeNativeAuth(this.#client, input);
   }
 }

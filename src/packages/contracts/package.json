@@ -5,6 +5,11 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./native-auth": {
+      "source": "./src/native-auth.ts",
+      "types": "./dist/native-auth.d.ts",
+      "import": "./dist/native-auth.js"
+    },
     "./database-sizes": {
       "source": "./src/database-sizes.ts",
       "types": "./dist/database-sizes.d.ts",

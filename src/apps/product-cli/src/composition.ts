@@ -746,11 +746,16 @@ export const runProductionCli = async (
   }
   // A command handed over from an OHMYHOST_TOKEN process runs only with a key of that account,
   // never with a saved login, even one of the same user.
-  const requiredToken = command.kind === "secret-set" ? command.environmentToken : undefined;
+  const requiredToken =
+    command.kind === "secret-set" || command.kind === "native-auth"
+      ? command.environmentToken
+      : undefined;
   // Either handed form names its account; the login or key that would run it must be exactly that
   // account, so a login of the same name on another computer is refused before anything is read.
   const handedAccount =
-    command.kind === "secret-set" ? (requiredToken ?? command.profileAccount) : undefined;
+    command.kind === "secret-set" || command.kind === "native-auth"
+      ? (requiredToken ?? command.profileAccount)
+      : undefined;
   if (requiredToken !== undefined && apiToken === undefined)
     return written(
       errorDocument(

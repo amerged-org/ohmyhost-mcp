@@ -577,6 +577,15 @@ function configurationFindings(input: FrameworkSourceRuleInput): FrameworkConver
   const build = "command" in configuration.build ? configuration.build : null;
   const crons = (configuration.functions?.crons.length ?? 0) > 0;
   const findings: FrameworkConversionDiagnostic[] = [];
+  if (configuration.auth?.provider === "omh-native") {
+    for (const path of files) {
+      if (
+        /^(?:src\/)?(?:app|pages)\/api\/auth\/v1(?:\/.*)?\.(?:astro|[cm]?[jt]sx?)$/u.test(path) ||
+        /^src\/routes\/api(?:\.auth\.v1|\/auth\/v1)(?:[./].*)?\.[cm]?[jt]sx?$/u.test(path)
+      )
+        findings.push(diagnostic({ code: "native_auth_route_conflict", path }));
+    }
+  }
   // runtime.mode functions selects the functions framework, whose build is only build.install.
   if (framework !== "functions" && !runtimeModeAdmitted(framework, configuration, crons))
     findings.push(

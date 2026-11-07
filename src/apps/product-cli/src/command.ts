@@ -26,6 +26,8 @@ import {
   type ProjectDataChangeKind,
 } from "@ohmyhost/contracts/project-data-changes";
 import type { ManagedMailCommand, SharedMailCommand } from "@ohmyhost/sdk-ts";
+import type { NativeAuthCommand } from "./native-auth.js";
+import { isNativeAuthRedirectPath } from "@ohmyhost/contracts/native-auth";
 import { USER_API_KEY_ID } from "@ohmyhost/contracts/user-api-keys";
 import { WORKOS_USER_API_KEY_PATTERN } from "@ohmyhost/workos-auth-contracts/user-api-keys";
 import { isProfileName, isProfileUserId } from "./profile-store.js";
@@ -86,6 +88,14 @@ export type SourceCliCommand =
     };
 export type ProductCliCommand =
   | SourceCliCommand
+  | {
+      readonly kind: "native-auth";
+      readonly request: NativeAuthCommand;
+      readonly stdin: boolean;
+      readonly credentialStore: "native";
+      readonly environmentToken?: HandedAccount;
+      readonly profileAccount?: HandedAccount;
+    }
   | {
       readonly kind: "project-data-plan";
       readonly projectId: string;
@@ -978,6 +988,7 @@ function parseSourceCommand(values: string[], wait: boolean): SourceCliCommand {
 }
 
 export type RecognizedCommandLabel =
+  | "auth"
   | "source inspect"
   | "source status"
   | "source files"
@@ -1291,6 +1302,7 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
       if (values[0] === "set") return "secret set";
       if (values[0] === "delete") return "secret delete";
     }
+    if (value === "auth") return "auth";
     if (value === "function" && values[0] === "runs") return "function runs";
     if (value === "mail") {
       if (["workspace", "binding", "identity"].includes(values[0] ?? "")) {
@@ -1350,6 +1362,229 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
   const follow = removeFlag(values, "--follow");
   const stdin = removeFlag(values, "--stdin");
   const first = values.shift();
+  if (first === "auth") {
+    if (dryRun || revoke || yes || wait || follow) throw new InvalidCommandError();
+    const area = values.shift();
+    const action = values.shift();
+    const actionKey = `${area}_${action}`;
+    const options = parseOptionalOptions(values, [
+      "--project",
+      "--environment",
+      "--idempotency-key",
+      "--revision",
+      "--enabled",
+      "--signup-policy",
+      "--application-name",
+      "--canonical-origin",
+      "--allowed-redirect-paths",
+      "--reset-password-path",
+      "--invitation-path",
+      "--provider",
+      "--client-id",
+      "--user",
+      "--email",
+      "--limit",
+      "--cursor",
+      "--search",
+      "--token-user",
+      "--token-organization",
+      "--profile-user",
+      "--profile-organization",
+    ]);
+    const actionOptions: Readonly<Record<string, readonly string[]>> = {
+      config_get: [],
+      config_set: [
+        "--idempotency-key",
+        "--revision",
+        "--enabled",
+        "--signup-policy",
+        "--application-name",
+        "--canonical-origin",
+        "--allowed-redirect-paths",
+        "--reset-password-path",
+        "--invitation-path",
+      ],
+      provider_get: ["--provider"],
+      provider_set: [
+        "--provider",
+        "--idempotency-key",
+        "--revision",
+        "--enabled",
+        "--client-id",
+        "--token-user",
+        "--token-organization",
+        "--profile-user",
+        "--profile-organization",
+      ],
+      users_list: ["--limit", "--cursor", "--search"],
+      user_create: ["--idempotency-key", "--email"],
+      user_get: ["--user"],
+      user_delete: ["--user", "--idempotency-key"],
+      user_invite: ["--user", "--idempotency-key"],
+      user_suspend: ["--user", "--idempotency-key"],
+      user_reactivate: ["--user", "--idempotency-key"],
+      "user_revoke-sessions": ["--user", "--idempotency-key"],
+    };
+    const admittedOptions = actionOptions[actionKey];
+    if (
+      !admittedOptions ||
+      Object.keys(options).some(
+        (key) => key !== "--project" && key !== "--environment" && !admittedOptions.includes(key),
+      )
+    )
+      throw new InvalidCommandError();
+    const projectId = options["--project"],
+      environmentId = options["--environment"];
+    if (!projectId || !environmentId) throw new InvalidCommandError();
+    const scope = { projectId, environmentId };
+    const idempotencyKey = options["--idempotency-key"];
+    const revision = Number(options["--revision"]);
+    const enabled =
+      options["--enabled"] === "true" ? true : options["--enabled"] === "false" ? false : null;
+    const provider = options["--provider"];
+    const userId = options["--user"];
+    let request: NativeAuthCommand;
+    if (actionKey === "config_get") request = { ...scope, action: "config_get" };
+    else if (
+      actionKey === "config_set" &&
+      idempotencyKey &&
+      Number.isSafeInteger(revision) &&
+      revision >= 0 &&
+      enabled !== null &&
+      (options["--signup-policy"] === "open" || options["--signup-policy"] === "invite-only") &&
+      options["--application-name"]
+    ) {
+      const rawPaths = options["--allowed-redirect-paths"];
+      let paths: unknown;
+      if (rawPaths !== undefined) {
+        try {
+          paths = JSON.parse(rawPaths);
+        } catch {
+          throw new InvalidCommandError();
+        }
+        if (
+          !Array.isArray(paths) ||
+          paths.length < 1 ||
+          paths.length > 16 ||
+          !paths.every(isNativeAuthRedirectPath) ||
+          new Set(paths).size !== paths.length
+        )
+          throw new InvalidCommandError();
+      }
+      for (const path of [options["--reset-password-path"], options["--invitation-path"]]) {
+        if (
+          path !== undefined &&
+          (!isNativeAuthRedirectPath(path) || (Array.isArray(paths) && !paths.includes(path)))
+        )
+          throw new InvalidCommandError();
+      }
+      const origin = options["--canonical-origin"];
+      if (origin !== undefined && origin !== "primary") {
+        try {
+          const url = new URL(origin);
+          if (url.protocol !== "https:" || url.origin !== origin || url.username || url.password)
+            throw new InvalidCommandError();
+        } catch {
+          throw new InvalidCommandError();
+        }
+      }
+      request = {
+        ...scope,
+        action: "config_set",
+        idempotencyKey,
+        configurationRevision: revision,
+        enabled,
+        signupPolicy: options["--signup-policy"],
+        applicationName: options["--application-name"],
+        ...(options["--canonical-origin"] === undefined
+          ? {}
+          : {
+              canonicalOrigin:
+                options["--canonical-origin"] === "primary" ? null : options["--canonical-origin"],
+            }),
+        ...(paths === undefined ? {} : { allowedRedirectPaths: paths as string[] }),
+        ...(options["--reset-password-path"] === undefined
+          ? {}
+          : { resetPasswordPath: options["--reset-password-path"] }),
+        ...(options["--invitation-path"] === undefined
+          ? {}
+          : { invitationPath: options["--invitation-path"] }),
+      };
+    } else if (actionKey === "provider_get" && (provider === "google" || provider === "github"))
+      request = { ...scope, action: "provider_get", provider };
+    else if (
+      actionKey === "provider_set" &&
+      idempotencyKey &&
+      Number.isSafeInteger(revision) &&
+      revision >= 0 &&
+      enabled !== null &&
+      (provider === "google" || provider === "github")
+    )
+      request = {
+        ...scope,
+        action: "provider_set",
+        provider,
+        idempotencyKey,
+        configurationRevision: revision,
+        enabled,
+        ...(options["--client-id"] ? { clientId: options["--client-id"] } : {}),
+      };
+    else if (actionKey === "users_list") {
+      const limit = options["--limit"] === undefined ? undefined : Number(options["--limit"]);
+      if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 100))
+        throw new InvalidCommandError();
+      request = {
+        ...scope,
+        action: "users_list",
+        ...(limit === undefined ? {} : { limit }),
+        ...(options["--cursor"] ? { cursor: options["--cursor"] } : {}),
+        ...(options["--search"] ? { search: options["--search"] } : {}),
+      };
+    } else if (actionKey === "user_create" && idempotencyKey && options["--email"])
+      request = { ...scope, action: "user_create", idempotencyKey, email: options["--email"] };
+    else if (actionKey === "user_get" && userId) request = { ...scope, action: "user_get", userId };
+    else if (
+      idempotencyKey &&
+      userId &&
+      [
+        "user_delete",
+        "user_invite",
+        "user_suspend",
+        "user_reactivate",
+        "user_revoke-sessions",
+      ].includes(actionKey)
+    )
+      request = {
+        ...scope,
+        action: (actionKey === "user_revoke-sessions" ? "user_revoke_sessions" : actionKey) as
+          | "user_delete"
+          | "user_invite"
+          | "user_suspend"
+          | "user_reactivate"
+          | "user_revoke_sessions",
+        userId,
+        idempotencyKey,
+      };
+    else throw new InvalidCommandError();
+    if (stdin && request.action !== "provider_set") throw new InvalidCommandError();
+    const environmentToken = handedAccount(
+      options["--token-user"],
+      options["--token-organization"],
+    );
+    const profileAccount = handedAccount(
+      options["--profile-user"],
+      options["--profile-organization"],
+    );
+    if (environmentToken && profileAccount) throw new InvalidCommandError();
+    return {
+      kind: "native-auth",
+      request,
+      stdin,
+      credentialStore,
+      ...(environmentToken ? { environmentToken } : {}),
+      ...(profileAccount ? { profileAccount } : {}),
+    };
+  }
   if (first === "source" && values[0] !== "auto-deploy") {
     if (dryRun || revoke || yes || follow || stdin) throw new InvalidCommandError();
     return parseSourceCommand(values, wait);

@@ -61,9 +61,17 @@ export function assertProjectExport(value: unknown): asserts value is ProjectExp
     Number(archive["bytes"]) > 536870912 ||
     typeof archive["sha256"] !== "string" ||
     !/^sha256:[a-f0-9]{64}$/u.test(archive["sha256"]) ||
-    !['["dev.sql"]', '["prod.sql"]', '["dev.sql","prod.sql"]', '["shared.sql"]'].includes(
-      JSON.stringify(archive["sql_files"]),
-    ) ||
+    ![
+      '["dev.sql"]',
+      '["prod.sql"]',
+      '["dev.sql","prod.sql"]',
+      '["shared.sql"]',
+      '["auth.sql"]',
+      '["dev.sql","auth.sql"]',
+      '["prod.sql","auth.sql"]',
+      '["dev.sql","prod.sql","auth.sql"]',
+      '["shared.sql","auth.sql"]',
+    ].includes(JSON.stringify(archive["sql_files"])) ||
     !timestamp(archive["captured_at"]) ||
     !timestamp(archive["expires_at"])
   )
