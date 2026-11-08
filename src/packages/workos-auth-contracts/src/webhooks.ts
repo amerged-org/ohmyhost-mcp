@@ -16,6 +16,7 @@ export interface VerifyWorkosWebhookInput {
   readonly rawBody: Uint8Array;
   readonly signatureHeader: string;
   readonly secret: string;
+  readonly additionalSecrets?: readonly string[];
   readonly now: Date;
   readonly toleranceMs: number;
   readonly maximumBodyBytes: number;
@@ -66,9 +67,20 @@ export const parseWorkosWebhookEnvelope = (value: unknown): WorkosWebhookEnvelop
 export const verifyAndParseWorkosWebhook = async (
   input: VerifyWorkosWebhookInput,
 ): Promise<WorkosWebhookEnvelope> => {
-  if (input.secret.length === 0) {
+  if (
+    typeof input.secret !== "string" ||
+    input.secret.length === 0 ||
+    (input.additionalSecrets !== undefined &&
+      (!Array.isArray(input.additionalSecrets) ||
+        input.additionalSecrets.length > 1 ||
+        (input.additionalSecrets.length === 1 &&
+          (!Object.hasOwn(input.additionalSecrets, 0) ||
+            typeof input.additionalSecrets[0] !== "string" ||
+            input.additionalSecrets[0].length === 0))))
+  ) {
     throw new WorkosContractError("invalid_webhook_secret", "Webhook secret is invalid");
   }
+  const secrets = [...new Set([input.secret, ...(input.additionalSecrets ?? [])])];
   if (
     !Number.isSafeInteger(input.maximumBodyBytes) ||
     input.maximumBodyBytes <= 0 ||
@@ -94,11 +106,11 @@ export const verifyAndParseWorkosWebhook = async (
   const message = new Uint8Array(prefix.byteLength + input.rawBody.byteLength);
   message.set(prefix);
   message.set(input.rawBody, prefix.byteLength);
-  const importKey = async () => {
+  const importKey = async (secret: string) => {
     try {
       return await globalThis.crypto.subtle.importKey(
         "raw",
-        new TextEncoder().encode(input.secret),
+        new TextEncoder().encode(secret),
         { name: "HMAC", hash: "SHA-256" },
         false,
         ["verify"],
@@ -107,21 +119,26 @@ export const verifyAndParseWorkosWebhook = async (
       throw new WorkosContractError("invalid_webhook_secret", "Webhook secret is invalid");
     }
   };
-  const key = await importKey();
+  const keys = await Promise.all(secrets.map(importKey));
   let valid = false;
-  for (const expectedHexDigest of signature.signatures) {
-    const expected = Uint8Array.from(expectedHexDigest.match(/.{2}/gu) ?? [], (byte) =>
-      Number.parseInt(byte, 16),
-    );
-    try {
-      valid = (await globalThis.crypto.subtle.verify("HMAC", key, expected, message)) || valid;
-    } catch {
-      // Only a verified signature can change the accumulated result.
+  for (const key of keys) {
+    for (const expectedHexDigest of signature.signatures) {
+      const expected = Uint8Array.from(expectedHexDigest.match(/.{2}/gu) ?? [], (byte) =>
+        Number.parseInt(byte, 16),
+      );
+      try {
+        valid = (await globalThis.crypto.subtle.verify("HMAC", key, expected, message)) || valid;
+      } catch {
+        // Only a verified signature can change the accumulated result.
+      }
     }
   }
   if (!valid)
     throw new WorkosContractError("invalid_webhook_signature", "Webhook signature is invalid");
+  // Parse the authenticated snapshot, never caller-owned bytes which may change across awaits.
   return parseWorkosWebhookEnvelope(
-    parseJsonObject(new TextDecoder("utf-8", { fatal: true }).decode(input.rawBody)),
+    parseJsonObject(
+      new TextDecoder("utf-8", { fatal: true }).decode(message.subarray(prefix.byteLength)),
+    ),
   );
 };
