@@ -2831,7 +2831,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
         email: input.email,
         idempotencyKey: input.idempotency_key,
       }),
-    mutationAnnotations(),
+    destructiveAnnotations(),
   );
   registerProductTool(
     server,
