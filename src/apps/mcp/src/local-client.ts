@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   executeManagedMail,
   executeSharedMail,
@@ -38,7 +39,12 @@ import {
 } from "@ohmyhost/contracts/project-context";
 import { lstat, open } from "node:fs/promises";
 import { isAbsolute } from "node:path";
-import { assertProjectExport } from "@ohmyhost/contracts/project-exports";
+import {
+  assertProjectExport,
+  assertProjectExportDownloadLink,
+  EXPORT_PASSWORD_MIN_CHARACTERS,
+  exportPasswordMeetsMinimum,
+} from "@ohmyhost/contracts/project-exports";
 import { parseUserApiKeyPage } from "@ohmyhost/contracts/user-api-keys";
 import { parseFeedbackReceipt, parseFeedbackStatus } from "@ohmyhost/contracts/feedback";
 import { assertOrganizationCreditUsage } from "@ohmyhost/contracts/credit-pricing";
@@ -65,6 +71,7 @@ import {
   createClient,
   createProjectExport,
   getProjectExport,
+  createProjectExportDownloadLink,
   createUserApiKey,
   listUserApiKeys,
   revokeUserApiKey,
@@ -393,6 +400,16 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
       { client: this.#client },
     );
     assertProjectExport(result);
+    return result;
+  }
+  public async createProjectExportDownloadLink(
+    input: Parameters<LocalMcpProductClient["createProjectExportDownloadLink"]>[0],
+  ) {
+    const result = await createProjectExportDownloadLink(
+      { project_id: input.projectId, export_id: input.exportId },
+      { client: this.#client },
+    );
+    assertProjectExportDownloadLink(result);
     return result;
   }
   public async createUserApiKey(input: Parameters<LocalMcpProductClient["createUserApiKey"]>[0]) {
@@ -963,6 +980,7 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
   ) {
     const value = await testProjectDatabaseWebhook(
       {
+        "Idempotency-Key": input.idempotencyKey ?? randomUUID(),
         project_id: input.projectId,
         environment: input.environment,
         webhook_id: input.webhookId,
@@ -977,6 +995,7 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
   ) {
     const value = await deleteProjectDatabaseWebhook(
       {
+        "Idempotency-Key": input.idempotencyKey ?? randomUUID(),
         project_id: input.projectId,
         environment: input.environment,
         webhook_id: input.webhookId,
@@ -1012,6 +1031,7 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
   ) {
     const value = await replayProjectDatabaseWebhookDelivery(
       {
+        "Idempotency-Key": input.idempotencyKey ?? randomUUID(),
         project_id: input.projectId,
         environment: input.environment,
         delivery_id: input.deliveryId,
@@ -1088,7 +1108,12 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
     input: Parameters<LocalMcpProductClient["runDatabaseSchedule"]>[0],
   ) {
     const value = await runProjectDatabaseSchedule(
-      { project_id: input.projectId, name: input.name, environment: input.environment },
+      {
+        "Idempotency-Key": input.idempotencyKey ?? randomUUID(),
+        project_id: input.projectId,
+        name: input.name,
+        environment: input.environment,
+      },
       { client: this.#client },
     );
     assertDatabaseScheduleRunAccepted(value);
@@ -1445,11 +1470,11 @@ async function readExportPasswordFile(path: string): Promise<string> {
     const value = new TextDecoder("utf-8", { fatal: true }).decode(
       buffer.subarray(0, read.bytesRead),
     );
-    if (!value.trim()) throw new Error();
+    if (!value.trim() || !exportPasswordMeetsMinimum(value)) throw new Error();
     return value;
   } catch {
     throw new Error(
-      "EXPORT_PASSWORD_FILE_INVALID: Choose an existing private UTF-8 password file of 1–1024 bytes.",
+      `EXPORT_PASSWORD_FILE_INVALID: Choose an existing private UTF-8 password file of at least ${EXPORT_PASSWORD_MIN_CHARACTERS} characters and 1–1024 bytes.`,
     );
   } finally {
     buffer.fill(0);

@@ -39,7 +39,12 @@ import {
   assertProjectContext,
   assertProjectNotesReceipt,
 } from "@ohmyhost/contracts/project-context";
-import { assertProjectExport } from "@ohmyhost/contracts/project-exports";
+import {
+  assertProjectExport,
+  assertProjectExportDownloadLink,
+  EXPORT_PASSWORD_MIN_CHARACTERS,
+  exportPasswordMeetsMinimum,
+} from "@ohmyhost/contracts/project-exports";
 import { prepareUserTokenFile, UserTokenFileError } from "./user-token-file.js";
 import { parseUserApiKeyPage } from "@ohmyhost/contracts/user-api-keys";
 import { assertOrganizationCreditUsage } from "@ohmyhost/contracts/credit-pricing";
@@ -350,7 +355,9 @@ const HELP_USAGE = Object.freeze({
   "export create":
     "ohmyhost export create --project ULID --idempotency-key KEY --stdin --json (password on stdin only; one accepted SQL ZIP per project per 24 hours)",
   "export get":
-    "ohmyhost export get EXPORT_ULID --project ULID --json (poll the original job; signed ZIP download lasts 24 hours)",
+    "ohmyhost export get EXPORT_ULID --project ULID --json (poll the original job: progress and error only, never a download URL; once it succeeds, run 'ohmyhost export download-link' for the signed 24-hour ZIP link)",
+  "export download-link":
+    "ohmyhost export download-link EXPORT_ULID --project ULID --json (signs one audited 24-hour link of a succeeded SQL ZIP; the URL is a secret, keep it out of files and notes; each call signs another link)",
   "credits account": "ohmyhost credits account --organization ULID --json",
   "referral link":
     "ohmyhost referral link --organization ULID --json (the workspace's link to share; a new user whose first workspace comes from it starts with 30 days of Paid and 1,000 credits, and its first payment gives this workspace 1,000 credits plus 30 days of Paid unless a subscription or an unbounded grant already covers it)",
@@ -442,13 +449,13 @@ const HELP_USAGE = Object.freeze({
   "database webhook get":
     "ohmyhost database webhook get --project ULID [--environment dev|prod] --webhook ID --json",
   "database webhook delete":
-    "ohmyhost database webhook delete --project ULID --environment dev|prod --webhook ID --yes --json",
+    "ohmyhost database webhook delete --project ULID --environment dev|prod --webhook ID [--idempotency-key KEY] --yes --json (a retry with the same key and request returns the stored answer; without a key each call is new)",
   "database webhook test":
-    "ohmyhost database webhook test --project ULID --environment dev|prod --webhook ID --yes --json (sends one signed test request to the receiver; nothing is stored)",
+    "ohmyhost database webhook test --project ULID --environment dev|prod --webhook ID [--idempotency-key KEY] --yes --json (sends one signed test request to the receiver; nothing is stored; a retry with the same key and request returns the stored outcome without sending again)",
   "database webhook deliveries":
     "ohmyhost database webhook deliveries --project ULID [--environment dev|prod] [--webhook ID] [--limit 1..100] [--cursor CURSOR] --json",
   "database webhook replay":
-    "ohmyhost database webhook replay --project ULID --environment dev|prod --delivery ID --yes --json",
+    "ohmyhost database webhook replay --project ULID --environment dev|prod --delivery ID [--idempotency-key KEY] --yes --json (a retry with the same key and request returns the stored answer without queuing another attempt)",
   "database schedule set":
     "ohmyhost database schedule set --project ULID --environment dev|prod --name NAME (--cron EXPR | --every-seconds N) --statements-file PATH [--timeout-ms N] [--enabled true|false] --yes --json (runs the statements in the file, a UTF-8 JSON array of 1 to 20 SQL strings, as the runtime role of the application; cron has five fields in UTC; every-seconds is 60 to 2678400; timeout-ms is 1000 to 30000, default 10000). A project whose Stop budget is reached has its schedules disabled automatically, within about an hour of the billed usage reaching the budget: the credit service does this after its hourly pgcf pass, and Continue budgets are never touched. While the budget is reached, schedule set with enabled true and schedule run are refused with project_budget_exceeded (HTTP 402). Re-enabling is manual: raise the budget (or wait for the next UTC month) and run database schedule set --enabled true again with the schedule body (read it with schedule get).",
   "database schedule list":
@@ -460,7 +467,7 @@ const HELP_USAGE = Object.freeze({
   "database schedule runs":
     "ohmyhost database schedule runs --project ULID [--environment dev|prod] --name NAME [--limit 1..50] --json",
   "database schedule run":
-    "ohmyhost database schedule run --project ULID --environment dev|prod --name NAME --yes --json (queues one run now, in addition to the timer; refused with project_budget_exceeded (HTTP 402) while the project's Stop budget is reached)",
+    "ohmyhost database schedule run --project ULID --environment dev|prod --name NAME [--idempotency-key KEY] --yes --json (queues one run now, in addition to the timer; a retry with the same key and request returns the stored answer without a second run; refused with project_budget_exceeded (HTTP 402) while the project's Stop budget is reached)",
   "database executions":
     "ohmyhost database executions --project ULID [--environment dev|prod] --from ISO --to ISO --granularity hour|day [--limit 1..100] [--cursor CURSOR] --json (UTC timestamps like 2026-10-30T00:00:00.000Z aligned to the granularity, at most 31 days; counts schedule runs, webhook attempts and events per hour or day; these are counters only, executions have no price of their own and the awake compute time of the database is what is billed)",
   "database psql":
@@ -639,11 +646,11 @@ export const invalidCommandAction = (argv: readonly string[], commandPrefix: str
  * (--yes but no key) may already have applied its change, so its state is read first. Any other
  * command only reads or signs in; it keeps the general advice.
  */
-const retryAdvice = (command: string): string => {
+const retryAdvice = (command: string, keyed = true): string => {
   const usage = Object.hasOwn(HELP_USAGE, command)
     ? HELP_USAGE[command as CustomerCommandLabel]
     : "";
-  if (usage.includes("--idempotency-key"))
+  if (keyed && usage.includes("--idempotency-key"))
     return "run the same command again with the same --idempotency-key; the change may already have been applied, and a new key could apply it twice";
   if (usage.includes("--yes"))
     return "this command has no idempotency key and the change may already have been applied; check its current state first with the matching list or get command (for example database access list --project ULID --json), and run the command again only if the change is not there";
@@ -651,18 +658,18 @@ const retryAdvice = (command: string): string => {
 };
 
 /** The next step after an unexpected client failure; the stderr diagnostic line identifies it. */
-export const internalErrorAction = (command: string): string =>
-  `The ohmyhost client stopped on an unexpected error; the stderr line starting with [ohmyhost: identifies it. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json and install the published client if it is older, then ${retryAdvice(command)}. If the current client fails the same way, report it with feedback submit (kind bug, error code internal_error) and quote that stderr line.`;
+export const internalErrorAction = (command: string, keyed = true): string =>
+  `The ohmyhost client stopped on an unexpected error; the stderr line starting with [ohmyhost: identifies it. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json and install the published client if it is older, then ${retryAdvice(command, keyed)}. If the current client fails the same way, report it with feedback submit (kind bug, error code internal_error) and quote that stderr line.`;
 
 /** The local credential store or saved-login index failed; a sandbox is the usual cause. */
 export const CREDENTIAL_STORE_UNAVAILABLE_ACTION =
   "This computer's credential store (for example macOS Keychain or Windows Credential Manager) or the saved-login list in ~/.ohmyhost/profiles could not be read or written; nothing was changed. If the agent runs in a sandbox, run the command with access to them before asking the customer to sign in again. If the store is locked, ask the customer to unlock it, then run the command again. On a server, container or CI runner without a credential store, do not run login: load OHMYHOST_TOKEN from a private env file with a token from the portal's API Tokens page.";
 
-const responseContractAction = (command: string): string =>
-  `The ohmyho.st API answered in a form this client version does not accept, usually because the client is older than the service. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json; if it is older, install the published CLI and MCP and reload MCP. Then ${retryAdvice(command)}. If the current version answers this too, report it with feedback submit (kind bug, error code response_contract_invalid).`;
+const responseContractAction = (command: string, keyed = true): string =>
+  `The ohmyho.st API answered in a form this client version does not accept, usually because the client is older than the service. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json; if it is older, install the published CLI and MCP and reload MCP. Then ${retryAdvice(command, keyed)}. If the current version answers this too, report it with feedback submit (kind bug, error code response_contract_invalid).`;
 
-const requestTimeoutAction = (command: string): string =>
-  `The ohmyho.st API did not answer within 30 seconds; ${retryAdvice(command)}.`;
+const requestTimeoutAction = (command: string, keyed = true): string =>
+  `The ohmyho.st API did not answer within 30 seconds; ${retryAdvice(command, keyed)}.`;
 
 const LOGOUT_UNCONFIRMED_ACTION =
   "The saved login was removed from this computer, but ohmyho.st did not confirm that its session ended. Running logout again cannot retry this, because the login is gone; do not sign in again just to revoke it. Tell the customer the session end was not confirmed.";
@@ -1044,7 +1051,11 @@ export class ProductCli {
       if (command.kind === "export-create") {
         const api = await this.authenticatedApi(command.credentialStore, signal);
         const password = await this.dependencies.readSecretValue(signal);
-        if (password.trim().length === 0 || new TextEncoder().encode(password).length > 1024)
+        if (
+          password.trim().length === 0 ||
+          new TextEncoder().encode(password).length > 1024 ||
+          !exportPasswordMeetsMinimum(password)
+        )
           throw new SecretInputError();
         const operation = parseOperation(
           await api.createProjectExport({
@@ -1063,6 +1074,15 @@ export class ProductCli {
         });
         assertProjectExport(result);
         return success("export get", { status: result.state, export: result });
+      }
+      if (command.kind === "export-download-link") {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        const link = await api.createProjectExportDownloadLink({
+          projectId: command.projectId,
+          exportId: command.exportId,
+        });
+        assertProjectExportDownloadLink(link);
+        return success("export download-link", { status: "succeeded", download_link: link });
       }
       if (command.kind === "feedback-status") {
         const api = await this.authenticatedApi(command.credentialStore, signal);
@@ -1328,7 +1348,14 @@ export class ProductCli {
           profileLimitAction(this.dependencies.commandPrefix),
         );
       this.recordDiagnostic(diagnosticDescriptor(error, signal));
-      return classifyFailure(name, error, signal, this.context());
+      return classifyFailure(
+        name,
+        error,
+        signal,
+        this.context(),
+        // A mutation parsed without its optional --idempotency-key has no key to repeat with.
+        !("idempotencyKey" in command && command.idempotencyKey === null),
+      );
     }
   }
 
@@ -2113,6 +2140,7 @@ export class ProductCli {
       projectId: command.projectId,
       environment: command.environment,
       webhookId: command.webhookId,
+      ...(command.idempotencyKey === null ? {} : { idempotencyKey: command.idempotencyKey }),
     });
     return success("database webhook delete", { status: "succeeded", deleted });
   }
@@ -2126,6 +2154,7 @@ export class ProductCli {
       projectId: command.projectId,
       environment: command.environment,
       webhookId: command.webhookId,
+      ...(command.idempotencyKey === null ? {} : { idempotencyKey: command.idempotencyKey }),
     });
     return success("database webhook test", { status: "succeeded", result });
   }
@@ -2158,6 +2187,7 @@ export class ProductCli {
       projectId: command.projectId,
       environment: command.environment,
       deliveryId: command.deliveryId,
+      ...(command.idempotencyKey === null ? {} : { idempotencyKey: command.idempotencyKey }),
     });
     return success("database webhook replay", { status: "succeeded", replay });
   }
@@ -2239,6 +2269,7 @@ export class ProductCli {
       projectId: command.projectId,
       environment: command.environment,
       name: command.name,
+      ...(command.idempotencyKey === null ? {} : { idempotencyKey: command.idempotencyKey }),
     });
     return success("database schedule run", { status: "succeeded", run });
   }
@@ -3258,6 +3289,7 @@ const classifyFailure = (
   error: unknown,
   signal: AbortSignal,
   actingAs?: Readonly<Record<string, unknown>>,
+  keyed = true,
 ): CliResult => {
   if (error instanceof LocalSourcePublicationError)
     return failure(
@@ -3276,16 +3308,16 @@ const classifyFailure = (
       130,
       "command_cancelled",
       true,
-      `The command was stopped by an interrupt or termination signal, for example the shell's command timeout, before it finished; ${retryAdvice(command)}. Give login and commands with --wait or --follow several minutes, or run them in the background.`,
+      `The command was stopped by an interrupt or termination signal, for example the shell's command timeout, before it finished; ${retryAdvice(command, keyed)}. Give login and commands with --wait or --follow several minutes, or run them in the background.`,
     );
   }
   if (isTimeout(error)) {
-    return failure(command, 8, "request_timeout", true, requestTimeoutAction(command));
+    return failure(command, 8, "request_timeout", true, requestTimeoutAction(command, keyed));
   }
   // A retryable request_timeout is a token refresh that timed out inside this command; the logout
   // timeout is not retryable and keeps its own advice.
   if (error instanceof ProductCliFailure && error.code === "request_timeout" && error.retryable) {
-    return failure(command, 8, "request_timeout", true, requestTimeoutAction(command));
+    return failure(command, 8, "request_timeout", true, requestTimeoutAction(command, keyed));
   }
   if (error instanceof ProductCliFailure) {
     return failure(
@@ -3304,7 +3336,7 @@ const classifyFailure = (
       "secret_input_invalid",
       false,
       command === "export create"
-        ? "Pipe the ZIP password through standard input: non-blank UTF-8 of at most 1024 bytes. A final line break becomes part of the password."
+        ? `Pipe the ZIP password through standard input: at least ${EXPORT_PASSWORD_MIN_CHARACTERS} characters, non-blank UTF-8 of at most 1024 bytes. A final line break becomes part of the password.`
         : "Pipe a non-empty UTF-8 value of at most 5120 bytes through standard input.",
     );
   }
@@ -3345,7 +3377,13 @@ const classifyFailure = (
     );
   }
   if (error instanceof ResponseContractError) {
-    return failure(command, 7, "response_contract_invalid", false, responseContractAction(command));
+    return failure(
+      command,
+      7,
+      "response_contract_invalid",
+      false,
+      responseContractAction(command, keyed),
+    );
   }
   if (error instanceof PublicResponseTooLargeError) {
     return failure(
@@ -3378,12 +3416,18 @@ const classifyFailure = (
         7,
         "response_contract_invalid",
         false,
-        responseContractAction(command),
+        responseContractAction(command, keyed),
       );
     }
   }
   if (looksLikeRemoteObject(error)) {
-    return failure(command, 7, "response_contract_invalid", false, responseContractAction(command));
+    return failure(
+      command,
+      7,
+      "response_contract_invalid",
+      false,
+      responseContractAction(command, keyed),
+    );
   }
   if (error instanceof NetworkTransportError) {
     return failure(
@@ -3391,10 +3435,10 @@ const classifyFailure = (
       8,
       "network_error",
       true,
-      `The request did not reach the ohmyho.st API, or its answer was cut off. If the agent runs in a sandbox without network access, run the command with network access. Otherwise ${retryAdvice(command)}.`,
+      `The request did not reach the ohmyho.st API, or its answer was cut off. If the agent runs in a sandbox without network access, run the command with network access. Otherwise ${retryAdvice(command, keyed)}.`,
     );
   }
-  return failure(command, 1, "internal_error", false, internalErrorAction(command));
+  return failure(command, 1, "internal_error", false, internalErrorAction(command, keyed));
 };
 
 /** A 409 idempotency_key_reused problem, with what its answer carries. */
@@ -3631,6 +3675,7 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "source-read") return `source ${command.action}`;
   if (command.kind === "export-create") return "export create";
   if (command.kind === "export-get") return "export get";
+  if (command.kind === "export-download-link") return "export download-link";
   if (command.kind === "token-create") return "token create";
   if (command.kind === "token-list") return "token list";
   if (command.kind === "token-revoke") return "token revoke";

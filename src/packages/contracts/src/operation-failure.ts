@@ -130,6 +130,14 @@ const failures = {
     "The Prod deployment changed before promotion could start.",
     "Read current Prod status, run 'ohmyhost deployment promote plan' again and confirm it with the new resource_etag and confirmation_token. Replaying this terminal operation cannot replace its stale target.",
   ],
+  project_handle_taken: [
+    "The requested project handle was taken before the rename could finish. The project keeps its current handle.",
+    "Run 'ohmyhost project handle check --handle NAME --json' or MCP project_handle_check, choose a handle that is still free, then submit the rename again with the current ETag and a new idempotency key. Replaying this terminal operation cannot take the handle.",
+  ],
+  managed_source_dispatch_failed: [
+    "The managed source change could not be dispatched for processing, so it was ended.",
+    "Read the current source to confirm it did not change, then submit the change again with a new idempotency key.",
+  ],
 } as const;
 
 export interface PublicOperationFailure {

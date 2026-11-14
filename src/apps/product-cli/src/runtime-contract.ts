@@ -232,7 +232,13 @@ export interface PublicCloudflareDnsAuthorization {
 }
 
 export interface PublicCloudflareDnsAuthorizationStatus {
-  readonly status: "not_authorized" | "pending" | "authorized" | "expired" | "revoked";
+  readonly status:
+    | "not_authorized"
+    | "pending"
+    | "authorized"
+    | "reauthorization_required"
+    | "expired"
+    | "revoked";
   readonly zone: string | null;
   readonly scopes: readonly ("dns.write" | "zone.read")[];
   readonly expires_at: string | null;
@@ -428,6 +434,7 @@ export const parseCloudflareDnsAuthorizationStatus = (
     (status !== "not_authorized" &&
       status !== "pending" &&
       status !== "authorized" &&
+      status !== "reauthorization_required" &&
       status !== "expired" &&
       status !== "revoked") ||
     (status === "not_authorized"
@@ -439,7 +446,8 @@ export const parseCloudflareDnsAuthorizationStatus = (
     new Set(scopes).size !== scopes.length ||
     (input["expires_at"] !== null && !isIsoInstant(input["expires_at"])) ||
     (status === "authorized" && [...scopes].sort().join(",") !== "dns.write,zone.read") ||
-    (status === "not_authorized" && (scopes.length !== 0 || input["expires_at"] !== null))
+    (status === "not_authorized" && (scopes.length !== 0 || input["expires_at"] !== null)) ||
+    (status === "reauthorization_required" && (scopes.length !== 0 || input["expires_at"] !== null))
   ) {
     throw new ResponseContractError();
   }
@@ -1042,7 +1050,7 @@ export interface PublicFunctionRun {
   readonly deployment_id: string;
   readonly cron: string;
   readonly scheduled_at: string;
-  readonly state: "due" | "running" | "retry" | "succeeded" | "failed";
+  readonly state: "due" | "running" | "retry" | "succeeded" | "failed" | "skipped";
   readonly attempt: number;
   readonly status_code: number | null;
   readonly started_at: string | null;
@@ -1073,7 +1081,9 @@ const parseFunctionRun = (value: unknown): PublicFunctionRun => {
     input["cron"].length === 0 ||
     input["cron"].length > 64 ||
     !isIsoInstant(input["scheduled_at"]) ||
-    !["due", "running", "retry", "succeeded", "failed"].includes(String(input["state"])) ||
+    !["due", "running", "retry", "succeeded", "failed", "skipped"].includes(
+      String(input["state"]),
+    ) ||
     !Number.isSafeInteger(input["attempt"]) ||
     Number(input["attempt"]) < 0 ||
     Number(input["attempt"]) > 3 ||

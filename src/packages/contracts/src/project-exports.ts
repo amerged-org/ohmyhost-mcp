@@ -1,4 +1,10 @@
 import { publicOperationFailure, type PublicOperationFailure } from "./operation-failure.js";
+/** Minimum characters for a new export password; restore and capture keep their own bounds. */
+export const EXPORT_PASSWORD_MIN_CHARACTERS = 12;
+/** Counts code points, the characters a customer types, matching JSON Schema minLength. */
+export function exportPasswordMeetsMinimum(value: string): boolean {
+  return Array.from(value).length >= EXPORT_PASSWORD_MIN_CHARACTERS;
+}
 export interface ProjectExport {
   readonly id: string;
   readonly project_id: string;
@@ -18,6 +24,30 @@ export interface ProjectExport {
   } | null;
 }
 /** The public export shape carries no job password, source URL or permanent storage credential. */
+/** The answer of one audited download link: a signed URL and its expiry, never the archive state. */
+export interface ProjectExportDownloadLink {
+  id: string;
+  project_id: string;
+  download_url: string;
+  download_expires_at: string;
+}
+export function assertProjectExportDownloadLink(
+  value: unknown,
+): asserts value is ProjectExportDownloadLink {
+  if (
+    !record(value) ||
+    Object.keys(value).sort().join(",") !== "download_expires_at,download_url,id,project_id" ||
+    typeof value["id"] !== "string" ||
+    !id.test(value["id"]) ||
+    typeof value["project_id"] !== "string" ||
+    !id.test(value["project_id"]) ||
+    typeof value["download_url"] !== "string" ||
+    !value["download_url"].startsWith("https://") ||
+    !timestamp(value["download_expires_at"])
+  )
+    throw new TypeError("Project export download link is invalid");
+}
+
 export function assertProjectExport(value: unknown): asserts value is ProjectExport {
   if (
     !record(value) ||

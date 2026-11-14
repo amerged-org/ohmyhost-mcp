@@ -493,10 +493,16 @@ export type CloudflareDnsAuthorization = {
 };
 
 /**
- * Credential-free project authorization state. Without an authorization, status is not_authorized, zone and expires_at are null, and scopes is empty. All other states name the actual customer zone; no platform or customer zone is inferred.
+ * Credential-free project authorization state. Without an authorization, status is not_authorized, zone and expires_at are null, and scopes is empty. When the consenting user no longer holds project write authority, status is reauthorization_required, which names the zone while scopes is empty and expires_at is null until the owner authorizes the zone again. All other states name the actual customer zone; no platform or customer zone is inferred.
  */
 export type CloudflareDnsAuthorizationStatus = {
-  status: "not_authorized" | "pending" | "authorized" | "expired" | "revoked";
+  status:
+    | "not_authorized"
+    | "pending"
+    | "authorized"
+    | "reauthorization_required"
+    | "expired"
+    | "revoked";
   zone: string | null;
   scopes: Array<"dns.write" | "zone.read">;
   expires_at: string | null;
@@ -641,6 +647,21 @@ export type GithubOrganizationConnection = {
 export type GithubOrganizationConnectionStatus = {
   status: "not_connected" | "connected" | "revoked";
   connection: GithubOrganizationConnection | null;
+};
+
+export type OrganizationMcpConnection = {
+  connection_id: string;
+  client_id: string;
+  user_id: string;
+  connected_at: string;
+};
+
+export type OrganizationMcpConnectionList = {
+  connections: Array<OrganizationMcpConnection>;
+};
+
+export type OrganizationMcpConnectionRevocation = {
+  state: "pending" | "revoked";
 };
 
 export type GithubConnectionAuthorization = {
@@ -878,7 +899,7 @@ export type FunctionRun = {
   deployment_id: Ulid;
   cron: string;
   scheduled_at: string;
-  state: "due" | "running" | "retry" | "succeeded" | "failed";
+  state: "due" | "running" | "retry" | "succeeded" | "failed" | "skipped";
   attempt: number;
   status_code: number | null;
   started_at: string | null;
@@ -1180,6 +1201,9 @@ export type DatabaseWebhookCreateRequest = {
 export type DatabaseWebhook = {
   id: string;
   environment: "dev" | "prod";
+  /**
+   * The receiver URL. Callers without projects:write receive only its origin, because the path or query may carry the receiver's credential.
+   */
   url: string;
   event_types: Array<DatabaseWebhookEventPattern>;
   /**
@@ -1782,6 +1806,7 @@ export type ProblemDetails = {
     | "promotion_target_stale"
     | "promotion_invalid_target"
     | "mail_domain_conflict"
+    | "mail_domain_pending_limit"
     | "mail_domain_required"
     | "mail_capacity_unavailable"
     | "storage_jurisdiction_conflict"
@@ -1796,8 +1821,10 @@ export type ProblemDetails = {
     | "project_handle_taken"
     | "project_handle_unchanged"
     | "project_rename_blocked"
+    | "database_limit_reached"
     | "payload_too_large"
     | "rate_limited"
+    | "build_capacity_reached"
     | "insufficient_organization_credits"
     | "paid_plan_required"
     | "project_budget_exceeded"
@@ -1834,16 +1861,23 @@ export type ProblemDetails = {
     | "api_key_creation_uncertain"
     | "api_key_permissions_unavailable"
     | "reconciliation_exhausted"
+    | "reconciliation_not_pending"
     | "service_unavailable"
     | "source_commit_not_found"
     | "domain_hostname_taken"
+    | "domain_ownership_required"
     | "domain_dns_conflict"
     | "data_change_blocked"
     | "data_change_in_progress"
     | "data_change_not_applicable"
     | "rollback_target_data_changed"
     | "project_domain_delete_required"
-    | "native_domain_sync_pending";
+    | "native_domain_sync_pending"
+    | "native_auth_launch_unavailable"
+    | "native_auth_provider_unavailable"
+    | "native_auth_epoch_exhausted"
+    | "native_user_conflict"
+    | "project_domains_conflict";
   request_id: string;
   retryable: boolean;
   /**
@@ -2060,7 +2094,9 @@ export type OperationFailure = {
     | "provider_state_absent"
     | "auto_deploy_plan_rejected"
     | "promotion_source_stale"
-    | "promotion_target_stale";
+    | "promotion_target_stale"
+    | "project_handle_taken"
+    | "managed_source_dispatch_failed";
   message: string;
   /**
    * A terminal operation cannot be retried in place; follow suggested_action.
@@ -4482,6 +4518,61 @@ export type ConnectGithubOrganizationResponses = {
 export type ConnectGithubOrganizationResponse =
   ConnectGithubOrganizationResponses[keyof ConnectGithubOrganizationResponses];
 
+export type DisconnectGithubOrganizationData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/github";
+};
+
+export type DisconnectGithubOrganizationErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DisconnectGithubOrganizationError =
+  DisconnectGithubOrganizationErrors[keyof DisconnectGithubOrganizationErrors];
+
+export type DisconnectGithubOrganizationResponses = {
+  /**
+   * The connection after disconnect, revoked or not connected.
+   */
+  200: GithubOrganizationConnectionStatus;
+};
+
+export type DisconnectGithubOrganizationResponse =
+  DisconnectGithubOrganizationResponses[keyof DisconnectGithubOrganizationResponses];
+
 export type GetGithubOrganizationConnectionData = {
   body?: never;
   headers?: {
@@ -4536,6 +4627,117 @@ export type GetGithubOrganizationConnectionResponses = {
 
 export type GetGithubOrganizationConnectionResponse =
   GetGithubOrganizationConnectionResponses[keyof GetGithubOrganizationConnectionResponses];
+
+export type ListOrganizationMcpConnectionsData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/mcp-connections";
+};
+
+export type ListOrganizationMcpConnectionsErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListOrganizationMcpConnectionsError =
+  ListOrganizationMcpConnectionsErrors[keyof ListOrganizationMcpConnectionsErrors];
+
+export type ListOrganizationMcpConnectionsResponses = {
+  /**
+   * The live MCP connections of the workspace.
+   */
+  200: OrganizationMcpConnectionList;
+};
+
+export type ListOrganizationMcpConnectionsResponse =
+  ListOrganizationMcpConnectionsResponses[keyof ListOrganizationMcpConnectionsResponses];
+
+export type RevokeOrganizationMcpConnectionData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+    connection_id: string;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/mcp-connections/{connection_id}";
+};
+
+export type RevokeOrganizationMcpConnectionErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RevokeOrganizationMcpConnectionError =
+  RevokeOrganizationMcpConnectionErrors[keyof RevokeOrganizationMcpConnectionErrors];
+
+export type RevokeOrganizationMcpConnectionResponses = {
+  /**
+   * The disconnect state.
+   */
+  200: OrganizationMcpConnectionRevocation;
+};
+
+export type RevokeOrganizationMcpConnectionResponse =
+  RevokeOrganizationMcpConnectionResponses[keyof RevokeOrganizationMcpConnectionResponses];
 
 export type GetOrganizationReferralData = {
   body?: never;
@@ -5149,9 +5351,13 @@ export type CompleteGithubSourceAuthorizationErrors = {
    */
   400: ProblemDetails;
   /**
-   * The authorizing GitHub account lacks the required installation access or account authority.
+   * The authorizing GitHub account lacks the required installation access or account authority. It is also the answer, for a machine client, to an unknown state, to another user's portal session and to a missing portal session; a browser is sent to the unknown-state page instead.
    */
   403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -5183,6 +5389,10 @@ export type CompleteCloudflareDnsAuthorizationErrors = {
    * The request failed.
    */
   400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -5786,7 +5996,7 @@ export type GetOrganizationCreditUsageResponse =
 export type CreateProjectExportData = {
   body: {
     /**
-     * Non-blank user-controlled ZIP password, at most 1024 UTF-8 bytes. Never include it in logs or command-line arguments.
+     * User-controlled ZIP password of at least 12 characters and at most 1024 UTF-8 bytes, not blank. Never include it in logs or command-line arguments.
      */
     password: string;
   };
@@ -5901,6 +6111,70 @@ export type GetProjectExportResponses = {
 };
 
 export type GetProjectExportResponse = GetProjectExportResponses[keyof GetProjectExportResponses];
+
+export type CreateProjectExportDownloadLinkData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    export_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/exports/{export_id}/download-links";
+};
+
+export type CreateProjectExportDownloadLinkErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateProjectExportDownloadLinkError =
+  CreateProjectExportDownloadLinkErrors[keyof CreateProjectExportDownloadLinkErrors];
+
+export type CreateProjectExportDownloadLinkResponses = {
+  /**
+   * The signed download URL and its expiry.
+   */
+  200: {
+    id: Ulid;
+    project_id: Ulid;
+    download_url: string;
+    download_expires_at: string;
+  };
+};
+
+export type CreateProjectExportDownloadLinkResponse =
+  CreateProjectExportDownloadLinkResponses[keyof CreateProjectExportDownloadLinkResponses];
 
 export type GetProjectCreditBudgetData = {
   body?: never;
@@ -6830,6 +7104,10 @@ export type CreateProjectDevAccessTicketData = {
      * Optional caller-provided correlation identifier.
      */
     "X-Request-Id"?: string;
+    /**
+     * Optional and ignored. This route does not replay a stored answer, so a repeated request issues another ticket and revokes the unused one.
+     */
+    "Idempotency-Key"?: string;
   };
   path: {
     /**
@@ -9131,6 +9409,10 @@ export type CreateProjectDatabaseAccessData = {
      * Optional caller-provided correlation identifier.
      */
     "X-Request-Id"?: string;
+    /**
+     * Optional and ignored. This route does not replay a stored answer, so a repeated request issues another credential.
+     */
+    "Idempotency-Key"?: string;
   };
   path: {
     /**
@@ -9346,6 +9628,10 @@ export type ListProjectDatabaseWatchesErrors = {
    * The request failed.
    */
   401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
   /**
    * The resource does not exist or is not visible to the authenticated principal.
    */
@@ -9638,11 +9924,15 @@ export type CreateProjectDatabaseWebhookResponse =
 
 export type DeleteProjectDatabaseWebhookData = {
   body?: never;
-  headers?: {
+  headers: {
     /**
      * Optional caller-provided correlation identifier.
      */
     "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
   };
   path: {
     /**
@@ -9676,6 +9966,10 @@ export type DeleteProjectDatabaseWebhookErrors = {
    * The resource does not exist or is not visible to the authenticated principal.
    */
   404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -9764,11 +10058,15 @@ export type GetProjectDatabaseWebhookResponse =
 
 export type TestProjectDatabaseWebhookData = {
   body?: never;
-  headers?: {
+  headers: {
     /**
      * Optional caller-provided correlation identifier.
      */
     "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
   };
   path: {
     /**
@@ -9802,6 +10100,10 @@ export type TestProjectDatabaseWebhookErrors = {
    * The resource does not exist or is not visible to the authenticated principal.
    */
   404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -9898,11 +10200,15 @@ export type ListProjectDatabaseWebhookDeliveriesResponse =
 
 export type ReplayProjectDatabaseWebhookDeliveryData = {
   body?: never;
-  headers?: {
+  headers: {
     /**
      * Optional caller-provided correlation identifier.
      */
     "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
   };
   path: {
     /**
@@ -10288,11 +10594,15 @@ export type ListProjectDatabaseScheduleRunsResponse =
 
 export type RunProjectDatabaseScheduleData = {
   body?: never;
-  headers?: {
+  headers: {
     /**
      * Optional caller-provided correlation identifier.
      */
     "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
   };
   path: {
     /**
@@ -11556,6 +11866,70 @@ export type PrepareManagedMailWebhookResponses = {
 
 export type PrepareManagedMailWebhookResponse =
   PrepareManagedMailWebhookResponses[keyof PrepareManagedMailWebhookResponses];
+
+export type RotateManagedMailWebhookSecretData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    project_id: Ulid;
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/mail-webhook:rotate";
+};
+
+export type RotateManagedMailWebhookSecretErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RotateManagedMailWebhookSecretError =
+  RotateManagedMailWebhookSecretErrors[keyof RotateManagedMailWebhookSecretErrors];
+
+export type RotateManagedMailWebhookSecretResponses = {
+  /**
+   * Authorized mail result with the new signing secret.
+   */
+  200: ManagedMailWebhook;
+};
+
+export type RotateManagedMailWebhookSecretResponse =
+  RotateManagedMailWebhookSecretResponses[keyof RotateManagedMailWebhookSecretResponses];
 
 export type VerifyManagedMailWebhookData = {
   body?: never;

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   executeManagedMail,
   executeSharedMail,
@@ -72,7 +73,12 @@ import {
   type ProjectContext,
   type ProjectNotesReceipt,
 } from "@ohmyhost/contracts/project-context";
-import { assertProjectExport, type ProjectExport } from "@ohmyhost/contracts/project-exports";
+import {
+  assertProjectExport,
+  assertProjectExportDownloadLink,
+  type ProjectExport,
+  type ProjectExportDownloadLink,
+} from "@ohmyhost/contracts/project-exports";
 import {
   parseUserApiKeyCreation,
   parseUserApiKeyPage,
@@ -88,6 +94,7 @@ import {
   createClient,
   createProjectExport,
   getProjectExport,
+  createProjectExportDownloadLink,
   createUserApiKey,
   listUserApiKeys,
   revokeUserApiKey,
@@ -295,6 +302,10 @@ export interface ProductApi {
     idempotencyKey: string;
   }): Promise<Operation>;
   getProjectExport(input: { projectId: string; exportId: string }): Promise<ProjectExport>;
+  createProjectExportDownloadLink(input: {
+    projectId: string;
+    exportId: string;
+  }): Promise<ProjectExportDownloadLink>;
   createUserApiKey(input: {
     organizationId: string;
     name: string;
@@ -397,11 +408,14 @@ export interface ProductApi {
     readonly projectId: string;
     readonly environment: "dev" | "prod";
     readonly webhookId: string;
+    /** One new key per call when absent; the same key retries the same request and gets its stored answer. */
+    readonly idempotencyKey?: string;
   }): Promise<DatabaseWebhookDeleted>;
   testProjectDatabaseWebhook(input: {
     readonly projectId: string;
     readonly environment: "dev" | "prod";
     readonly webhookId: string;
+    readonly idempotencyKey?: string;
   }): Promise<DatabaseWebhookTestResult>;
   createProjectDatabaseWatch(input: {
     readonly projectId: string;
@@ -436,6 +450,7 @@ export interface ProductApi {
     readonly projectId: string;
     readonly environment: "dev" | "prod";
     readonly deliveryId: string;
+    readonly idempotencyKey?: string;
   }): Promise<DatabaseWebhookReplayAccepted>;
   setProjectDatabaseSchedule(input: {
     readonly projectId: string;
@@ -467,6 +482,7 @@ export interface ProductApi {
     readonly projectId: string;
     readonly environment: "dev" | "prod";
     readonly name: string;
+    readonly idempotencyKey?: string;
   }): Promise<DatabaseScheduleRunAccepted>;
   getProjectDatabaseExecutionUsage(input: {
     readonly projectId: string;
@@ -775,6 +791,16 @@ export class GeneratedSdkProductApi implements ProductApi {
       { client: this.#client },
     );
     assertProjectExport(result);
+    return result;
+  }
+  public async createProjectExportDownloadLink(
+    input: Parameters<ProductApi["createProjectExportDownloadLink"]>[0],
+  ) {
+    const result = await createProjectExportDownloadLink(
+      { project_id: input.projectId, export_id: input.exportId },
+      { client: this.#client },
+    );
+    assertProjectExportDownloadLink(result);
     return result;
   }
   public async getCurrentIdentity(): Promise<CurrentIdentity> {
@@ -1148,6 +1174,7 @@ export class GeneratedSdkProductApi implements ProductApi {
   ): Promise<DatabaseWebhookDeleted> {
     const value = await deleteProjectDatabaseWebhook(
       {
+        "Idempotency-Key": input.idempotencyKey ?? randomUUID(),
         project_id: input.projectId,
         environment: input.environment,
         webhook_id: input.webhookId,
@@ -1164,6 +1191,7 @@ export class GeneratedSdkProductApi implements ProductApi {
   ): Promise<DatabaseWebhookTestResult> {
     const value = await testProjectDatabaseWebhook(
       {
+        "Idempotency-Key": input.idempotencyKey ?? randomUUID(),
         project_id: input.projectId,
         environment: input.environment,
         webhook_id: input.webhookId,
@@ -1201,6 +1229,7 @@ export class GeneratedSdkProductApi implements ProductApi {
   ): Promise<DatabaseWebhookReplayAccepted> {
     const value = await replayProjectDatabaseWebhookDelivery(
       {
+        "Idempotency-Key": input.idempotencyKey ?? randomUUID(),
         project_id: input.projectId,
         environment: input.environment,
         delivery_id: input.deliveryId,
@@ -1299,7 +1328,12 @@ export class GeneratedSdkProductApi implements ProductApi {
     input: Parameters<ProductApi["runProjectDatabaseSchedule"]>[0],
   ): Promise<DatabaseScheduleRunAccepted> {
     const value = await runProjectDatabaseSchedule(
-      { project_id: input.projectId, environment: input.environment, name: input.name },
+      {
+        "Idempotency-Key": input.idempotencyKey ?? randomUUID(),
+        project_id: input.projectId,
+        environment: input.environment,
+        name: input.name,
+      },
       { client: this.#client },
     );
     assertDatabaseScheduleRunAccepted(value);

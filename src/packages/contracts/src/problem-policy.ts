@@ -326,6 +326,13 @@ export const PROBLEM_POLICY = {
     action: "The project already answers on this address; no rename is needed.",
     title: "Project address is unchanged",
   },
+  database_limit_reached: {
+    status: 409,
+    retryable: false,
+    action:
+      "Delete a database you no longer need, or the project whose database it is, then deploy again. The limit counts the organization's live databases.",
+    title: "Database limit reached",
+  },
   project_rename_blocked: {
     status: 409,
     retryable: true,
@@ -406,6 +413,13 @@ export const PROBLEM_POLICY = {
     action:
       "Read the workspace sender resource and project binding. Reuse requires explicit domain-use authority, target-project editing and a current verified application identity with the same registrable main domain. Read the current revision before changing settings. Detach a shared project binding explicitly; legacy domain deletion cannot retire a resource used by another project.",
     title: "Mail domain conflict",
+  },
+  mail_domain_pending_limit: {
+    status: 409,
+    retryable: false,
+    action:
+      "This organization already holds the maximum number of unverified workspace mail domains. Verify one of them, or retire an unused one, and then add this domain again.",
+    title: "Mail domain pending limit",
   },
   mail_domain_required: {
     status: 409,
@@ -501,6 +515,13 @@ export const PROBLEM_POLICY = {
       "Keep the flag on, remove the custom domain with 'ohmyhost domain paid delete', or buy Paid, then switch the flag off.",
     title: "Powered-by flag required",
   },
+  build_capacity_reached: {
+    status: 429,
+    retryable: false,
+    action:
+      "This organization already has its maximum number of open builds. Wait for an open deployment to finish, then start a new deployment with a new idempotency key.",
+    title: "Build capacity reached",
+  },
   rate_limited: {
     status: 429,
     retryable: true,
@@ -561,6 +582,13 @@ export const PROBLEM_POLICY = {
       "Stop retries and submit feedback with this operation ID. A platform recovery review is required.",
     title: "Recovery attempts exhausted",
   },
+  reconciliation_not_pending: {
+    status: 409,
+    retryable: false,
+    action:
+      "Do not repeat this reconciliation: no uncertain delivery or provider mutation is pending for this operation. If the operation still does not finish, submit feedback with this operation ID.",
+    title: "No recovery pending",
+  },
   service_unavailable: {
     status: 503,
     retryable: true,
@@ -583,10 +611,19 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "A live project connection already holds this hostname. Remove it from the project you manage with 'ohmyhost domain paid delete --project ULID --hostname HOST --yes --json', then apply it to the new project. Repeating while that connection remains cannot work; report the request_id if you cannot manage its owning project.",
+      "A live connection holds it; its holder removes it with ohmyhost domain paid delete --project ULID --hostname HOST --yes --json. To connect it here, run application_domain_identity_declare (CLI: ohmyhost mail identity declare --project ULID --hostname HOST --idempotency-key KEY --json), add the _omh-project.HOST TXT record it returns, run application_domain_identity_verify (CLI: ohmyhost mail identity verify --project ULID --expected-revision N --idempotency-key KEY --json), then apply again.",
     restAction:
-      "A live project connection already holds this hostname. Remove it from the project you manage with 'ohmyhost domain paid delete --project ULID --hostname HOST --yes --json', then apply it to the new project. Repeating while that connection remains cannot work; report the request_id if you cannot manage its owning project.",
+      "A live connection holds it; its holder removes it with ohmyhost domain paid delete --project ULID --hostname HOST --yes --json. To connect it here, run application_domain_identity_declare (CLI: ohmyhost mail identity declare --project ULID --hostname HOST --idempotency-key KEY --json), add the _omh-project.HOST TXT record it returns, run application_domain_identity_verify (CLI: ohmyhost mail identity verify --project ULID --expected-revision N --idempotency-key KEY --json), then apply again.",
     title: "Domain hostname is already connected",
+  },
+  domain_ownership_required: {
+    status: 409,
+    retryable: false,
+    action:
+      "This hostname is not verified for this project yet. Run application_domain_identity_declare (CLI: ohmyhost mail identity declare --project ULID --hostname HOST --idempotency-key KEY --json) and add the _omh-project.HOST TXT record it returns; then application_domain_identity_verify (CLI: ohmyhost mail identity verify --project ULID --expected-revision N --idempotency-key KEY --json), then apply again. Repeating before then cannot work.",
+    restAction:
+      "This hostname is not verified for this project yet. Run application_domain_identity_declare (CLI: ohmyhost mail identity declare --project ULID --hostname HOST --idempotency-key KEY --json) and add the _omh-project.HOST TXT record it returns; then application_domain_identity_verify (CLI: ohmyhost mail identity verify --project ULID --expected-revision N --idempotency-key KEY --json), then apply again. Repeating before then cannot work.",
+    title: "Verify the domain before connecting it",
   },
   domain_dns_conflict: {
     status: 409,
@@ -644,6 +681,41 @@ export const PROBLEM_POLICY = {
     title: "Complete the pending domain change",
     action:
       "Read project status and Paid domain status to identify the pending change. If a Paid domain removal is pending, retry it as a current owner with a new idempotency key. If a project address change is pending, submit a fresh address change as a current owner. After it finishes, create a new project deletion plan.",
+  },
+  native_auth_launch_unavailable: {
+    status: 409,
+    retryable: false,
+    title: "Native Auth cannot launch yet",
+    action:
+      "Read the Native Auth configuration with 'ohmyhost auth config get --project ULID --environment ULID --json'. Its readiness shows which requirement is missing: a Paid plan, a verified sender domain, an approved canonical origin or storage. Complete that requirement, then send the change again with a new idempotency key. Repeating unchanged does not help.",
+  },
+  native_auth_provider_unavailable: {
+    status: 409,
+    retryable: false,
+    title: "Native Auth provider unavailable",
+    action:
+      "This sign-in provider cannot be enabled for this project's current Native Auth state. Read the provider with 'ohmyhost auth provider get --project ULID --environment ULID --provider google|github --json' and complete the Native Auth configuration it reports. Repeating unchanged does not help.",
+  },
+  native_auth_epoch_exhausted: {
+    status: 409,
+    retryable: false,
+    title: "Native Auth policy changes exhausted",
+    action:
+      "This project's Native Auth policy has reached its revision limit, so no further policy change is accepted. Do not retry. Contact support with the request_id of this response.",
+  },
+  project_domains_conflict: {
+    status: 409,
+    retryable: false,
+    title: "Project domains belong to another handle",
+    action:
+      "The domains of this project were configured under another project handle. Read the project with 'ohmyhost project status --project ULID --json' to see its current handle, then repeat the domain configuration with a new idempotency key. Do not replay the earlier request.",
+  },
+  native_user_conflict: {
+    status: 409,
+    retryable: false,
+    title: "Native Auth user conflicts with current state",
+    action:
+      "The user already exists, or the user is not in the state this action needs (for example a pending user cannot be suspended, and only a pending invitation can be resent). Read the user with 'ohmyhost auth user get --project ULID --environment ULID --user UUID --json' and choose the action that matches its status.",
   },
 } as const;
 

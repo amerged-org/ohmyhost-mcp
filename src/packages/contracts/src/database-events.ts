@@ -33,6 +33,7 @@ export const DATABASE_SCHEDULE_STATEMENT_MAX_BYTES = 16 * 1024;
 export const DATABASE_SCHEDULE_STATEMENTS_MAX_BYTES = 64 * 1024;
 export const DATABASE_SCHEDULE_MIN_TIMEOUT_MS = 1_000;
 export const DATABASE_SCHEDULE_DEFAULT_TIMEOUT_MS = 10_000;
+/** timeout_ms sets only the schedule's initial statement_timeout; the schedule's own statements can change it. The real bound is the platform abort at timeout_ms plus 75 seconds. */
 export const DATABASE_SCHEDULE_MAX_TIMEOUT_MS = 30_000;
 
 export const DATABASE_SCHEDULE_OUTCOMES = [

@@ -143,6 +143,21 @@ const PNPM_RESOLVED_VERSION = /^([^()]+)(?:\(.*\))?$/u;
 const DEFAULT_EXPORT_PATTERN = /\bexport\s+default\b/u;
 const FETCH_HANDLER_PATTERN = /(?:[{,;}]|\basync)\s*fetch\s*(?:\(|:|,|\})/u;
 const SCHEDULED_HANDLER_PATTERN = /\bscheduled\s*(?:\(|:|,|\})/u;
+/** The raw TCP primitive of the Workers runtime; a customer Worker never loads it. */
+export const SOCKET_PRIMITIVE_SPECIFIER = "cloudflare:sockets" as const;
+// The early hint reads the raw text: the quoted specifier, after string escapes are decoded.
+const SOCKET_PRIMITIVE_PATTERN = new RegExp(`["'\`]${SOCKET_PRIMITIVE_SPECIFIER}["'\`]`, "u");
+const STRING_ESCAPE =
+  /\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|u\{([0-9A-Fa-f]{1,6})\}|(?:\r\n|[\n\r\u2028\u2029])|([^\n\r\u2028\u2029]))/gu;
+const SIMPLE_STRING_ESCAPES: Readonly<Record<string, string>> = Object.freeze({
+  b: "\b",
+  f: "\f",
+  n: "\n",
+  r: "\r",
+  t: "\t",
+  v: "\v",
+  "0": "\0",
+});
 // No connection string reaches a customer Worker, and a Worker cannot open a socket.
 const DATABASE_CONTRACT_PATTERNS = Object.freeze([
   [
@@ -441,6 +456,38 @@ export function databaseContractCodes(source: string): readonly DatabaseContract
 }
 
 /**
+ * The early hint that a module names the raw socket primitive `cloudflare:sockets` in quotes, for
+ * `ohmyhost init`, which cannot parse source. It reads the raw text with string escapes decoded
+ * (`"cloudflare\x3asockets"` is found) and blanks no comment, so a regex literal cannot hide an
+ * import; a mention in a comment, a type-only import and a variable that holds the specifier count
+ * too. Planning does not rely on it: SourceFetcher decides from parsed, decoded specifiers.
+ */
+export function importsSocketPrimitive(source: string): boolean {
+  return SOCKET_PRIMITIVE_PATTERN.test(decodeStringEscapes(source));
+}
+
+function decodeStringEscapes(source: string): string {
+  return source.replace(
+    STRING_ESCAPE,
+    (
+      match,
+      hex: string | undefined,
+      unit: string | undefined,
+      braces: string | undefined,
+      plain: string | undefined,
+    ) => {
+      const code = hex ?? unit ?? braces;
+      if (code !== undefined) {
+        const point = Number.parseInt(code, 16);
+        return point > 0x10ffff ? match : String.fromCodePoint(point);
+      }
+      // A line continuation spells nothing; any other escaped character stands for itself.
+      return plain === undefined ? "" : (SIMPLE_STRING_ESCAPES[plain] ?? plain);
+    },
+  );
+}
+
+/**
  * The handler rules a Worker module breaks, ignoring comments: a default export, with fetch when
  * the module serves requests (runtime.mode: functions) and scheduled when crons are declared.
  * Without a default export no handler is judged, because named exports are never invoked.
@@ -520,6 +567,14 @@ export function sourceWithoutComments(source: string): string {
  */
 export function isDatabaseContractModule(path: string): boolean {
   return /\.(?:astro|ts|tsx|js|jsx|mjs|mts)$/u.test(path) && !/\.d\.[cm]?ts$/u.test(path);
+}
+
+/**
+ * Whether `ohmyhost init` scans a module for the socket primitive: every source extension a Worker
+ * bundle can load, without TypeScript declaration files, which never run.
+ */
+export function isSocketPrimitiveModule(path: string): boolean {
+  return /\.(?:astro|[cm]?[jt]sx?)$/u.test(path) && !/\.d\.[cm]?ts$/u.test(path);
 }
 
 function manifestFindings(

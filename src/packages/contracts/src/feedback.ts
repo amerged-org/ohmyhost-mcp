@@ -93,6 +93,7 @@ const detailSentence = new RegExp(
       "(?:title|description) must be a string\\.",
       "(?:title|description) must not be empty\\.",
       "(?:title|description) must not start or end with whitespace; trim it\\.",
+      "(?:title|description) must not contain a credential, key or connection string; remove it and submit again\\.",
       "(?:title|description) has [1-9][0-9]{0,8} characters, over the (?:160|8000)-character limit; shorten it, it is never truncated\\.",
       "title must not contain line breaks, tabs or other control characters\\.",
       "description must not contain control characters other than tabs and line breaks, such as terminal color codes\\.",
@@ -147,6 +148,10 @@ export function parseFeedbackSubmission(value: unknown): FeedbackSubmission {
   return v as unknown as FeedbackSubmission;
 }
 
+/** Token, key and connection-string shapes that a customer must not paste into feedback; feedback is stored without expiry. */
+const CREDENTIAL_SHAPE =
+  /whsec_[A-Za-z0-9]{20,}|omh_(?:ab|am)_[A-Za-z0-9_-]{16,}|sk_(?:live|test)_[A-Za-z0-9]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:[^\s@/?#]+@/iu;
+
 /** The same rules as validText, each failure named for one field. */
 function textProblems(field: string, value: unknown, max: number, multiline: boolean): string[] {
   if (typeof value !== "string") return [`${field} must be a string.`];
@@ -158,6 +163,10 @@ function textProblems(field: string, value: unknown, max: number, multiline: boo
   if (length > max)
     problems.push(
       `${field} has ${String(length)} characters, over the ${String(max)}-character limit; shorten it, it is never truncated.`,
+    );
+  if (CREDENTIAL_SHAPE.test(value))
+    problems.push(
+      `${field} must not contain a credential, key or connection string; remove it and submit again.`,
     );
   if (hasControlCharacter(value, multiline))
     problems.push(

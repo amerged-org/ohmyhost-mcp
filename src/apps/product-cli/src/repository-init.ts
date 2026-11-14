@@ -23,7 +23,9 @@ import {
 import {
   databaseContractCodes,
   declaredDependencyNames,
+  importsSocketPrimitive,
   isDatabaseContractModule,
+  isSocketPrimitiveModule,
   MANAGED_BETTER_AUTH_VERSION,
   packageManagerDeclaration,
   parsePackageManifest,
@@ -79,11 +81,15 @@ const GATEWAY_BINDING_NAME = /^OHMYHOST_(?:MAIL|STORAGE)_GATEWAY$/u;
 const GATEWAY_WORD_TOKEN = /[\p{ID_Start}_$][\p{ID_Continue}$]*/uy;
 // The catalog names a module only by a path of its grammar; a file name with a space, for example,
 // is not one, so its blocker carries the path beside a sentence that does not quote it.
-const UNNAMED_MODULE_MESSAGES: Readonly<Record<DatabaseContractCode, string>> = Object.freeze({
+const UNNAMED_MODULE_MESSAGES: Readonly<
+  Record<DatabaseContractCode | "socket_primitive_unsupported", string>
+> = Object.freeze({
   database_binding_private:
     'The module at path reads a database connection string (DATABASE_URL, HYPERDRIVE, connectionString or a postgres:// URL); none reaches a customer Worker. Call the database with createPrivateDatabaseClient from "@ohmyhost/customer-runtime/database". Commit and push the change, then plan the new commit.',
   database_driver_unsupported:
     'The module at path imports a database socket driver (pg, postgres, pg-native or mysql2); customer Workers cannot open sockets. Call the database with createPrivateDatabaseClient from "@ohmyhost/customer-runtime/database". Commit and push the change, then plan the new commit.',
+  socket_primitive_unsupported:
+    "The module at path loads cloudflare:sockets; customer Workers cannot open sockets. Call HTTPS services through the global fetch function and declare each origin in runtime.egress.allow in ohmyhost.yaml. Commit and push the change, then plan the new commit.",
 });
 
 // Only a call constructs the client; a comment or a type-only import never does.
@@ -538,6 +544,7 @@ async function judgeSource(
       ...source.findings.map((finding) => requiredCatalogBlocker(finding, context.applicationRoot)),
       ...(await workerModuleBlockers(context)),
       ...(await databaseContractBlockers(context, context.provider)),
+      ...(await socketPrimitiveBlockers(context)),
       ...(await gatewayBindingBlockers(context)),
       ...(await storageClientBlockers(context)),
       ...(await migrationSqlBlockers(context, context.provider)),
@@ -837,14 +844,44 @@ async function databaseContractBlockers(
     const information = await stat(absolute);
     if (!information.isFile() || information.size > MAXIMUM_SOURCE_BYTES) continue;
     for (const code of databaseContractCodes(await readFile(absolute, "utf8")))
-      blockers.push(
-        catalogBlocker({ code, path }, context.applicationRoot) ??
-          Object.freeze({
-            code,
-            path: repositoryPath(context.applicationRoot, path),
-            message: UNNAMED_MODULE_MESSAGES[code],
-          }),
-      );
+      blockers.push(moduleBlocker(code, path, context.applicationRoot));
+  }
+  return blockers;
+}
+
+/** The blocker of a module refused by a code of the catalog's module grammar. */
+function moduleBlocker(
+  code: keyof typeof UNNAMED_MODULE_MESSAGES,
+  path: string,
+  applicationRoot: ApplicationRoot,
+): RepositoryInitBlocker {
+  return (
+    catalogBlocker({ code, path }, applicationRoot) ??
+    Object.freeze({
+      code,
+      path: repositoryPath(applicationRoot, path),
+      message: UNNAMED_MODULE_MESSAGES[code],
+    })
+  );
+}
+
+/**
+ * A customer Worker opens no raw TCP socket: only fetch() passes the egress policy. Planning parses
+ * the reachable modules and refuses `cloudflare:sockets` whatever the configuration. Init cannot
+ * parse (the CLI denies `@babel/`), so its early hint lists every module whose raw text names the
+ * quoted specifier, reachable or not and comments included, with or without the database.
+ */
+async function socketPrimitiveBlockers(
+  context: SourceCheckContext,
+): Promise<RepositoryInitBlocker[]> {
+  const blockers: RepositoryInitBlocker[] = [];
+  for (const path of context.files) {
+    if (!isSocketPrimitiveModule(path)) continue;
+    const absolute = resolve(context.applicationDirectory, path);
+    const information = await stat(absolute);
+    if (!information.isFile() || information.size > MAXIMUM_SOURCE_BYTES) continue;
+    if (importsSocketPrimitive(await readFile(absolute, "utf8")))
+      blockers.push(moduleBlocker("socket_primitive_unsupported", path, context.applicationRoot));
   }
   return blockers;
 }

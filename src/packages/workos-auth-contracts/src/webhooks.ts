@@ -142,3 +142,10 @@ export const verifyAndParseWorkosWebhook = async (
     ),
   );
 };
+
+/**
+ * The only query the WorkOS webhook path accepts: none, or one rotation marker of 32 lowercase
+ * hex digits. Edge and ingress both use this predicate so they cannot drift apart.
+ */
+export const isAcceptedWorkosWebhookSearch = (search: string): boolean =>
+  search === "" || /^\?omh_rotation=[a-f0-9]{32}$/u.test(search);

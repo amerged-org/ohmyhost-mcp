@@ -5,6 +5,7 @@ import {
   type DatabaseMigrationCaptureTrigger,
 } from "./database-migration-capture.js";
 import {
+  isSqlKeyword,
   readMigrationSql,
   rejectMigrationSqlReferences,
   type MigrationSqlToken,
@@ -151,6 +152,33 @@ function rejectFunctionBodyReferences(sql: string): void {
   }
 }
 
+/**
+ * A SECURITY DEFINER body runs with its definer's rights, so every `SET search_path` in the statement header must pin the
+ * path to an empty list or one that starts with pg_catalog. A path the session can change, or one that starts with a
+ * customer schema, lets the caller decide which relation or function the definer touches. The body is one dollar-quoted
+ * token, so only the header can name a path, and a later SET overrides an earlier one: each occurrence must pin.
+ */
+function pinsSearchPath(tokens: readonly MigrationSqlToken[]): boolean {
+  let found = false;
+  for (let index = 0; index + 2 < tokens.length; index += 1) {
+    if (!isSqlKeyword(tokens[index], "set") || !isSqlKeyword(tokens[index + 1], "search_path"))
+      continue;
+    const operator = tokens[index + 2];
+    const assigns =
+      isSqlKeyword(operator, "to") || (operator?.kind === "symbol" && operator.value === "=");
+    const first = tokens[index + 3];
+    if (!assigns || !first) return false;
+    found = true;
+    if (first.kind === "string") {
+      const list = first.value.trim().toLowerCase();
+      if (list !== "" && !/^pg_catalog(?:\s*,|$)/u.test(list)) return false;
+    } else if (first.kind === "word" || first.kind === "identifier") {
+      if (first.value.toLowerCase() !== "pg_catalog") return false;
+    } else return false;
+  }
+  return found;
+}
+
 function admitStatement(tokens: readonly MigrationSqlToken[], sql: string): void {
   const normalized = tokens
     .map((token) => (token.kind === "string" ? "'literal'" : token.text.toLowerCase()))
@@ -161,10 +189,12 @@ function admitStatement(tokens: readonly MigrationSqlToken[], sql: string): void
     rejectFunctionBodyReferences(sql);
     if (
       !/\blanguage\s+(?:sql|plpgsql)\b/u.test(normalized) ||
-      (/\bsecurity\s+definer\b/u.test(normalized) &&
-        !/\bset\s+search_path\s*(?:=\s*|to\s+)/u.test(normalized))
+      (/\bsecurity\s+definer\b/u.test(normalized) && !pinsSearchPath(tokens))
     ) {
-      throw new DatabaseMigrationAdmissionError("unsupported");
+      throw new DatabaseMigrationAdmissionError(
+        "unsupported",
+        "a SECURITY DEFINER function needs every SET search_path to be '' or to start with pg_catalog",
+      );
     }
     return;
   }

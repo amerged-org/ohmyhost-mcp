@@ -375,6 +375,10 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
     paths: ["module"],
     template: `"{{path}}" imports a database socket driver (pg, postgres, pg-native or mysql2); customer Workers cannot open sockets. Call the database with createPrivateDatabaseClient from "@ohmyhost/customer-runtime/database". ${PUSH_AND_PLAN}`,
   },
+  socket_primitive_unsupported: {
+    paths: ["module"],
+    template: `"{{path}}" loads cloudflare:sockets; customer Workers cannot open sockets. Call HTTPS services through the global fetch function and declare each origin in runtime.egress.allow in ohmyhost.yaml. ${PUSH_AND_PLAN}`,
+  },
   source_syntax_invalid: {
     paths: ["module"],
     template:

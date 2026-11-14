@@ -73,6 +73,8 @@ import type {
   CreateProjectDevAccessTicketErrors,
   CreateProjectDevAccessTicketResponses,
   CreateProjectErrors,
+  CreateProjectExportDownloadLinkErrors,
+  CreateProjectExportDownloadLinkResponses,
   CreateProjectExportErrors,
   CreateProjectExportResponses,
   CreateProjectRequest,
@@ -110,6 +112,8 @@ import type {
   DiffManagedSourceResponses,
   DisableManagedMailReceivingErrors,
   DisableManagedMailReceivingResponses,
+  DisconnectGithubOrganizationErrors,
+  DisconnectGithubOrganizationResponses,
   EnsureProjectDevShareLinkErrors,
   EnsureProjectDevShareLinkResponses,
   FeedbackSubmission,
@@ -218,6 +222,8 @@ import type {
   ListManagedSourceVersionsResponses,
   ListNativeAuthUsersErrors,
   ListNativeAuthUsersResponses,
+  ListOrganizationMcpConnectionsErrors,
+  ListOrganizationMcpConnectionsResponses,
   ListProjectDatabaseAccessErrors,
   ListProjectDatabaseAccessResponses,
   ListProjectDatabaseScheduleRunsErrors,
@@ -308,6 +314,8 @@ import type {
   RevokeCurrentSessionResponses,
   RevokeNativeAuthUserSessionsErrors,
   RevokeNativeAuthUserSessionsResponses,
+  RevokeOrganizationMcpConnectionErrors,
+  RevokeOrganizationMcpConnectionResponses,
   RevokeProjectDatabaseAccessErrors,
   RevokeProjectDatabaseAccessResponses,
   RevokeProjectDevShareLinkErrors,
@@ -318,6 +326,8 @@ import type {
   RevokeWorkspaceMailDomainDnsAuthorizationResponses,
   RollbackDeploymentErrors,
   RollbackDeploymentResponses,
+  RotateManagedMailWebhookSecretErrors,
+  RotateManagedMailWebhookSecretResponses,
   RotateProjectDevShareLinkErrors,
   RotateProjectDevShareLinkResponses,
   RunProjectDatabaseScheduleErrors,
@@ -1893,6 +1903,48 @@ export const connectGithubOrganization = <ThrowOnError extends boolean = true>(
 };
 
 /**
+ * Disconnect the workspace GitHub connection
+ *
+ * Owner only. Revokes the workspace connection and every GitHub repository grant under it, so auto-deploy and linked sources stop at once. The GitHub App stays installed for other workspaces; reconnecting starts a new connection.
+ */
+export const disconnectGithubOrganization = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    organization_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  DisconnectGithubOrganizationResponses,
+  DisconnectGithubOrganizationErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "organization_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    DisconnectGithubOrganizationResponses,
+    DisconnectGithubOrganizationErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/github",
+    ...options,
+    ...params,
+  });
+};
+
+/**
  * Read the workspace GitHub connection
  */
 export const getGithubOrganizationConnection = <ThrowOnError extends boolean = true>(
@@ -1927,6 +1979,92 @@ export const getGithubOrganizationConnection = <ThrowOnError extends boolean = t
     responseStyle: "data",
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/organizations/{organization_id}/github",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * List the MCP clients connected to the workspace
+ *
+ * Owner only. Lists each connected MCP client and the member who connected it, once per member, client and consent. Consents already disconnected are not listed.
+ */
+export const listOrganizationMcpConnections = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    organization_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ListOrganizationMcpConnectionsResponses,
+  ListOrganizationMcpConnectionsErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "organization_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    ListOrganizationMcpConnectionsResponses,
+    ListOrganizationMcpConnectionsErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/mcp-connections",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Disconnect an MCP client from the workspace
+ *
+ * Owner only. Disconnects the client's consent from this workspace only; the member's other workspaces are unaffected. Answers pending while an active provider use of the consent drains. Repeat the request until it answers revoked.
+ */
+export const revokeOrganizationMcpConnection = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    organization_id: Ulid;
+    connection_id: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RevokeOrganizationMcpConnectionResponses,
+  RevokeOrganizationMcpConnectionErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "organization_id" },
+          { in: "path", key: "connection_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    RevokeOrganizationMcpConnectionResponses,
+    RevokeOrganizationMcpConnectionErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/mcp-connections/{connection_id}",
     ...options,
     ...params,
   });
@@ -2366,7 +2504,7 @@ export const getFeedback = <ThrowOnError extends boolean = true>(
 /**
  * Complete the bound GitHub browser authorization
  *
- * Browser callback only. Revalidates the original user session or user API key, workspace Owner/Admin authority and authorization expiry, then privately verifies the GitHub account and installation. A valid installation callback without an OAuth code continues automatically through OAuth. Completion records the workspace connection without building or returning provider credentials. Previously issued project authorizations remain supported during rollout.
+ * Browser callback only. Requires the portal session of the same user who started the authorization (a browser with no session, another user's session or an unknown state is answered as an unknown state and consumes nothing). Revalidates the original user session or user API key, workspace Owner/Admin authority and authorization expiry, then privately verifies the GitHub account and installation. A valid installation callback without an OAuth code continues automatically through OAuth. Completion records the workspace connection without building or returning provider credentials. Previously issued project authorizations remain supported during rollout.
  */
 export const completeGithubSourceAuthorization = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -2412,7 +2550,7 @@ export const completeGithubSourceAuthorization = <ThrowOnError extends boolean =
 /**
  * Complete one Cloudflare DNS authorization
  *
- * Successful callbacks require code and state and complete one previously authenticated project authorization. Provider rejection instead supplies error and optional error_description, error_uri and state; it returns a static actionable problem without completing authorization or reflecting provider input. Success and error parameters cannot be combined. This callback grants no general unauthenticated product access.
+ * Successful callbacks require code and state and complete one previously authenticated project authorization, only in a browser signed in to the portal as the user who started it; without that session the callback answers a confirmation problem and consumes nothing. Provider rejection instead supplies error and optional error_description, error_uri and state; it returns a static actionable problem without completing authorization or reflecting provider input. Success and error parameters cannot be combined. This callback grants no general unauthenticated product access.
  */
 export const completeCloudflareDnsAuthorization = <ThrowOnError extends boolean = true>(
   parameters?: {
@@ -2936,7 +3074,7 @@ export const createProjectExport = <ThrowOnError extends boolean = true>(
 /**
  * Read export progress and its verified 24-hour download capability
  *
- * Owner-only, including at zero credits. Poll queued/running jobs after next_poll_after_seconds. A verified SQL ZIP is retained seven days. Its signed download URL is valid 24 hours and is issued only with at least 24 hours of retention left; otherwise download fields are null. Treat the URL as a secret bearer capability. Neither the password nor any permanent storage credential can be retrieved. Generic operation reads never contain this capability.
+ * Owner-only, including at zero credits. Poll queued/running jobs after next_poll_after_seconds. A verified SQL ZIP is retained seven days. This read never signs a download URL, so download_url and download_expires_at are always null here. Request a link with POST download-links. Neither the password nor any permanent storage credential can be retrieved. Generic operation reads never contain a download capability.
  */
 export const getProjectExport = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -2967,6 +3105,50 @@ export const getProjectExport = <ThrowOnError extends boolean = true>(
     responseStyle: "data",
     security: [{ scheme: "bearer", type: "http" }],
     url: "/v1/projects/{project_id}/exports/{export_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Sign one 24-hour download link of a ready SQL export
+ *
+ * Owner-only. Each link is audited under the caller before it is signed, and an organization may take six links a minute; a seventh is refused with 429 and a retry after 60 seconds. Treat the returned URL as a secret bearer capability; never store it in files, notes or source. The link is not idempotent, so a repeated request signs another link and is audited again. Requires at least 24 hours of retention left on the archive, otherwise 409.
+ */
+export const createProjectExportDownloadLink = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    export_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateProjectExportDownloadLinkResponses,
+  CreateProjectExportDownloadLinkErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "export_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateProjectExportDownloadLinkResponses,
+    CreateProjectExportDownloadLinkErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/exports/{export_id}/download-links",
     ...options,
     ...params,
   });
@@ -3670,6 +3852,7 @@ export const setProjectPoweredByFlag = <ThrowOnError extends boolean = true>(
 export const createProjectDevAccessTicket = <ThrowOnError extends boolean = true>(
   parameters: {
     "X-Request-Id"?: string;
+    "Idempotency-Key"?: string;
     project_id: Ulid;
   },
   options?: Options<never, ThrowOnError>,
@@ -3685,6 +3868,7 @@ export const createProjectDevAccessTicket = <ThrowOnError extends boolean = true
       {
         args: [
           { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
           { in: "path", key: "project_id" },
         ],
       },
@@ -5283,11 +5467,12 @@ export const listProjectDatabaseAccess = <ThrowOnError extends boolean = true>(
 /**
  * Issue one time-bound PostgreSQL credential for Dev or Prod
  *
- * Owner-authorized direct PostgreSQL login for the project's own database, returned exactly once and never retrievable again. Mode read joins the read-only role, mode write joins the same restricted runtime role the application uses; neither can change schema, and application row-level security policies remain effective. The lifetime is 5 minutes to 24 hours (3600 seconds by default) and PostgreSQL refuses new logins after it; the platform ends remaining sessions within 15 minutes after expiry, at the latest. At most three active credentials exist per project environment. Database compute wakes and is metered normally, and existing credit grace and Stop budgets apply. Revoke the credential as soon as the work is finished and never store the connection URI in files, notes or source.
+ * Owner-authorized direct PostgreSQL login for the project's own database, returned exactly once and never retrievable again. Mode read joins the read-only role, mode write joins the same restricted runtime role the application uses; neither can change schema. The login gets no implicit row bypass, but its holder can set ohmyhost.request_claims and so act as any application user; treat a credential as read (or write) access to all application rows. The lifetime is 5 minutes to 24 hours (3600 seconds by default) and PostgreSQL refuses new logins after it; the platform ends remaining sessions within 15 minutes after expiry, at the latest. At most three active credentials exist per project environment. Database compute wakes and is metered normally, and existing credit grace and Stop budgets apply. Revoke the credential as soon as the work is finished and never store the connection URI in files, notes or source.
  */
 export const createProjectDatabaseAccess = <ThrowOnError extends boolean = true>(
   parameters: {
     "X-Request-Id"?: string;
+    "Idempotency-Key"?: string;
     project_id: Ulid;
     projectDatabaseAccessRequest: ProjectDatabaseAccessRequest;
   },
@@ -5304,6 +5489,7 @@ export const createProjectDatabaseAccess = <ThrowOnError extends boolean = true>
       {
         args: [
           { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
           { in: "path", key: "project_id" },
           { key: "projectDatabaseAccessRequest", map: "body" },
         ],
@@ -5427,7 +5613,7 @@ export const createProjectDatabaseTable = <ThrowOnError extends boolean = true>(
 /**
  * List the project's database watches
  *
- * Returns every watch of the selected environment. Listing wakes a sleeping database.
+ * Returns every watch of the selected environment. Listing wakes a sleeping database, so while the project's Stop budget is reached it is refused with 402, as create and delete are.
  */
 export const listProjectDatabaseWatches = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -5570,7 +5756,7 @@ export const deleteProjectDatabaseWatch = <ThrowOnError extends boolean = true>(
 /**
  * List the project's database webhooks
  *
- * Returns every webhook of the selected environment without signing secrets.
+ * Returns every webhook of the selected environment without signing secrets. Callers without projects:write see only the origin of each receiver URL.
  */
 export const listProjectDatabaseWebhooks = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -5667,11 +5853,12 @@ export const createProjectDatabaseWebhook = <ThrowOnError extends boolean = true
 /**
  * Delete one database webhook
  *
- * Stops deliveries to the webhook. Deleting an already deleted webhook answers not found.
+ * Stops deliveries to the webhook. Deleting an already deleted webhook answers not found. A retry with the same Idempotency-Key and request returns the stored answer; the same key with another request answers 409 idempotency_key_reused.
  */
 export const deleteProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
   parameters: {
     "X-Request-Id"?: string;
+    "Idempotency-Key": string;
     project_id: Ulid;
     webhook_id: string;
     environment: "dev" | "prod";
@@ -5689,6 +5876,7 @@ export const deleteProjectDatabaseWebhook = <ThrowOnError extends boolean = true
       {
         args: [
           { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
           { in: "path", key: "project_id" },
           { in: "path", key: "webhook_id" },
           { in: "query", key: "environment" },
@@ -5713,7 +5901,7 @@ export const deleteProjectDatabaseWebhook = <ThrowOnError extends boolean = true
 /**
  * Read one database webhook
  *
- * Returns one webhook without its signing secret.
+ * Returns one webhook without its signing secret. Callers without projects:write see only the origin of the receiver URL.
  */
 export const getProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -5759,11 +5947,12 @@ export const getProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
 /**
  * Send one test delivery to a database webhook
  *
- * Sends one signed test request to the webhook URL and reports the outcome synchronously. Each call sends one request; the platform allows one test per webhook every five seconds.
+ * Sends one signed test request to the webhook URL and reports the outcome synchronously. A retry with the same Idempotency-Key and request returns the stored outcome without sending again; a new key sends another request. The platform allows one test per webhook every five seconds.
  */
 export const testProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
   parameters: {
     "X-Request-Id"?: string;
+    "Idempotency-Key": string;
     project_id: Ulid;
     webhook_id: string;
     environment: "dev" | "prod";
@@ -5781,6 +5970,7 @@ export const testProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
       {
         args: [
           { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
           { in: "path", key: "project_id" },
           { in: "path", key: "webhook_id" },
           { in: "query", key: "environment" },
@@ -5855,11 +6045,12 @@ export const listProjectDatabaseWebhookDeliveries = <ThrowOnError extends boolea
 /**
  * Replay one database webhook delivery
  *
- * Queues a new attempt for a delivery that is no longer being retried. Each call queues one more attempt, and the delivery returns to pending until it is delivered or dead-lettered again.
+ * Queues a new attempt for a delivery that is no longer being retried. A retry with the same Idempotency-Key and request returns the stored answer without queuing again; a new key queues one more attempt, and the delivery returns to pending until it is delivered or dead-lettered again.
  */
 export const replayProjectDatabaseWebhookDelivery = <ThrowOnError extends boolean = true>(
   parameters: {
     "X-Request-Id"?: string;
+    "Idempotency-Key": string;
     project_id: Ulid;
     delivery_id: string;
     environment: "dev" | "prod";
@@ -5877,6 +6068,7 @@ export const replayProjectDatabaseWebhookDelivery = <ThrowOnError extends boolea
       {
         args: [
           { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
           { in: "path", key: "project_id" },
           { in: "path", key: "delivery_id" },
           { in: "query", key: "environment" },
@@ -5901,7 +6093,7 @@ export const replayProjectDatabaseWebhookDelivery = <ThrowOnError extends boolea
 /**
  * List the project's database schedules
  *
- * Returns every schedule of the selected environment.
+ * Returns every schedule of the selected environment. Callers without projects:write see a sha256 digest of each statement instead of its SQL text.
  */
 export const listProjectDatabaseSchedules = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -6136,11 +6328,12 @@ export const listProjectDatabaseScheduleRuns = <ThrowOnError extends boolean = t
 /**
  * Queue one immediate run of a database schedule
  *
- * Queues one manual run. The run is refused while the schedule is disabled or while a run is already queued. A reached Stop budget (or exhausted credit past its grace) refuses the run with project_budget_exceeded (402).
+ * Queues one manual run. The run is refused while the schedule is disabled or while a run is already queued. A retry with the same Idempotency-Key and request returns the stored answer without queuing a second run. A reached Stop budget (or exhausted credit past its grace) refuses the run with project_budget_exceeded (402).
  */
 export const runProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
   parameters: {
     "X-Request-Id"?: string;
+    "Idempotency-Key": string;
     project_id: Ulid;
     name: string;
     environment: "dev" | "prod";
@@ -6158,6 +6351,7 @@ export const runProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
       {
         args: [
           { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
           { in: "path", key: "project_id" },
           { in: "path", key: "name" },
           { in: "query", key: "environment" },
@@ -6635,7 +6829,7 @@ export const getOperation = <ThrowOnError extends boolean = true>(
 /**
  * Reconcile an uncertain platform delivery or provider mutation
  *
- * Owner-only, idempotent recovery for an operation retained after an uncertain platform delivery or provider mutation. The control plane derives the exact recovery decision, including any deterministic internal Workflow handoff; the request has no body. Exhausted lifecycle recovery returns reconciliation_exhausted (409, retryable false); stop retries and report the original operation through feedback.
+ * Owner-only, idempotent recovery for an operation retained after an uncertain platform delivery or provider mutation. The control plane derives the exact recovery decision, including any deterministic internal Workflow handoff; the request has no body. Exhausted lifecycle recovery returns reconciliation_exhausted (409, retryable false); stop retries and report the original operation through feedback. An operation with no uncertain delivery or provider mutation pending returns reconciliation_not_pending (409, retryable false).
  */
 export const reconcileOperation = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -6990,6 +7184,52 @@ export const prepareManagedMailWebhook = <ThrowOnError extends boolean = true>(
       ...options?.headers,
       ...params.headers,
     },
+  });
+};
+
+/**
+ * Rotate the customer webhook signing secret
+ *
+ * Owner-only. Issues a new signing secret for the same endpoint and ends receiving until the endpoint verifies the new secret. Earlier secrets stop verifying at once. Repeating the same idempotency key after an uncertain response returns the current secret.
+ */
+export const rotateManagedMailWebhookSecret = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RotateManagedMailWebhookSecretResponses,
+  RotateManagedMailWebhookSecretErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    RotateManagedMailWebhookSecretResponses,
+    RotateManagedMailWebhookSecretErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/mail-webhook:rotate",
+    ...options,
+    ...params,
   });
 };
 

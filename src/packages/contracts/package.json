@@ -45,6 +45,11 @@
       "types": "./dist/platform-origins.d.ts",
       "import": "./dist/platform-origins.js"
     },
+    "./wfp-dispatch": {
+      "source": "./src/wfp-dispatch.ts",
+      "types": "./dist/wfp-dispatch.d.ts",
+      "import": "./dist/wfp-dispatch.js"
+    },
     ".": {
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",

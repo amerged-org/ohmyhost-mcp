@@ -165,6 +165,12 @@ export type ProductCliCommand =
       readonly credentialStore: "native";
     }
   | {
+      readonly kind: "export-download-link";
+      readonly projectId: string;
+      readonly exportId: string;
+      readonly credentialStore: "native";
+    }
+  | {
       readonly kind: "token-create";
       readonly organizationId: string;
       readonly name: string;
@@ -485,6 +491,7 @@ export type ProductCliCommand =
       readonly projectId: string;
       readonly environment: "dev" | "prod";
       readonly webhookId: string;
+      readonly idempotencyKey: string | null;
       readonly yes: true;
       readonly credentialStore: "native";
     }
@@ -493,6 +500,7 @@ export type ProductCliCommand =
       readonly projectId: string;
       readonly environment: "dev" | "prod";
       readonly webhookId: string;
+      readonly idempotencyKey: string | null;
       readonly yes: true;
       readonly credentialStore: "native";
     }
@@ -510,6 +518,7 @@ export type ProductCliCommand =
       readonly projectId: string;
       readonly environment: "dev" | "prod";
       readonly deliveryId: string;
+      readonly idempotencyKey: string | null;
       readonly yes: true;
       readonly credentialStore: "native";
     }
@@ -560,6 +569,7 @@ export type ProductCliCommand =
       readonly projectId: string;
       readonly environment: "dev" | "prod";
       readonly name: string;
+      readonly idempotencyKey: string | null;
       readonly yes: true;
       readonly credentialStore: "native";
     }
@@ -1008,6 +1018,7 @@ export type RecognizedCommandLabel =
   | "project notes set"
   | "export create"
   | "export get"
+  | "export download-link"
   | "billing recharge get"
   | "billing recharge set"
   | "billing checkout"
@@ -1181,7 +1192,10 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     if (value === "operation" && values[0] === "reconcile") return "operation reconcile";
     if (value === "token" && ["create", "list", "revoke"].includes(values[0] ?? ""))
       return `token ${values[0]}` as RecognizedCommandLabel;
-    if (value === "export" && (values[0] === "create" || values[0] === "get"))
+    if (
+      value === "export" &&
+      (values[0] === "create" || values[0] === "get" || values[0] === "download-link")
+    )
       return `export ${values[0]}`;
     if (value === "feedback" && values[0] === "submit") return "feedback submit";
     if (value === "feedback" && values[0] === "status") return "feedback status";
@@ -2552,10 +2566,16 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
     }
     if (subcommand === "delete" || subcommand === "test") {
       if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
-      const options = parseOptionalOptions(values, ["--project", "--environment", "--webhook"]);
+      const options = parseOptionalOptions(values, [
+        "--project",
+        "--environment",
+        "--webhook",
+        "--idempotency-key",
+      ]);
       const projectId = options["--project"],
         environment = options["--environment"],
-        webhookId = options["--webhook"];
+        webhookId = options["--webhook"],
+        idempotencyKey = options["--idempotency-key"] ?? null;
       if (!isValue(projectId)) throw new InvalidCommandError();
       if (environment !== "dev" && environment !== "prod") throw new InvalidCommandError();
       const target = contractValue(() => parseDatabaseWebhookId(webhookId));
@@ -2565,6 +2585,7 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
           projectId,
           environment,
           webhookId: target,
+          idempotencyKey,
           yes: true,
           credentialStore,
         };
@@ -2573,6 +2594,7 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
         projectId,
         environment,
         webhookId: target,
+        idempotencyKey,
         yes: true,
         credentialStore,
       };
@@ -2611,7 +2633,12 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
     }
     if (subcommand === "replay") {
       if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
-      const options = parseOptionalOptions(values, ["--project", "--environment", "--delivery"]);
+      const options = parseOptionalOptions(values, [
+        "--project",
+        "--environment",
+        "--delivery",
+        "--idempotency-key",
+      ]);
       const projectId = options["--project"],
         environment = options["--environment"],
         deliveryId = options["--delivery"];
@@ -2622,6 +2649,7 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
         projectId,
         environment,
         deliveryId: contractValue(() => parseDatabaseDeliveryId(deliveryId)),
+        idempotencyKey: options["--idempotency-key"] ?? null,
         yes: true,
         credentialStore,
       };
@@ -2723,7 +2751,12 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
     }
     if (subcommand === "delete" || subcommand === "run") {
       if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
-      const options = parseOptionalOptions(values, ["--project", "--environment", "--name"]);
+      const options = parseOptionalOptions(
+        values,
+        subcommand === "run"
+          ? ["--project", "--environment", "--name", "--idempotency-key"]
+          : ["--project", "--environment", "--name"],
+      );
       const projectId = options["--project"],
         environment = options["--environment"];
       if (!isValue(projectId) || (environment !== "dev" && environment !== "prod"))
@@ -2743,6 +2776,7 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
             projectId,
             environment,
             name,
+            idempotencyKey: options["--idempotency-key"] ?? null,
             yes: true,
             credentialStore,
           };
@@ -3086,6 +3120,19 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
     if (!exportId) throw new InvalidCommandError();
     const options = parseOptions(values, ["--project"]);
     return { kind: "export-get", projectId: options["--project"], exportId, credentialStore };
+  }
+  if (first === "export" && values[0] === "download-link") {
+    if (yes || wait || follow || stdin) throw new InvalidCommandError();
+    values.shift();
+    const exportId = values.shift();
+    if (!exportId) throw new InvalidCommandError();
+    const options = parseOptions(values, ["--project"]);
+    return {
+      kind: "export-download-link",
+      projectId: options["--project"],
+      exportId,
+      credentialStore,
+    };
   }
   if (first === "secret" && values[0] === "list") {
     if (yes || wait || follow || stdin) throw new InvalidCommandError();
