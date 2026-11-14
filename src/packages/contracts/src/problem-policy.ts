@@ -611,18 +611,18 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "A live connection holds it; its holder removes it with ohmyhost domain paid delete --project ULID --hostname HOST --yes --json. To connect it here, run application_domain_identity_declare (CLI: ohmyhost mail identity declare --project ULID --hostname HOST --idempotency-key KEY --json), add the _omh-project.HOST TXT record it returns, run application_domain_identity_verify (CLI: ohmyhost mail identity verify --project ULID --expected-revision N --idempotency-key KEY --json), then apply again.",
+      "A live connection holds it; its holder removes it with ohmyhost domain paid delete --project ULID --hostname HOST --yes --json. To connect it here, add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --json.",
     restAction:
-      "A live connection holds it; its holder removes it with ohmyhost domain paid delete --project ULID --hostname HOST --yes --json. To connect it here, run application_domain_identity_declare (CLI: ohmyhost mail identity declare --project ULID --hostname HOST --idempotency-key KEY --json), add the _omh-project.HOST TXT record it returns, run application_domain_identity_verify (CLI: ohmyhost mail identity verify --project ULID --expected-revision N --idempotency-key KEY --json), then apply again.",
+      "A live connection holds it; its holder removes it with ohmyhost domain paid delete --project ULID --hostname HOST --yes --json. To connect it here, add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --json.",
     title: "Domain hostname is already connected",
   },
   domain_ownership_required: {
     status: 409,
     retryable: false,
     action:
-      "This hostname is not verified for this project yet. Run application_domain_identity_declare (CLI: ohmyhost mail identity declare --project ULID --hostname HOST --idempotency-key KEY --json) and add the _omh-project.HOST TXT record it returns; then application_domain_identity_verify (CLI: ohmyhost mail identity verify --project ULID --expected-revision N --idempotency-key KEY --json), then apply again. Repeating before then cannot work.",
+      "This hostname is not verified for this project yet. Add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --json. Repeating before the record is published cannot work.",
     restAction:
-      "This hostname is not verified for this project yet. Run application_domain_identity_declare (CLI: ohmyhost mail identity declare --project ULID --hostname HOST --idempotency-key KEY --json) and add the _omh-project.HOST TXT record it returns; then application_domain_identity_verify (CLI: ohmyhost mail identity verify --project ULID --expected-revision N --idempotency-key KEY --json), then apply again. Repeating before then cannot work.",
+      "This hostname is not verified for this project yet. Add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --json. Repeating before the record is published cannot work.",
     title: "Verify the domain before connecting it",
   },
   domain_dns_conflict: {

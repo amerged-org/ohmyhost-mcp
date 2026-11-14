@@ -110,6 +110,9 @@ import {
   linkProjectSource,
   connectGithubOrganization,
   getGithubOrganizationConnection,
+  disconnectGithubOrganization,
+  listOrganizationMcpConnections,
+  revokeOrganizationMcpConnection,
   listDeployments,
   listEnvironmentSecrets,
   listFunctionRuns,
@@ -175,6 +178,7 @@ import {
   parseCloudflareDnsAuthorizationStatus,
   parsePaidDomain,
   parsePaidDomainPlan,
+  parseGithubDisconnection,
   parseOperation,
   parseProjectDataChangePlan,
   parseProjectSource,
@@ -1270,6 +1274,29 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
   public getGithubConnection(organizationId: string) {
     return getGithubOrganizationConnection(
       { organization_id: organizationId },
+      { client: this.#client },
+    );
+  }
+
+  public async disconnectGithub(organizationId: string) {
+    return parseGithubDisconnection(
+      await disconnectGithubOrganization(
+        { organization_id: organizationId },
+        { client: this.#client },
+      ),
+    );
+  }
+
+  public listOrganizationMcpConnections(organizationId: string) {
+    return listOrganizationMcpConnections(
+      { organization_id: organizationId },
+      { client: this.#client },
+    );
+  }
+
+  public revokeOrganizationMcpConnection(input: { organizationId: string; connectionId: string }) {
+    return revokeOrganizationMcpConnection(
+      { organization_id: input.organizationId, connection_id: input.connectionId },
       { client: this.#client },
     );
   }

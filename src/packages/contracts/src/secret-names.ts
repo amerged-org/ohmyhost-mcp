@@ -10,12 +10,19 @@ const FIXED_PLATFORM_NAMES = new Set([
   "IMAGES",
   "STORAGE",
 ]);
-const INSTALLED_PLATFORM_KEYS = new Set([
+/** The four keys the platform installs; control-store's rotation accepts exactly these names. */
+export const INSTALLED_PLATFORM_KEY_NAMES = [
   "OHMYHOST_STORAGE_KEY",
   "OHMYHOST_MAIL_KEY",
   "OHMYHOST_AI_KEY",
   "BETTER_AUTH_SECRET",
-]);
+] as const;
+const INSTALLED_PLATFORM_KEYS = new Set<string>(INSTALLED_PLATFORM_KEY_NAMES);
+
+/** The four keys the platform installs. An owner may rotate them; a customer may never set or delete them. */
+export function isInstalledPlatformKeyName(value: unknown): value is string {
+  return typeof value === "string" && INSTALLED_PLATFORM_KEYS.has(value);
+}
 
 export function isUserSecretName(
   value: unknown,

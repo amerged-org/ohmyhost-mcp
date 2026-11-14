@@ -24,6 +24,7 @@ export {
   parseCloudflareDnsAuthorizationStatus,
   parsePaidDomain,
   parsePaidDomainPlan,
+  parseGithubDisconnection,
   parseOperation,
   parseOperationEvent,
   parseSafeProblem,

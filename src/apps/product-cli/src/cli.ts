@@ -108,7 +108,10 @@ import {
 import {
   parseCloudflareDnsAuthorization,
   parseGithubConnectionAuthorization,
+  parseGithubDisconnection,
   parseGithubOrganizationConnectionStatus,
+  parseOrganizationMcpConnectionList,
+  parseOrganizationMcpConnectionRevocation,
   parseCloudflareDnsAuthorizationStatus,
   parseDeploymentPlan,
   parseProjectDataChangePlan,
@@ -352,6 +355,8 @@ const HELP_USAGE = Object.freeze({
   "github connect":
     "ohmyhost github connect --organization ULID --idempotency-key KEY --json (connect once, then link covered repositories without another browser consent)",
   "github status": "ohmyhost github status --organization ULID --json",
+  "github disconnect":
+    "ohmyhost github disconnect --organization ULID --yes --json (Owner only; revokes the workspace GitHub connection and every repository grant under it, so auto-deploy and linked sources stop at once; the GitHub App stays installed for other workspaces, and github connect starts a new connection)",
   "export create":
     "ohmyhost export create --project ULID --idempotency-key KEY --stdin --json (password on stdin only; one accepted SQL ZIP per project per 24 hours)",
   "export get":
@@ -381,6 +386,10 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost organization list [--profile-name NAME] --json (the workspaces of the chosen login's user and the one that login is scoped to)",
   "organization use":
     "ohmyhost organization use --organization ULID [--profile-name NAME] --json (binds a login that has no organization yet; another organization needs its own login)",
+  "organization mcp-connections list":
+    "ohmyhost organization mcp-connections list --organization ULID --json (Owner only; lists each MCP client connected to this workspace and the member who connected it; disconnected consents are not listed)",
+  "organization mcp-connections revoke":
+    "ohmyhost organization mcp-connections revoke --organization ULID --connection UUID --yes --json (Owner only; disconnects one MCP client from this workspace only, and the member's other workspaces are unaffected; repeat until it answers revoked)",
   "operation get": "ohmyhost operation get OPERATION_ULID --json",
   "operation reconcile":
     "ohmyhost operation reconcile OPERATION_ULID --idempotency-key KEY --yes --json",
@@ -568,6 +577,8 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost mail webhook verify --project ULID --environment ULID --idempotency-key KEY --json",
   "mail webhook disable":
     "ohmyhost mail webhook disable --project ULID --environment ULID --idempotency-key KEY --json",
+  "mail webhook rotate":
+    "ohmyhost mail webhook rotate --project ULID --environment ULID --idempotency-key KEY --yes --json (Owner only; issues a new signing secret for the same endpoint, stops the earlier secrets at once and ends receiving until the endpoint verifies the new one; the secret is returned once, so install it in Prod application secrets and never write it into files or notes)",
   "mail messages list":
     "ohmyhost mail messages list --project ULID --environment ULID [--after ULID] --json",
   "mail messages get":
@@ -860,6 +871,48 @@ export class ProductCli {
                     : authorization.status === "authorizing"
                       ? "GitHub authorization is processing. Repeat this exact command and key; do not replay the callback."
                       : "Resolve last_failure, then run github connect for this same workspace with a new idempotency key.",
+              }),
+        });
+      }
+      if (command.kind === "github-disconnect") {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        const github = parseGithubDisconnection(await api.disconnectGithub(command.organizationId));
+        if (
+          github.connection !== null &&
+          github.connection.organization_id !== command.organizationId
+        )
+          throw new ResponseContractError();
+        return success(name, {
+          status: github.status,
+          github,
+          ...(github.status === "connected"
+            ? {}
+            : { next_action: this.githubConnectAction(command.organizationId) }),
+        });
+      }
+      if (command.kind === "organization-mcp-connections-list") {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        const page = parseOrganizationMcpConnectionList(
+          await api.listOrganizationMcpConnections(command.organizationId),
+        );
+        return success(name, { status: "listed", connections: page.connections });
+      }
+      if (command.kind === "organization-mcp-connection-revoke") {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        const revocation = parseOrganizationMcpConnectionRevocation(
+          await api.revokeOrganizationMcpConnection({
+            organizationId: command.organizationId,
+            connectionId: command.connectionId,
+          }),
+        );
+        return success(name, {
+          status: revocation.state,
+          revocation,
+          ...(revocation.state === "revoked"
+            ? {}
+            : {
+                next_action:
+                  "Repeat this exact command until status is revoked; the client's active provider use is still draining.",
               }),
         });
       }
@@ -3702,6 +3755,11 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "organization-use") return "organization use";
   if (command.kind === "github-connect") return "github connect";
   if (command.kind === "github-status") return "github status";
+  if (command.kind === "github-disconnect") return "github disconnect";
+  if (command.kind === "organization-mcp-connections-list")
+    return "organization mcp-connections list";
+  if (command.kind === "organization-mcp-connection-revoke")
+    return "organization mcp-connections revoke";
   if (command.kind === "project-list") return "project list";
   if (command.kind === "database-compute-set") return "database compute set";
   if (command.kind === "database-compute-get") return "database compute get";

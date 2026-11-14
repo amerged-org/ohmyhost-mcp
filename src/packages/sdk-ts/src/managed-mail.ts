@@ -6,6 +6,7 @@ import {
   prepareManagedMailWebhook,
   verifyManagedMailWebhook,
   disableManagedMailReceiving,
+  rotateManagedMailWebhookSecret,
   deleteManagedMailDomain,
   listManagedMailMessages,
   getManagedMailMessage,
@@ -21,7 +22,10 @@ export type ManagedMailCommand = { projectId: string; environmentId: string } & 
     }
   | { action: "status" }
   | { action: "webhook_set"; url: string; idempotencyKey: string }
-  | { action: "webhook_verify" | "webhook_disable" | "domain_delete"; idempotencyKey: string }
+  | {
+      action: "webhook_verify" | "webhook_disable" | "webhook_rotate" | "domain_delete";
+      idempotencyKey: string;
+    }
   | { action: "messages_list"; after?: string }
   | { action: "message_get"; messageId: string }
   | { action: "message_retry"; messageId: string; idempotencyKey: string }
@@ -56,6 +60,11 @@ function requestManagedMail(client: Client, input: ManagedMailCommand) {
       );
     case "webhook_verify":
       return verifyManagedMailWebhook(
+        { ...scope, "Idempotency-Key": input.idempotencyKey },
+        { client },
+      );
+    case "webhook_rotate":
+      return rotateManagedMailWebhookSecret(
         { ...scope, "Idempotency-Key": input.idempotencyKey },
         { client },
       );

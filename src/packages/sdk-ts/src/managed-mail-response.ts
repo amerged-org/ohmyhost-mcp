@@ -49,6 +49,18 @@ export function assertManagedMailResponse(value: unknown, input: ManagedMailComm
     }
     return;
   }
+  if (input.action === "webhook_rotate") {
+    // The rotated secret is the only answer that carries it; the endpoint is the one already set.
+    exact(r, ["url", "signing_secret", "status"]);
+    https(r["url"]);
+    if (
+      r["status"] !== "verification_required" ||
+      typeof r["signing_secret"] !== "string" ||
+      !/^whsec_[A-Za-z0-9+/]{43}=$/u.test(r["signing_secret"])
+    )
+      invalid();
+    return;
+  }
   if (input.action === "webhook_set") {
     exact(r, ["url", "signing_secret", "status"]);
     if (

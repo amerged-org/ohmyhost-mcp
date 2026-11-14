@@ -162,6 +162,11 @@
       "types": "./dist/secret-names.d.ts",
       "import": "./dist/secret-names.js"
     },
+    "./organization-mcp-connections": {
+      "source": "./src/organization-mcp-connections.ts",
+      "types": "./dist/organization-mcp-connections.d.ts",
+      "import": "./dist/organization-mcp-connections.js"
+    },
     "./project-data-changes": {
       "source": "./src/project-data-changes.ts",
       "types": "./dist/project-data-changes.d.ts",

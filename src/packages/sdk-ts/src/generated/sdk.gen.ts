@@ -326,6 +326,8 @@ import type {
   RevokeWorkspaceMailDomainDnsAuthorizationResponses,
   RollbackDeploymentErrors,
   RollbackDeploymentResponses,
+  RotateEnvironmentSecretErrors,
+  RotateEnvironmentSecretResponses,
   RotateManagedMailWebhookSecretErrors,
   RotateManagedMailWebhookSecretResponses,
   RotateProjectDevShareLinkErrors,
@@ -6788,6 +6790,54 @@ export const putEnvironmentSecret = <ThrowOnError extends boolean = true>(
       ...options?.headers,
       ...params.headers,
     },
+  });
+};
+
+/**
+ * Rotate an installed platform key
+ *
+ * Replaces the value of an installed platform key (OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY or BETTER_AUTH_SECRET) with a value the platform generates. The request has no body and the value is never returned. The earlier value stops authorizing at once, and the new value reaches the running environment without a deployment. Other names answer 400; an installed key the environment does not hold answers 404. Repeating the same idempotency key replays the stored metadata.
+ */
+export const rotateEnvironmentSecret = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    secret_name: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RotateEnvironmentSecretResponses,
+  RotateEnvironmentSecretErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "secret_name" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    RotateEnvironmentSecretResponses,
+    RotateEnvironmentSecretErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/secrets/{secret_name}/rotate",
+    ...options,
+    ...params,
   });
 };
 

@@ -522,7 +522,7 @@ export type PaidDomainPlan = {
 };
 
 /**
- * awaiting_deployment means the requested hostname is declared but not provisioned. Its hostname is present, suspension_reason, custom_hostname_status, ssl_status and url are null, and validation_records is empty. Authorize Cloudflare, deploy to Prod, then repeat the same apply.
+ * awaiting_deployment means the requested hostname is declared but not provisioned. Its hostname is present, suspension_reason, custom_hostname_status, ssl_status and url are null. validation_records holds only the _omh-project TXT ownership record while the hostname is not yet proven, and is empty once it is proven. Publish that record, authorize Cloudflare, deploy to Prod, then repeat the same apply.
  */
 export type PaidDomain = {
   status:
@@ -11299,6 +11299,80 @@ export type PutEnvironmentSecretResponses = {
 
 export type PutEnvironmentSecretResponse =
   PutEnvironmentSecretResponses[keyof PutEnvironmentSecretResponses];
+
+export type RotateEnvironmentSecretData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    /**
+     * Uppercase environment-variable name.
+     */
+    secret_name: string;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/secrets/{secret_name}/rotate";
+};
+
+export type RotateEnvironmentSecretErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The idempotency key was already used with a different canonical request.
+   */
+  409: IdempotencyConflictProblem;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RotateEnvironmentSecretError =
+  RotateEnvironmentSecretErrors[keyof RotateEnvironmentSecretErrors];
+
+export type RotateEnvironmentSecretResponses = {
+  /**
+   * Rotated secret metadata. The value is never returned.
+   */
+  200: EnvironmentSecret;
+};
+
+export type RotateEnvironmentSecretResponse =
+  RotateEnvironmentSecretResponses[keyof RotateEnvironmentSecretResponses];
 
 export type GetOperationData = {
   body?: never;

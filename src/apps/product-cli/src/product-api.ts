@@ -136,8 +136,13 @@ import {
   type Organization,
   type GithubConnectionAuthorization,
   type GithubOrganizationConnectionStatus,
+  type OrganizationMcpConnectionList,
+  type OrganizationMcpConnectionRevocation,
   connectGithubOrganization,
   getGithubOrganizationConnection,
+  disconnectGithubOrganization,
+  listOrganizationMcpConnections,
+  revokeOrganizationMcpConnection,
   deleteEnvironmentSecret,
   deleteProject,
   deletePaidProjectDomain,
@@ -548,6 +553,12 @@ export interface ProductApi {
     readonly idempotencyKey: string;
   }): Promise<GithubConnectionAuthorization>;
   getGithubConnection(organizationId: string): Promise<GithubOrganizationConnectionStatus>;
+  disconnectGithub(organizationId: string): Promise<GithubOrganizationConnectionStatus>;
+  listOrganizationMcpConnections(organizationId: string): Promise<OrganizationMcpConnectionList>;
+  revokeOrganizationMcpConnection(input: {
+    readonly organizationId: string;
+    readonly connectionId: string;
+  }): Promise<OrganizationMcpConnectionRevocation>;
   linkSource(input: {
     readonly projectId: string;
     readonly repositoryOwner: string;
@@ -1552,6 +1563,34 @@ export class GeneratedSdkProductApi implements ProductApi {
   ): Promise<GithubOrganizationConnectionStatus> {
     return getGithubOrganizationConnection(
       { organization_id: organizationId },
+      { client: this.#client },
+    );
+  }
+
+  public async disconnectGithub(
+    organizationId: string,
+  ): Promise<GithubOrganizationConnectionStatus> {
+    return disconnectGithubOrganization(
+      { organization_id: organizationId },
+      { client: this.#client },
+    );
+  }
+
+  public async listOrganizationMcpConnections(
+    organizationId: string,
+  ): Promise<OrganizationMcpConnectionList> {
+    return listOrganizationMcpConnections(
+      { organization_id: organizationId },
+      { client: this.#client },
+    );
+  }
+
+  public async revokeOrganizationMcpConnection(input: {
+    readonly organizationId: string;
+    readonly connectionId: string;
+  }): Promise<OrganizationMcpConnectionRevocation> {
+    return revokeOrganizationMcpConnection(
+      { organization_id: input.organizationId, connection_id: input.connectionId },
       { client: this.#client },
     );
   }

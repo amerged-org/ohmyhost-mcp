@@ -1,4 +1,5 @@
 import { parseFeedbackSubmissionDetail } from "@ohmyhost/contracts/feedback";
+import { MCP_CONNECTION_ID_PATTERN } from "@ohmyhost/contracts/organization-mcp-connections";
 import {
   assertGithubSourceResponse,
   assertManagedSourceResponse,
@@ -20,6 +21,8 @@ import type {
   GithubOrganizationConnection,
   GithubOrganizationConnectionStatus,
   OrganizationCredits,
+  OrganizationMcpConnectionList,
+  OrganizationMcpConnectionRevocation,
   ProjectCreditBudget,
 } from "@ohmyhost/sdk-ts";
 import { isSaasCnameTarget, type SaasCnameTarget } from "@ohmyhost/contracts/platform-origins";
@@ -329,6 +332,41 @@ export const parseGithubOrganizationConnectionStatus = (
       throw new ResponseContractError();
   }
   return input as unknown as GithubOrganizationConnectionStatus;
+};
+
+export const parseOrganizationMcpConnectionList = (
+  value: unknown,
+): OrganizationMcpConnectionList => {
+  const input = exactRecord(value, ["connections"]);
+  if (!Array.isArray(input["connections"])) throw new ResponseContractError();
+  for (const item of input["connections"]) {
+    const connection = exactRecord(item, ["connection_id", "client_id", "user_id", "connected_at"]);
+    if (
+      typeof connection["connection_id"] !== "string" ||
+      !MCP_CONNECTION_ID_PATTERN.test(connection["connection_id"]) ||
+      !boundedString(connection["client_id"], 1, 2048) ||
+      !boundedString(connection["user_id"], 1, 256) ||
+      !isIsoInstant(connection["connected_at"])
+    )
+      throw new ResponseContractError();
+  }
+  return input as unknown as OrganizationMcpConnectionList;
+};
+
+export const parseOrganizationMcpConnectionRevocation = (
+  value: unknown,
+): OrganizationMcpConnectionRevocation => {
+  const input = exactRecord(value, ["state"]);
+  if (input["state"] !== "pending" && input["state"] !== "revoked")
+    throw new ResponseContractError();
+  return input as unknown as OrganizationMcpConnectionRevocation;
+};
+
+/** A disconnect answer that still reports a live connection did not disconnect, so it is refused. */
+export const parseGithubDisconnection = (value: unknown): GithubOrganizationConnectionStatus => {
+  const status = parseGithubOrganizationConnectionStatus(value);
+  if (status.status === "connected") throw new ResponseContractError();
+  return status;
 };
 
 export const parseGithubConnectionAuthorization = (

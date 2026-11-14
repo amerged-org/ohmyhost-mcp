@@ -1,3 +1,4 @@
+import { MCP_CONNECTION_ID_PATTERN } from "@ohmyhost/contracts/organization-mcp-connections";
 import { isUserSecretName, USER_SECRET_NAME_PATTERN } from "@ohmyhost/contracts/secret-names";
 import { isNativeAuthRedirectPath } from "@ohmyhost/contracts/native-auth";
 import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
@@ -100,6 +101,8 @@ import type {
   CloudflareDnsAuthorizationStatus,
   GithubConnectionAuthorization,
   GithubOrganizationConnectionStatus,
+  OrganizationMcpConnectionList,
+  OrganizationMcpConnectionRevocation,
   DeleteEnvironmentSecretResult,
   Deployment,
   DeploymentPage,
@@ -425,6 +428,12 @@ export interface LocalMcpProductClient {
     idempotencyKey: string;
   }): Promise<GithubConnectionAuthorization>;
   getGithubConnection(organizationId: string): Promise<GithubOrganizationConnectionStatus>;
+  disconnectGithub(organizationId: string): Promise<GithubOrganizationConnectionStatus>;
+  listOrganizationMcpConnections(organizationId: string): Promise<OrganizationMcpConnectionList>;
+  revokeOrganizationMcpConnection(input: {
+    organizationId: string;
+    connectionId: string;
+  }): Promise<OrganizationMcpConnectionRevocation>;
   linkSource(input: SourceLinkInput): Promise<Operation>;
   getSource(projectId: string): Promise<ProjectSource>;
   planDeployment(input: DeploymentPlanInput): Promise<DeploymentPlan>;
@@ -1950,6 +1959,42 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
   registerProductTool(
     server,
     dependencies,
+    "github_disconnect",
+    "Owner only: disconnect this workspace's GitHub connection. It revokes every repository grant under it, so auto-deploy and linked sources stop at once. The GitHub App stays installed for other workspaces; github_connect starts a new connection. Destructive: requires confirmed: true. Read github_status afterwards.",
+    z.object({ organization_id: identifier, confirmed: z.literal(true) }).strict(),
+    (client, input) => client.disconnectGithub(input.organization_id),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "organization_mcp_connections_list",
+    "Owner only: list the MCP clients connected to this workspace and the member who connected each, one entry per member, client and consent. Disconnected consents are not listed. Take a connection_id from here for organization_mcp_connection_revoke.",
+    z.object({ organization_id: identifier }),
+    (client, input) => client.listOrganizationMcpConnections(input.organization_id),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "organization_mcp_connection_revoke",
+    "Owner only: disconnect one MCP client from this workspace only; the member's other workspaces are unaffected. Answers pending while an active provider use of the consent drains; repeat the request until it answers revoked. Destructive: requires confirmed: true.",
+    z
+      .object({
+        organization_id: identifier,
+        connection_id: z.string().regex(MCP_CONNECTION_ID_PATTERN),
+        confirmed: z.literal(true),
+      })
+      .strict(),
+    (client, input) =>
+      client.revokeOrganizationMcpConnection({
+        organizationId: input.organization_id,
+        connectionId: input.connection_id,
+      }),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
     "source_link",
     "Link a repository covered by the workspace GitHub connection. Call github_status first and github_connect once if needed. This returns an operation without another browser consent and never starts a build. Wait for that operation before planning a deploy. If repository access is missing, update the installation using the returned settings action, then retry the same project and key. Never ask for an installation ID or provider token. Errors name the account the call ran as (acting_as): resource_not_found means that account cannot see the project (use the login of the account that owns it), github_connection_required means that workspace has no GitHub connection yet, and repository_not_installed means its GitHub App installation does not cover the repository.",
     z.object({
@@ -2569,6 +2614,28 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
       },
       action === "webhook_disable" ? destructiveAnnotations() : mutationAnnotations(),
     );
+  registerProductTool(
+    server,
+    dependencies,
+    "mail_webhook_rotate",
+    "Owner only: issue a new server-only signing secret for the project's Prod mail webhook endpoint. Earlier secrets stop verifying at once, and receiving stays off until mail_webhook_verify succeeds with the new secret. The secret is returned in this answer only: install it in Prod application secrets without logging it or writing it into files, notes or source. Repeat the same idempotency key after an uncertain response to read the current secret again. Destructive: requires confirmed: true.",
+    z.object({
+      project_id: identifier,
+      environment_id: identifier,
+      idempotency_key: idempotencyKey,
+      confirmed: z.literal(true),
+    }),
+    async (client, input) => {
+      if (!client.managedMail) throw new Error("Mail unavailable");
+      return client.managedMail({
+        action: "webhook_rotate",
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    destructiveAnnotations(),
+  );
   registerProductTool(
     server,
     dependencies,

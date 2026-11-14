@@ -1,4 +1,5 @@
 import { isUserSecretName } from "@ohmyhost/contracts/secret-names";
+import { MCP_CONNECTION_ID_PATTERN } from "@ohmyhost/contracts/organization-mcp-connections";
 import {
   DATABASE_PAGE_MAX_ITEMS,
   parseDatabaseCursor,
@@ -122,6 +123,24 @@ export type ProductCliCommand =
   | {
       readonly kind: "github-status";
       readonly organizationId: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "github-disconnect";
+      readonly organizationId: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "organization-mcp-connections-list";
+      readonly organizationId: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "organization-mcp-connection-revoke";
+      readonly organizationId: string;
+      readonly connectionId: string;
+      readonly yes: true;
       readonly credentialStore: "native";
     }
   | ({
@@ -746,6 +765,7 @@ export type ProductCliCommand =
         | "mail webhook set"
         | "mail webhook verify"
         | "mail webhook disable"
+        | "mail webhook rotate"
         | "mail messages list"
         | "mail messages get"
         | "mail messages retry";
@@ -1049,8 +1069,11 @@ export type RecognizedCommandLabel =
   | "organization create"
   | "organization list"
   | "organization use"
+  | "organization mcp-connections list"
+  | "organization mcp-connections revoke"
   | "github connect"
   | "github status"
+  | "github disconnect"
   | "project list"
   | "project status"
   | "project dev-access create"
@@ -1115,6 +1138,7 @@ export type RecognizedCommandLabel =
   | "mail webhook set"
   | "mail webhook verify"
   | "mail webhook disable"
+  | "mail webhook rotate"
   | "mail messages list"
   | "mail messages get"
   | "mail messages retry"
@@ -1175,6 +1199,7 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     if (value === "profile" && values[0] === "list") return "profile list";
     if (value === "github" && values[0] === "connect") return "github connect";
     if (value === "github" && values[0] === "status") return "github status";
+    if (value === "github" && values[0] === "disconnect") return "github disconnect";
     if (value === "operation" && values[0] === "get") return "operation get";
     if (value === "credits" && values[0] === "account") return "credits account";
     if (value === "referral" && values[0] === "link") return "referral link";
@@ -1207,6 +1232,10 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     if (value === "organization" && values[0] === "create") return "organization create";
     if (value === "organization" && values[0] === "list") return "organization list";
     if (value === "organization" && values[0] === "use") return "organization use";
+    if (value === "organization" && values[0] === "mcp-connections") {
+      if (values[1] === "list") return "organization mcp-connections list";
+      if (values[1] === "revoke") return "organization mcp-connections revoke";
+    }
     if (value === "project" && values[0] === "list") return "project list";
     if (value === "project" && values[0] === "context") return "project context";
     if (value === "project" && values[0] === "notes" && values[1] === "set")
@@ -1330,6 +1359,7 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
         if (values[1] === "set") return "mail webhook set";
         if (values[1] === "verify") return "mail webhook verify";
         if (values[1] === "disable") return "mail webhook disable";
+        if (values[1] === "rotate") return "mail webhook rotate";
       }
       if (values[0] === "messages") {
         if (values[1] === "list") return "mail messages list";
@@ -1970,14 +2000,19 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
   }
   if (first === "github") {
     const subcommand = values.shift();
-    if (yes || wait || follow || stdin) throw new InvalidCommandError();
-    if (subcommand !== "connect" && subcommand !== "status") throw new InvalidCommandError();
+    if (wait || follow || stdin) throw new InvalidCommandError();
+    if (subcommand !== "connect" && subcommand !== "status" && subcommand !== "disconnect")
+      throw new InvalidCommandError();
+    // Only disconnecting is destructive, and it requires --yes; the route reads no idempotency key.
+    if (yes !== (subcommand === "disconnect")) throw new InvalidCommandError();
     const options = parseOptions(
       values,
       subcommand === "connect" ? ["--organization", "--idempotency-key"] : ["--organization"],
     );
     const organizationId = options["--organization"];
     if (!ORGANIZATION_ULID.test(organizationId)) throw new InvalidCommandError();
+    if (subcommand === "disconnect")
+      return { kind: "github-disconnect", organizationId, yes: true, credentialStore };
     return subcommand === "connect"
       ? {
           kind: "github-connect",
@@ -1986,6 +2021,33 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
           credentialStore,
         }
       : { kind: "github-status", organizationId, credentialStore };
+  }
+  if (first === "organization" && values[0] === "mcp-connections") {
+    values.shift();
+    const subcommand = values.shift();
+    if (wait || follow || stdin) throw new InvalidCommandError();
+    // Only disconnecting a client is destructive, and it requires --yes; the route reads no key.
+    if (yes !== (subcommand === "revoke")) throw new InvalidCommandError();
+    if (subcommand === "list") {
+      const organizationId = parseOptions(values, ["--organization"])["--organization"];
+      if (!ORGANIZATION_ULID.test(organizationId)) throw new InvalidCommandError();
+      return { kind: "organization-mcp-connections-list", organizationId, credentialStore };
+    }
+    if (subcommand === "revoke") {
+      const options = parseOptions(values, ["--organization", "--connection"]);
+      const organizationId = options["--organization"];
+      const connectionId = options["--connection"];
+      if (!ORGANIZATION_ULID.test(organizationId) || !MCP_CONNECTION_ID_PATTERN.test(connectionId))
+        throw new InvalidCommandError();
+      return {
+        kind: "organization-mcp-connection-revoke",
+        organizationId,
+        connectionId,
+        yes: true,
+        credentialStore,
+      };
+    }
+    throw new InvalidCommandError();
   }
   if (first === "organization") {
     const subcommand = values.shift();
@@ -3310,20 +3372,27 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
     const area = values.shift();
     const sub =
       area === "webhook" || area === "messages" || area === "domain" ? values.shift() : undefined;
-    // Only retiring the mail domain is destructive, and it requires --yes.
+    // Only retiring the mail domain and rotating the webhook secret are destructive: each needs --yes.
     const retiring = area === "domain" && sub === "delete";
-    if (yes !== retiring || wait || follow || stdin) throw new InvalidCommandError();
-    const options = parseOptionalOptions(values, [
-      "--project",
-      "--environment",
-      "--domain",
-      "--sending",
-      "--receiving",
-      "--url",
-      "--idempotency-key",
-      "--message",
-      "--after",
-    ]);
+    const rotating = area === "webhook" && sub === "rotate";
+    if (yes !== (retiring || rotating) || wait || follow || stdin) throw new InvalidCommandError();
+    // Rotation takes only its scope and key, so any other option is refused rather than dropped.
+    const options = parseOptionalOptions(
+      values,
+      rotating
+        ? ["--project", "--environment", "--idempotency-key"]
+        : [
+            "--project",
+            "--environment",
+            "--domain",
+            "--sending",
+            "--receiving",
+            "--url",
+            "--idempotency-key",
+            "--message",
+            "--after",
+          ],
+    );
     const required = (key: keyof typeof options) => {
       const value = options[key];
       if (!value) throw new InvalidCommandError();
@@ -3364,6 +3433,13 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
         idempotencyKey: required("--idempotency-key"),
       };
       label = "mail webhook set";
+    } else if (rotating) {
+      request = {
+        ...scope,
+        action: "webhook_rotate",
+        idempotencyKey: required("--idempotency-key"),
+      };
+      label = "mail webhook rotate";
     } else if (area === "webhook" && (sub === "verify" || sub === "disable")) {
       request = {
         ...scope,
