@@ -166,11 +166,6 @@
       "source": "./src/managed-sources.ts",
       "types": "./dist/managed-sources.d.ts",
       "import": "./dist/managed-sources.js"
-    },
-    "./previews": {
-      "source": "./src/previews.ts",
-      "types": "./dist/previews.d.ts",
-      "import": "./dist/previews.js"
     }
   },
   "scripts": {
