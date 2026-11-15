@@ -13,6 +13,7 @@ import {
   DATABASE_WATCH_OPERATIONS,
   isDatabaseWatchSchema,
   isDatabaseWebhookEventPattern,
+  isDatabaseWebhookEventTypes,
   type DatabaseExecutionUsagePage,
   type DatabaseSchedule,
   type DatabaseSchedulePage,
@@ -29,6 +30,8 @@ import {
   type DatabaseWebhookPage,
   type DatabaseWebhookReplayAccepted,
   type DatabaseWebhookTestResult,
+  type DatabaseWebhookSubscription,
+  type DatabaseWebhookSubscriptionActivation,
 } from "@ohmyhost/contracts/database-events";
 import type { DatabaseEnvironment } from "@ohmyhost/contracts/database-access";
 import {
@@ -78,6 +81,7 @@ import {
   resolveProductCliEnvironment,
   parseSafeProblem,
   UserTokenFileError,
+  PrivateSecretFileError,
   type LocalProfile,
   type ProductApiAuthenticationError,
   type ProductCliEnvironment,
@@ -305,6 +309,10 @@ export interface LocalMcpProductClient {
     cursor?: string,
   ): Promise<import("@ohmyhost/sdk-ts").FeedbackStatus>;
   createProject(input: ProjectCreateInput): Promise<Operation>;
+  addProjectDevelopmentEnvironment(input: {
+    projectId: string;
+    idempotencyKey: string;
+  }): Promise<Operation>;
   planProjectDataChange(input: {
     projectId: string;
     change: ProjectDataChangeKind;
@@ -384,6 +392,29 @@ export interface LocalMcpProductClient {
     readonly headers: Readonly<Record<string, string>>;
     readonly idempotencyKey: string;
   }): Promise<DatabaseWebhookCreated>;
+  getDatabaseWebhookSubscription(input: {
+    projectId: string;
+    environment: DatabaseEnvironment;
+    subscriptionId: string;
+  }): Promise<DatabaseWebhookSubscription>;
+  activateDatabaseWebhookSubscription(input: {
+    projectId: string;
+    environment: DatabaseEnvironment;
+    subscriptionId: string;
+    generation: number;
+    idempotencyKey: string;
+    url: string;
+    eventTypes: readonly DatabaseWebhookEventPattern[];
+    headersFile?: string;
+    outputPath: string;
+  }): Promise<Omit<DatabaseWebhookSubscriptionActivation, "secret"> & { secret_file: string }>;
+  deactivateDatabaseWebhookSubscription(input: {
+    projectId: string;
+    environment: DatabaseEnvironment;
+    subscriptionId: string;
+    generation: number;
+    idempotencyKey: string;
+  }): Promise<DatabaseWebhookSubscription>;
   testDatabaseWebhook(input: DatabaseWebhookTarget): Promise<DatabaseWebhookTestResult>;
   deleteDatabaseWebhook(input: DatabaseWebhookTarget): Promise<DatabaseWebhookDeleted>;
   listDatabaseWebhookDeliveries(input: {
@@ -531,6 +562,7 @@ interface ProjectCreateInput {
   readonly name: string;
   readonly dataMode?: "shared" | "isolated";
   readonly devAccessMode?: "protected" | "public";
+  readonly includeDevelopmentEnvironment?: boolean;
   readonly region?: "us" | "eu";
   readonly idempotencyKey: string;
 }
@@ -545,7 +577,7 @@ interface SourceLinkInput {
 interface DeploymentPlanInput {
   readonly projectId: string;
   readonly commitSha: string;
-  readonly environment: "dev" | "prod";
+  readonly environment?: "dev" | "prod";
 }
 
 interface DeploymentCreateInput {
@@ -599,6 +631,7 @@ interface ProjectDeleteInput {
 }
 
 const identifier = z.string().min(1).max(256);
+const subscriptionId = z.string().regex(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u);
 const databaseEnvironment = z.enum(["dev", "prod"]);
 const databaseWebhookId = z.string().regex(/^whk_[a-z0-9]{20}$/u);
 const databaseWatchId = z.string().regex(/^pgcf_watch_[0-9a-f]{8}$/u);
@@ -1370,6 +1403,95 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
   registerProductTool(
     server,
     dependencies,
+    "database_webhook_subscription_status",
+    "Read a webhook subscription generation and state, without its signing secret.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      subscription_id: subscriptionId,
+    }),
+    (client, input) =>
+      client.getDatabaseWebhookSubscription({
+        projectId: input.project_id,
+        environment: input.environment,
+        subscriptionId: input.subscription_id,
+      }),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_webhook_subscription_activate",
+    "Activate a stable subscription ULID and generation. Start at 1; after confirmed deactivation use the next generation and a new key. Optional receiver headers are read from an absolute owner-private JSON file with headers_file; never put their values in tool arguments. The signing secret is saved in a new private output file and never returned to chat. Repeat the identical request and key with a new output file after uncertainty. Requires confirmed: true.",
+    z
+      .object({
+        project_id: identifier,
+        environment: databaseEnvironment,
+        subscription_id: subscriptionId,
+        generation: z.number().int().min(1).max(2147483647),
+        url: z
+          .string()
+          .max(2048)
+          .regex(/^https:\/\//u),
+        event_types: z
+          .array(z.string().refine(isDatabaseWebhookEventPattern))
+          .min(1)
+          .max(16)
+          .refine(isDatabaseWebhookEventTypes),
+        headers_file: z.string().min(1).max(4096).optional(),
+        out_file: z.string().min(1).max(4096),
+        idempotency_key: idempotencyKey,
+        confirmed: z.literal(true),
+      })
+      .strict(),
+    async (client, input) => {
+      const value = await client.activateDatabaseWebhookSubscription({
+        projectId: input.project_id,
+        environment: input.environment,
+        subscriptionId: input.subscription_id,
+        generation: input.generation,
+        idempotencyKey: input.idempotency_key,
+        outputPath: input.out_file,
+        url: input.url,
+        eventTypes: input.event_types as DatabaseWebhookEventPattern[],
+        ...(input.headers_file === undefined ? {} : { headersFile: input.headers_file }),
+      });
+      return {
+        id: value.id,
+        environment: value.environment,
+        state: value.state,
+        generation: value.generation,
+        provider_id: value.provider_id,
+        secret_file: value.secret_file,
+      };
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "database_webhook_subscription_deactivate",
+    "Deactivate one generation. Replay the same key after uncertainty; deliveries are not guaranteed while inactive. Requires confirmed: true.",
+    z.object({
+      project_id: identifier,
+      environment: databaseEnvironment,
+      subscription_id: subscriptionId,
+      generation: z.number().int().min(1).max(2147483647),
+      idempotency_key: idempotencyKey,
+      confirmed: z.literal(true),
+    }),
+    (client, input) =>
+      client.deactivateDatabaseWebhookSubscription({
+        projectId: input.project_id,
+        environment: input.environment,
+        subscriptionId: input.subscription_id,
+        generation: input.generation,
+        idempotencyKey: input.idempotency_key,
+      }),
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
     "database_webhook_test",
     "Send one signed test request to a database webhook and report the outcome synchronously. Each call sends one request to the receiver unless it repeats an idempotency_key already used for this request, which returns the stored outcome; the platform allows one test per webhook every five seconds. If the answer is lost, call again with the same idempotency_key; without a key a second call sends another request.",
     z.object({
@@ -1815,12 +1937,13 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "project_create",
-    "Create an ohmyho.st project. Ask whether Dev should be protected (default) or public before creation; public means anyone with the Dev URL can open it, including when Dev and Prod share data. Recommend isolated Dev/Prod data, but respect the customer's choice and added database consumption. data_mode is optional and defaults to shared, using one database/file namespace; isolated separates database/Auth records and files. Later changes use project_data_plan and project_data_change; ohmyho.st never copies data and ordinary usage prices apply. region defaults to us; new projects provision their PGCF database, new files and builds in the selected us or eu region at the same prices. Read database_compute_get for the observed database region. Existing projects migrated with their owner's authorization now use US databases; their existing R2 object locations remain unchanged. The customer API cannot change region later. ohmyhost.yaml storage.jurisdiction must match the recorded R2 bucket or reservation jurisdiction, using project region only for new storage. Read the Storage jurisdiction line in project_context_get; if unavailable, report it rather than guessing.",
+    "Create an ohmyho.st project. Dev is included by default; set include_development_environment to false for Prod only, or add Dev later with project_development_add. When Dev is included, choose protected (default) or public access; public means anyone with the Dev URL can open it. data_mode defaults to shared; isolated separates database/Auth records and files. Later changes use project_data_plan and project_data_change; ohmyho.st never copies data and ordinary usage prices apply. region defaults to us; new databases, files and builds use the selected us or eu region. The customer API cannot change region later. ohmyhost.yaml storage.jurisdiction must match the recorded R2 jurisdiction; read project_context_get rather than guessing. Deploy to Dev then promote the reviewed artifact, or deploy directly to Prod when authorized.",
     z.object({
       organization_id: identifier,
       name: z.string().min(1).max(128),
       data_mode: z.enum(["shared", "isolated"]).optional(),
       dev_access_mode: z.enum(["protected", "public"]).optional(),
+      include_development_environment: z.boolean().optional(),
       region: z.enum(["us", "eu"]).optional(),
       idempotency_key: idempotencyKey,
     }),
@@ -1830,6 +1953,9 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
         name: input.name,
         ...(input.data_mode === undefined ? {} : { dataMode: input.data_mode }),
         ...(input.dev_access_mode === undefined ? {} : { devAccessMode: input.dev_access_mode }),
+        ...(input.include_development_environment === undefined
+          ? {}
+          : { includeDevelopmentEnvironment: input.include_development_environment }),
         ...(input.region === undefined ? {} : { region: input.region }),
         idempotencyKey: input.idempotency_key,
       }),
@@ -1847,9 +1973,22 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "project_status",
-    "Get source, both Dev/Prod environment IDs, deployment URLs, Dev access mode, latest operation and cleanup status. Protected Dev needs project_dev_share_link_get for a persistent share link. Select environments by name when configuring secrets; never infer a Prod ID from the default Dev environment.",
+    "Get source, existing environment IDs, deployment URLs, custom production domains, Dev access mode, latest operation and cleanup status. Dev may be absent; add it with project_development_add. Protected Dev needs project_dev_share_link_get for a persistent share link. Select environments by name; never infer a Prod ID from the default environment.",
     z.object({ project_id: identifier }),
     (client, input) => client.getProjectStatus(input.project_id),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "project_development_add",
+    "Add Dev to an existing project. Returns an operation; reuse the same idempotency key after uncertainty and observe it with operation_get.",
+    z.object({ project_id: identifier, idempotency_key: idempotencyKey }),
+    (client, input) =>
+      client.addProjectDevelopmentEnvironment({
+        projectId: input.project_id,
+        idempotencyKey: input.idempotency_key,
+      }),
+    mutationAnnotations(),
   );
   registerProductTool(
     server,
@@ -2029,7 +2168,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "deployment_plan",
-    "Plan an immutable deployment. Preserve the customer's existing authentication integration, such as Better Auth or WorkOS, and use the same generic Next.js/Vite/TanStack runtime contract. ohmyho.st login is separate. Read the app Skill's auth guidance and report actual plan blockers, required secret names/callback configuration and unverified runtime compatibility. The explicitly selected managed Better Auth bridge requires the managed database; managed mail is optional, and its verification or password-reset send actions require a configured platform sender. Application-owned Better Auth handlers can use their own sender, including Resend, with auth.provider set to none. The unreleased omh-native capability is an explicit choice requiring Paid access, a verified sender and its separately metered Auth database; verify readiness and hosted support before claiming it works. Never assume a working platform login proves application login or silently replace its auth provider. The plan builds into Dev unless environment is prod; prod builds straight into Prod without a Dev deployment (a project with shared data and a database must deploy to Dev and promote instead). The plan stays valid for 24 hours.",
+    "Plan an immutable deployment. Preserve the customer's existing authentication integration, such as Better Auth or WorkOS. The explicitly selected managed Better Auth bridge requires the managed database; managed mail is optional. The unreleased omh-native capability is an explicit Paid choice with separate prerequisites. Never assume platform login proves application login. With no environment, the server chooses Dev if it exists, otherwise Prod. An explicit prod plan builds straight into Prod; shared data can affect Prod during migrations. Review the returned plan before deployment. The plan stays valid for 24 hours.",
     z.object({
       project_id: identifier,
       commit_sha: commitSha,
@@ -2039,7 +2178,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
       client.planDeployment({
         projectId: input.project_id,
         commitSha: input.commit_sha,
-        environment: input.environment ?? "dev",
+        ...(input.environment === undefined ? {} : { environment: input.environment }),
       }),
   );
   registerProductTool(
@@ -3642,7 +3781,7 @@ function safeFailure(error: unknown, commandPrefix: string): SafeFailure {
       retryable: error.code === "source_snapshot_changed",
       suggestedAction: error.message,
     };
-  if (error instanceof UserTokenFileError)
+  if (error instanceof UserTokenFileError || error instanceof PrivateSecretFileError)
     return { code: error.code, retryable: false, suggestedAction: error.message };
   if (error instanceof DOMException && error.name === "TimeoutError")
     return {
@@ -3676,6 +3815,15 @@ function localFailure(error: Error, commandPrefix: string): SafeFailure | undefi
         error instanceof SavedLoginCredentialError ? error.profile : undefined,
         commandPrefix,
       );
+    case "ProductCliFailure":
+      if (Reflect.get(error, "code") === "headers_file_invalid")
+        return {
+          code: "headers_file_invalid",
+          retryable: false,
+          suggestedAction:
+            "Use an absolute, owner-private UTF-8 JSON headers file of at most 8 KiB; header names and values must satisfy the webhook contract. Nothing was sent.",
+        };
+      return undefined;
     case "ProfileSelectionError":
       return {
         code: (error as Error & { code: string }).code,

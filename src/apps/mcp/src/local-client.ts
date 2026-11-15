@@ -31,6 +31,8 @@ import {
   assertDatabaseWebhookPage,
   assertDatabaseWebhookReplayAccepted,
   assertDatabaseWebhookTest,
+  assertDatabaseWebhookSubscription,
+  assertDatabaseWebhookSubscriptionActivation,
 } from "@ohmyhost/contracts/database-events";
 import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
 import {
@@ -92,6 +94,7 @@ import {
   setProjectCreditBudget,
   createDeployment,
   createProject,
+  addProjectDevelopmentEnvironment,
   planProjectDataChange,
   createProjectDataChange,
   submitFeedback,
@@ -128,6 +131,9 @@ import {
   listProjectDatabaseAccess,
   revokeProjectDatabaseAccess,
   createProjectDatabaseWebhook,
+  activateDatabaseWebhookSubscription,
+  deactivateDatabaseWebhookSubscription,
+  getDatabaseWebhookSubscription,
   listProjectDatabaseWebhooks,
   deleteProjectDatabaseWebhook,
   createProjectDatabaseTable,
@@ -169,6 +175,8 @@ import {
   createAuthenticatedProductTransport,
   resolveProductCliEnvironment,
   prepareUserTokenFile,
+  preparePrivateSecretFile,
+  readPrivateWebhookCreateRequest,
   ProductApiAuthenticationError,
   parseDevAccessTicket,
   parseDevAccessState,
@@ -979,6 +987,87 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
     requireScope(value.environment === input.environment);
     return value;
   }
+  public async getDatabaseWebhookSubscription(
+    input: Parameters<LocalMcpProductClient["getDatabaseWebhookSubscription"]>[0],
+  ) {
+    const value = await getDatabaseWebhookSubscription(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        subscription_id: input.subscriptionId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookSubscription(value);
+    requireScope(value.id === input.subscriptionId && value.environment === input.environment);
+    return value;
+  }
+  public async activateDatabaseWebhookSubscription(
+    input: Parameters<LocalMcpProductClient["activateDatabaseWebhookSubscription"]>[0],
+  ) {
+    const request = await readPrivateWebhookCreateRequest({
+      url: input.url,
+      eventTypes: input.eventTypes,
+      headersFile: input.headersFile ?? null,
+    });
+    const file = await preparePrivateSecretFile(input.outputPath);
+    try {
+      const value = await activateDatabaseWebhookSubscription(
+        {
+          project_id: input.projectId,
+          environment: input.environment,
+          subscription_id: input.subscriptionId,
+          generation: input.generation,
+          "Idempotency-Key": input.idempotencyKey,
+          databaseWebhookCreateRequest: {
+            ...request,
+            event_types: [...request.event_types],
+            headers: { ...request.headers },
+          },
+        },
+        { client: this.#client },
+      );
+      assertDatabaseWebhookSubscriptionActivation(value);
+      requireScope(
+        value.id === input.subscriptionId &&
+          value.environment === input.environment &&
+          value.generation === input.generation,
+      );
+      await file.save(value.secret);
+      const subscription = {
+        id: value.id,
+        environment: value.environment,
+        state: value.state,
+        generation: value.generation,
+        provider_id: value.provider_id,
+      };
+      return { ...subscription, secret_file: file.path };
+    } finally {
+      await file.close();
+    }
+  }
+  public async deactivateDatabaseWebhookSubscription(
+    input: Parameters<LocalMcpProductClient["deactivateDatabaseWebhookSubscription"]>[0],
+  ) {
+    const value = await deactivateDatabaseWebhookSubscription(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        subscription_id: input.subscriptionId,
+        generation: input.generation,
+        "Idempotency-Key": input.idempotencyKey,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookSubscription(value);
+    requireScope(
+      value.id === input.subscriptionId &&
+        value.environment === input.environment &&
+        value.generation === input.generation &&
+        value.state === "inactive",
+    );
+    return value;
+  }
   public async testDatabaseWebhook(
     input: Parameters<LocalMcpProductClient["testDatabaseWebhook"]>[0],
   ) {
@@ -1253,9 +1342,21 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
           name: input.name,
           ...(input.dataMode === undefined ? {} : { data_mode: input.dataMode }),
           ...(input.devAccessMode === undefined ? {} : { dev_access_mode: input.devAccessMode }),
+          ...(input.includeDevelopmentEnvironment === undefined
+            ? {}
+            : { include_development_environment: input.includeDevelopmentEnvironment }),
           ...(input.region === undefined ? {} : { region: input.region }),
         },
       },
+      { client: this.#client },
+    );
+  }
+
+  public addProjectDevelopmentEnvironment(
+    input: Parameters<LocalMcpProductClient["addProjectDevelopmentEnvironment"]>[0],
+  ) {
+    return addProjectDevelopmentEnvironment(
+      { project_id: input.projectId, "Idempotency-Key": input.idempotencyKey, body: {} },
       { client: this.#client },
     );
   }
@@ -1319,7 +1420,10 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
     return planDeployment(
       {
         project_id: input.projectId,
-        planDeploymentRequest: { commit_sha: input.commitSha, environment: input.environment },
+        planDeploymentRequest: {
+          commit_sha: input.commitSha,
+          ...(input.environment === undefined ? {} : { environment: input.environment }),
+        },
       },
       { client: this.#client },
     );

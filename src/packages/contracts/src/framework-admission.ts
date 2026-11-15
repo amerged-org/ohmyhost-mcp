@@ -518,8 +518,9 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
         text: {
           nextjs: "runtime.mode: edge",
           "vite-static":
-            "runtime.mode: edge with src/ohmyhost/companion.ts when database, auth, mail, ai, storage or functions.crons is set, and static otherwise",
-          "tanstack-start": "runtime.mode: edge, or static without functions.crons, storage and ai",
+            "runtime.mode: edge with src/ohmyhost/companion.ts when database, auth, mail, ai, browser, storage or functions.crons is set, and static otherwise",
+          "tanstack-start":
+            "runtime.mode: edge, or static without functions.crons, storage, ai and browser",
           astro: "runtime.mode: static for prerendered sites, or edge with the Cloudflare adapter",
         },
       },
@@ -550,7 +551,7 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
   build_option_unsupported: {
     paths: ["repository_config"],
     template:
-      '"{{path}}" sets a build option this runtime ignores: build.ssg_cache_max_mib applies only to Next.js, and runtime.mode: functions takes only build.install. Remove the option, commit and push the change, then plan the new commit.',
+      '"{{path}}" sets a build option this runtime ignores: build.ssg_cache_max_mib and build.next_revalidate_path apply only to Next.js, and runtime.mode: functions takes only build.install. Remove the option, commit and push the change, then plan the new commit.',
   },
   application_root_missing: {
     paths: ["repository_config"],
@@ -589,7 +590,7 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
   companion_entry_required: {
     paths: ["module"],
     template:
-      '"{{path}}" is missing. A Vite app with runtime.mode: edge or with database, auth, mail, ai, storage or functions.crons needs this Worker module with export default { fetch }. Add it, or use runtime.mode: static without those settings; commit and push the change, then plan the new commit.',
+      '"{{path}}" is missing. A Vite app with runtime.mode: edge or with database, auth, mail, ai, browser, storage or functions.crons needs this Worker module with export default { fetch }. Add it, or use runtime.mode: static without those settings; commit and push the change, then plan the new commit.',
   },
   worker_module_required: {
     paths: ["module"],

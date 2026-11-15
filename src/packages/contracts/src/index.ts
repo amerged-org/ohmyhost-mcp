@@ -26,6 +26,8 @@ export type OhmyhostApplicationBuild = Readonly<{
   output: string;
   /** Maximum private immutable Next.js prerender cache, in MiB; defaults to 32. */
   ssg_cache_max_mib?: number;
+  /** Opt into the writable, deployment-scoped Next.js revalidatePath cache. */
+  next_revalidate_path?: boolean;
 }>;
 export type OhmyhostFunctionsBuild = Readonly<{ install: string }>;
 
@@ -61,6 +63,7 @@ export interface OhmyhostConfig {
     enabled: boolean;
     jurisdiction?: "eu" | "any";
   }>;
+  readonly browser?: Readonly<{ enabled: boolean }>;
   readonly functions?: Readonly<{ crons: readonly string[] }>;
   readonly credits?: Readonly<{
     monthly_budget: number;
@@ -98,6 +101,9 @@ export function parseOhmyhostConfig(value: unknown): OhmyhostConfig {
             ...((input.build as OhmyhostApplicationBuild).ssg_cache_max_mib === undefined
               ? {}
               : { ssg_cache_max_mib: (input.build as OhmyhostApplicationBuild).ssg_cache_max_mib }),
+            ...((input.build as OhmyhostApplicationBuild).next_revalidate_path === true
+              ? { next_revalidate_path: true }
+              : {}),
           }),
     runtime: Object.freeze({
       mode: input.runtime.mode,
@@ -138,6 +144,9 @@ export function parseOhmyhostConfig(value: unknown): OhmyhostConfig {
             ...(input.ai.jurisdiction === undefined ? {} : { jurisdiction: input.ai.jurisdiction }),
           }),
         }),
+    ...(input.browser === undefined
+      ? {}
+      : { browser: Object.freeze({ enabled: input.browser.enabled }) }),
     ...(input.functions === undefined
       ? {}
       : {

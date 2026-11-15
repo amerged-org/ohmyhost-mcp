@@ -27,6 +27,79 @@ export class UserTokenFileError extends Error {
   }
 }
 
+export class PrivateSecretFileError extends Error {
+  readonly code = "private_output_invalid";
+  constructor() {
+    super(
+      "Choose a new private output file outside the repository or ignored by Git. Existing files and links are never replaced. After an uncertain activation, retry the same key and request with a new output file.",
+    );
+  }
+}
+
+/** Reserve a new owner-only secret file before a provider mutation. Existing paths are never changed. */
+export async function preparePrivateSecretFile(output: string) {
+  const path = resolve(output);
+  let file: FileHandle | undefined;
+  try {
+    await requireIgnoredTokenFile(path);
+    file = await open(
+      path,
+      constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
+    const handle = file;
+    await secureTokenFile(path, handle);
+    const identity = await handle.stat();
+    if (!identity.isFile() || identity.nlink !== 1 || identity.size !== 0)
+      throw new PrivateSecretFileError();
+    return {
+      path,
+      async save(value: string): Promise<void> {
+        try {
+          if (!/^[\x21-\x7e]{16,512}$/u.test(value)) throw new PrivateSecretFileError();
+          const current = await lstat(path),
+            before = await handle.stat();
+          if (
+            !current.isFile() ||
+            current.isSymbolicLink() ||
+            current.nlink !== 1 ||
+            current.ino !== identity.ino ||
+            current.dev !== identity.dev ||
+            before.size !== 0
+          )
+            throw new PrivateSecretFileError();
+          await handle.writeFile(value, "utf8");
+          await handle.sync();
+          const after = await lstat(path),
+            stored = Buffer.alloc(Buffer.byteLength(value));
+          try {
+            const read = await handle.read(stored, 0, stored.length, 0);
+            if (
+              !after.isFile() ||
+              after.isSymbolicLink() ||
+              after.nlink !== 1 ||
+              after.ino !== identity.ino ||
+              after.dev !== identity.dev ||
+              after.size !== stored.length ||
+              read.bytesRead !== stored.length ||
+              stored.toString("utf8") !== value
+            )
+              throw new PrivateSecretFileError();
+          } finally {
+            stored.fill(0);
+          }
+        } catch {
+          throw new PrivateSecretFileError();
+        }
+      },
+      close: () => handle.close(),
+    };
+  } catch {
+    await file?.close();
+    throw new PrivateSecretFileError();
+  }
+}
+
 /** What to do next; once a key was issued, the answer names it so it can be revoked. */
 const tokenFileAction = (code: UserTokenFileError["code"], keyId: string | undefined): string => {
   switch (code) {

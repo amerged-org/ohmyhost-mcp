@@ -225,6 +225,7 @@ export function viteCompanionRequired(configuration: OhmyhostConfig): boolean {
     configuration.auth?.provider === "better-auth" ||
     configuration.mail?.enabled === true ||
     configuration.ai?.enabled === true ||
+    configuration.browser?.enabled === true ||
     configuration.storage !== undefined ||
     (configuration.functions?.crons.length ?? 0) > 0
   );
@@ -646,7 +647,11 @@ function configurationFindings(input: FrameworkSourceRuleInput): FrameworkConver
     findings.push(
       diagnostic({ code: "runtime_mode_unsupported", path: REPOSITORY_CONFIG, framework }),
     );
-  if (build !== null && framework !== "nextjs" && build.ssg_cache_max_mib !== undefined)
+  if (
+    build !== null &&
+    framework !== "nextjs" &&
+    (build.ssg_cache_max_mib !== undefined || build.next_revalidate_path === true)
+  )
     findings.push(diagnostic({ code: "build_option_unsupported", path: REPOSITORY_CONFIG }));
   const output =
     framework === "astro"
@@ -703,6 +708,7 @@ function runtimeModeAdmitted(
         configuration.database?.enabled !== true &&
         configuration.mail?.enabled !== true &&
         configuration.ai?.enabled !== true &&
+        configuration.browser?.enabled !== true &&
         configuration.auth?.provider !== "better-auth")
     );
   if (framework === "nextjs") return mode === "edge";
@@ -713,7 +719,8 @@ function runtimeModeAdmitted(
     (mode === "static" &&
       !crons &&
       configuration.storage === undefined &&
-      configuration.ai?.enabled !== true)
+      configuration.ai?.enabled !== true &&
+      configuration.browser?.enabled !== true)
   );
 }
 

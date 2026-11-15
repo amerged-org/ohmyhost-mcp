@@ -140,6 +140,22 @@ export interface DatabaseWebhookCreated extends DatabaseWebhook {
   readonly secret: string;
 }
 
+/** A client-owned subscription remains identifiable across confirmed deactivations. */
+export interface DatabaseWebhookSubscription {
+  readonly id: string;
+  readonly environment: DatabaseEnvironment;
+  readonly state: "creating" | "active" | "deactivating" | "inactive";
+  readonly generation: number;
+  readonly provider_id: string | null;
+}
+
+/** Only an authenticated activation or its exact retry may reveal this generation's secret. */
+export interface DatabaseWebhookSubscriptionActivation extends DatabaseWebhookSubscription {
+  readonly state: "active";
+  readonly provider_id: string;
+  readonly secret: string;
+}
+
 export interface DatabaseWebhookPage {
   readonly items: readonly DatabaseWebhook[];
 }
@@ -279,6 +295,20 @@ export function parseDatabaseEnvironment(value: unknown): DatabaseEnvironment {
 export function parseDatabaseWebhookId(value: unknown): string {
   if (!matches(value, WEBHOOK_ID_PATTERN)) throw new TypeError("Invalid database webhook id");
   return value;
+}
+
+export function parseDatabaseWebhookSubscriptionId(value: unknown): string {
+  if (!matches(value, /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u))
+    throw new TypeError("Invalid database webhook subscription id");
+  return value;
+}
+
+export function parseDatabaseWebhookGeneration(value: unknown): number {
+  if (typeof value !== "string" || !/^[1-9][0-9]*$/u.test(value))
+    throw new TypeError("Invalid database webhook generation");
+  const generation = Number(value);
+  if (!Number.isSafeInteger(generation)) throw new TypeError("Invalid database webhook generation");
+  return generation;
 }
 
 export function parseDatabaseWatchId(value: unknown): string {
@@ -429,6 +459,43 @@ export function assertDatabaseWebhook(value: unknown): asserts value is Database
   if (!record(value) || !exact(value, WEBHOOK_KEYS))
     throw new TypeError("Invalid database webhook");
   assertWebhookFields(value);
+}
+
+const SUBSCRIPTION_KEYS = ["id", "environment", "state", "generation", "provider_id"];
+function assertSubscriptionFields(value: Record<string, unknown>): void {
+  if (
+    !matches(value["id"], /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u) ||
+    !oneOf(["dev", "prod"] as const, value["environment"]) ||
+    !oneOf(["creating", "active", "deactivating", "inactive"] as const, value["state"]) ||
+    !Number.isSafeInteger(value["generation"]) ||
+    Number(value["generation"]) < 1 ||
+    !(value["provider_id"] === null || matches(value["provider_id"], WEBHOOK_ID_PATTERN)) ||
+    (value["state"] === "creating" && value["provider_id"] !== null) ||
+    ((value["state"] === "active" || value["state"] === "deactivating") &&
+      value["provider_id"] === null)
+  )
+    throw new TypeError("Invalid database webhook subscription");
+}
+export function assertDatabaseWebhookSubscription(
+  value: unknown,
+): asserts value is DatabaseWebhookSubscription {
+  if (!record(value) || !exact(value, SUBSCRIPTION_KEYS))
+    throw new TypeError("Invalid database webhook subscription");
+  assertSubscriptionFields(value);
+}
+export function assertDatabaseWebhookSubscriptionActivation(
+  value: unknown,
+): asserts value is DatabaseWebhookSubscriptionActivation {
+  if (!record(value) || !exact(value, [...SUBSCRIPTION_KEYS, "secret"]))
+    throw new TypeError("Invalid database webhook subscription activation");
+  assertSubscriptionFields(value);
+  if (
+    value["state"] !== "active" ||
+    value["provider_id"] === null ||
+    typeof value["secret"] !== "string" ||
+    !/^[\x21-\x7e]{16,512}$/u.test(value["secret"])
+  )
+    throw new TypeError("Invalid database webhook subscription activation");
 }
 
 export function assertDatabaseWatch(value: unknown): asserts value is DatabaseWatch {

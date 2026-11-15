@@ -28,6 +28,7 @@ import type {
 import { isSaasCnameTarget, type SaasCnameTarget } from "@ohmyhost/contracts/platform-origins";
 import {
   publicOperationFailure,
+  parseMigrationFailureDiagnostic,
   publicOperationReconciliation,
   type PublicOperationFailure,
   type PublicOperationReconciliation,
@@ -818,6 +819,7 @@ export const parseProjectStatus = (value: unknown): Readonly<Record<string, unkn
     "prod_url",
     "latest_operation",
     "cleanup_state",
+    "custom_domains",
   ]);
   const handle = input["handle"];
   if (
@@ -854,6 +856,19 @@ export const parseProjectStatus = (value: unknown): Readonly<Record<string, unkn
     }
   }
   if (input["head_deployment"] !== null) parseProjectDeployment(input["head_deployment"]);
+  if (input["custom_domains"] !== undefined) {
+    if (!Array.isArray(input["custom_domains"]) || input["custom_domains"].length > 64)
+      throw new ResponseContractError();
+    for (const raw of input["custom_domains"]) {
+      const domain = exactRecord(raw, ["hostname", "environment", "state"]);
+      if (
+        !isPaidHostname(domain["hostname"]) ||
+        domain["environment"] !== "prod" ||
+        !["awaiting_deployment", "pending", "active", "deleting"].includes(String(domain["state"]))
+      )
+        throw new ResponseContractError();
+    }
+  }
   if (input["environments"] !== undefined) {
     const environments = input["environments"];
     if (!Array.isArray(environments) || environments.length > 2) throw new ResponseContractError();
@@ -1518,22 +1533,45 @@ export const parseOperation = (value: unknown): PublicOperation => {
  * detail, and only an exact catalog sentence naming the refused file; it is rendered again here.
  */
 function parseOperationFailure(value: unknown): PublicOperationFailure {
-  const input = exactRecord(value, ["code", "message", "retryable", "suggested_action", "detail"]);
+  const input = exactRecord(value, [
+    "code",
+    "message",
+    "retryable",
+    "suggested_action",
+    "detail",
+    "migration",
+  ]);
   const detail = input["detail"];
-  const diagnostic =
+  const framework =
     detail === undefined || input["code"] !== "auto_deploy_plan_rejected"
       ? null
       : frameworkConversionDiagnosticFromDetail(detail);
+  const migration =
+    input["migration"] === undefined ? null : parseMigrationFailureDiagnostic(input["migration"]);
+  const normalize = (value: Record<string, unknown>) =>
+    JSON.stringify(
+      Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))),
+    );
   if (
     typeof input["code"] !== "string" ||
     !boundedString(input["message"], 1, 512) ||
     input["retryable"] !== false ||
     !boundedString(input["suggested_action"], 1, 500) ||
-    (detail !== undefined && diagnostic === null)
+    (detail !== undefined && framework === null) ||
+    (input["migration"] !== undefined &&
+      (input["code"] !== "database_migration_failed" ||
+        migration === null ||
+        normalize(input["migration"] as Record<string, unknown>) !==
+          normalize(migration as unknown as Record<string, unknown>)))
   )
     throw new ResponseContractError();
-  const safe = publicOperationFailure(input["code"], diagnostic);
-  if (safe.code !== input["code"] || safe.detail !== detail) throw new ResponseContractError();
+  const safe = publicOperationFailure(input["code"], migration ?? framework);
+  if (
+    safe.code !== input["code"] ||
+    safe.detail !== detail ||
+    JSON.stringify(safe.migration) !== JSON.stringify(migration ?? undefined)
+  )
+    throw new ResponseContractError();
   return safe;
 }
 

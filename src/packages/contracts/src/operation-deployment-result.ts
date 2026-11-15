@@ -96,6 +96,34 @@ const deploymentProgressActions = {
     "Mail readiness could not be observed. Read 'ohmyhost mail status --project PROJECT --environment PROD_ENVIRONMENT_ULID --json' (MCP mail_status) with the Prod environment ID from 'ohmyhost project status', and report a persistent error; keep this operation.",
 } as const;
 export type DeploymentProgressPhase = keyof typeof deploymentProgressActions;
+export interface DeploymentMailProgress {
+  readonly domain: string;
+  readonly status:
+    | "configured"
+    | "delegation_required"
+    | "ready"
+    | "verification_pending"
+    | "verification_failed";
+  readonly configured_at: string;
+  readonly observed_at?: string;
+  readonly verification_issue?:
+    | "identity_missing"
+    | "identity_verification_failed"
+    | "dkim_verification_failed"
+    | "dkim_records_changed"
+    | "tenant_association_missing"
+    | null;
+  readonly next_check_after_seconds?: 60 | 3600 | null;
+  readonly sending?: "disabled" | "pending" | "ready" | "failed";
+  readonly receiving?: "disabled" | "pending" | "ready" | "failed";
+  readonly dns_records: {
+    readonly type: "MX" | "TXT" | "CNAME";
+    readonly name: string;
+    readonly value: string;
+    readonly status: string;
+    readonly priority?: number;
+  }[];
+}
 export interface OperationDeploymentProgress {
   readonly build_completed_at?: string;
   readonly phase: DeploymentProgressPhase;
@@ -104,6 +132,7 @@ export interface OperationDeploymentProgress {
   readonly observed_at: string;
   readonly next_poll_after_seconds: 60;
   readonly suggested_action: string;
+  readonly mail?: DeploymentMailProgress;
 }
 export function createOperationDeploymentProgress(input: {
   build_completed_at?: string;
@@ -111,6 +140,7 @@ export function createOperationDeploymentProgress(input: {
   project_id: string;
   deployment_id: string;
   observed_at: string;
+  mail?: DeploymentMailProgress;
 }): OperationDeploymentProgress {
   const project = ulid(input.project_id);
   ulid(input.deployment_id);
@@ -126,6 +156,8 @@ export function createOperationDeploymentProgress(input: {
       new Date(input.build_completed_at).toISOString() !== input.build_completed_at)
   )
     invalid();
+  const mail = input.mail === undefined ? undefined : parseDeploymentMailProgress(input.mail);
+  if (mail !== undefined && input.phase !== "waiting_for_mail") invalid();
   return Object.freeze({
     ...(input.build_completed_at === undefined
       ? {}
@@ -135,8 +167,93 @@ export function createOperationDeploymentProgress(input: {
     deployment_id: input.deployment_id,
     observed_at: input.observed_at,
     next_poll_after_seconds: 60 as const,
-    suggested_action: deploymentProgressActions[input.phase].replace("PROJECT", project),
+    suggested_action:
+      mail === undefined || mail.dns_records.length === 0
+        ? deploymentProgressActions[input.phase].replace("PROJECT", project)
+        : "Follow the mail readiness and DNS records shown here, then poll this same operation. Do not rebuild or repeat correct DNS changes.",
+    ...(mail === undefined ? {} : { mail }),
   });
+}
+function parseDeploymentMailProgress(value: unknown): DeploymentMailProgress {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) invalid();
+  const raw = value as Record<string, unknown>;
+  const keys = ["domain", "status", "configured_at", "dns_records"];
+  for (const optional of [
+    "observed_at",
+    "verification_issue",
+    "next_check_after_seconds",
+    "sending",
+    "receiving",
+  ])
+    if (raw[optional] !== undefined) keys.push(optional);
+  const row = exactRecord(raw, keys),
+    time = (v: unknown) =>
+      typeof v === "string" && Number.isFinite(Date.parse(v)) && new Date(v).toISOString() === v,
+    state = ["disabled", "pending", "ready", "failed"];
+  if (
+    typeof row["domain"] !== "string" ||
+    row["domain"].length > 253 ||
+    !/^[a-z0-9.-]+$/u.test(row["domain"]) ||
+    ![
+      "configured",
+      "delegation_required",
+      "ready",
+      "verification_pending",
+      "verification_failed",
+    ].includes(String(row["status"])) ||
+    !time(row["configured_at"]) ||
+    (row["observed_at"] !== undefined && !time(row["observed_at"])) ||
+    (row["verification_issue"] !== undefined &&
+      row["verification_issue"] !== null &&
+      ![
+        "identity_missing",
+        "identity_verification_failed",
+        "dkim_verification_failed",
+        "dkim_records_changed",
+        "tenant_association_missing",
+      ].includes(String(row["verification_issue"]))) ||
+    (row["next_check_after_seconds"] !== undefined &&
+      ![60, 3600, null].includes(row["next_check_after_seconds"] as 60 | 3600 | null)) ||
+    (row["sending"] !== undefined && !state.includes(String(row["sending"]))) ||
+    (row["receiving"] !== undefined && !state.includes(String(row["receiving"]))) ||
+    !Array.isArray(row["dns_records"]) ||
+    row["dns_records"].length > 16
+  )
+    invalid();
+  const records = row["dns_records"].map((value: unknown) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) invalid();
+    const item = value as Record<string, unknown>;
+    const record = exactRecord(
+      item,
+      item["priority"] === undefined
+        ? ["type", "name", "value", "status"]
+        : ["type", "name", "value", "status", "priority"],
+    );
+    if (
+      !["MX", "TXT", "CNAME"].includes(String(record["type"])) ||
+      typeof record["name"] !== "string" ||
+      record["name"].length === 0 ||
+      record["name"].length > 253 ||
+      /[\r\n\0]/u.test(record["name"]) ||
+      !(record["name"] === row["domain"] || record["name"].endsWith(`.${row["domain"]}`)) ||
+      typeof record["value"] !== "string" ||
+      record["value"].length === 0 ||
+      record["value"].length > 4096 ||
+      /[\r\n\0]/u.test(record["value"]) ||
+      typeof record["status"] !== "string" ||
+      record["status"].length === 0 ||
+      record["status"].length > 32 ||
+      /[\r\n\0]/u.test(record["status"]) ||
+      (record["type"] === "MX" &&
+        (!Number.isSafeInteger(record["priority"]) ||
+          Number(record["priority"]) < 0 ||
+          Number(record["priority"]) > 65535)) ||
+      (record["type"] !== "MX" && record["priority"] !== undefined)
+    )
+      invalid();
+    return Object.freeze({ ...record }) as DeploymentMailProgress["dns_records"][number];
+  });
+  return Object.freeze({ ...row, dns_records: records }) as unknown as DeploymentMailProgress;
 }
 export function parseOperationDeploymentProgress(value: unknown): OperationDeploymentProgress {
   const keys = [
@@ -149,6 +266,8 @@ export function parseOperationDeploymentProgress(value: unknown): OperationDeplo
   ];
   if (typeof value === "object" && value !== null && Object.hasOwn(value, "build_completed_at"))
     keys.push("build_completed_at");
+  if (typeof value === "object" && value !== null && Object.hasOwn(value, "mail"))
+    keys.push("mail");
   const row = exactRecord(value, keys);
   const parsed = createOperationDeploymentProgress({
     ...(row["build_completed_at"] === undefined
@@ -158,6 +277,7 @@ export function parseOperationDeploymentProgress(value: unknown): OperationDeplo
     project_id: row["project_id"] as string,
     deployment_id: row["deployment_id"] as string,
     observed_at: row["observed_at"] as string,
+    ...(row["mail"] === undefined ? {} : { mail: parseDeploymentMailProgress(row["mail"]) }),
   });
   if (row["next_poll_after_seconds"] !== 60 || row["suggested_action"] !== parsed.suggested_action)
     invalid();

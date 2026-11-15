@@ -1,5 +1,6 @@
-import { open } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { constants } from "node:fs";
+import { lstat, open } from "node:fs/promises";
+import { isAbsolute, join, resolve } from "node:path";
 import {
   assertManagedSourceResponse,
   type ManagedProjectSource,
@@ -45,7 +46,12 @@ import {
   EXPORT_PASSWORD_MIN_CHARACTERS,
   exportPasswordMeetsMinimum,
 } from "@ohmyhost/contracts/project-exports";
-import { prepareUserTokenFile, UserTokenFileError } from "./user-token-file.js";
+import {
+  prepareUserTokenFile,
+  UserTokenFileError,
+  preparePrivateSecretFile,
+  PrivateSecretFileError,
+} from "./user-token-file.js";
 import { parseUserApiKeyPage } from "@ohmyhost/contracts/user-api-keys";
 import { assertOrganizationCreditUsage } from "@ohmyhost/contracts/credit-pricing";
 import {
@@ -402,7 +408,7 @@ const HELP_USAGE = Object.freeze({
   "feedback submit":
     "ohmyhost feedback submit --organization ULID --kind bug|issue|feature_request --title TITLE --description REDACTED_REPORT [--project ULID] [--environment ULID] [--operation ULID] [--error-code CODE] [--client-version VERSION] --idempotency-key KEY --json",
   "project create":
-    "ohmyhost project create --organization ULID --name NAME [--data-mode shared|isolated] [--dev-access-mode protected|public] [--region us|eu] --idempotency-key KEY --json (data mode is optional and defaults to shared; later assignments use project data plan/change without copying data; the region is chosen once: us is the default, eu selects EU database, new files and builds; existing R2 locations survive authorized region moves; the customer API cannot change region later)",
+    "ohmyhost project create --organization ULID --name NAME [--include-development-environment true|false] [--data-mode shared|isolated] [--dev-access-mode protected|public] [--region us|eu] --idempotency-key KEY --json (Dev defaults to included; add it later with project dev add. Data mode defaults to shared; later changes do not copy data. The region is chosen once: us defaults to US; eu selects EU database, new files and builds; the customer API cannot change region later)",
   "project data plan":
     "ohmyhost project data plan --project ULID --change isolate_prod_keeps_data|isolate_dev_keeps_data|share_prod_keeps_data|reset_dev --json (shared is the optional creation default; review which data is kept or deleted; no data is copied)",
   "project data change":
@@ -412,6 +418,7 @@ const HELP_USAGE = Object.freeze({
   "project notes set":
     "ohmyhost project notes set --project ULID --version NUMBER --markdown TEXT --idempotency-key KEY --json (no credentials or signed URLs)",
   "project status": "ohmyhost project status --project ULID --json",
+  "project dev add": "ohmyhost project dev add --project ULID --idempotency-key KEY --json",
   "project dev-access create": "ohmyhost project dev-access create --project ULID --json",
   "project dev-share link": "ohmyhost project dev-share link --project ULID --json",
   "project dev-share rotate":
@@ -453,6 +460,12 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost database table create --project ULID --environment dev|prod --table NAME --columns-file PATH [--primary-key COL[,COL]] --idempotency-key KEY --yes --json (the table is created in the public schema as the migration role, with the same access as migration tables, so a database watch can attach later; the columns file is a UTF-8 JSON array of 1 to 64 column objects, at most 64 KiB, each with name, type and optional nullable, identity and default; types: text, integer, bigint, boolean, numeric, double precision, timestamptz, date, uuid, jsonb; identity needs integer or bigint; default now needs timestamptz and default uuid needs uuid; identical repeats answer created false; at most 100 tables, 64 columns per table)",
   "database webhook create":
     "ohmyhost database webhook create --project ULID --environment dev|prod --url HTTPS_URL --event-types TYPE[,TYPE] [--headers-file PATH] --idempotency-key KEY --yes --json (the signing secret is shown once in this answer; types: database.created, database.ready, database.woke, database.slept, database.suspended, database.resized, database.deleted, data.<topic> for the rows of one watched table printed by database watch create, or data.* for every watched table; a bare * is not accepted and does not include data events; the headers file is a UTF-8 JSON object of at most 8 KiB)",
+  "database webhook subscription activate":
+    "ohmyhost database webhook subscription activate --project ULID --environment dev|prod --subscription ULID --generation N --url HTTPS_URL --event-types TYPE[,TYPE] [--headers-file PATH] --out NEW_PRIVATE_FILE --idempotency-key KEY --yes --json (the secret is written privately; repeat the same key and body after uncertainty using a new output file)",
+  "database webhook subscription deactivate":
+    "ohmyhost database webhook subscription deactivate --project ULID --environment dev|prod --subscription ULID --generation N --idempotency-key KEY --yes --json",
+  "database webhook subscription status":
+    "ohmyhost database webhook subscription status --project ULID [--environment dev|prod] --subscription ULID --json",
   "database webhook list":
     "ohmyhost database webhook list --project ULID [--environment dev|prod] --json (dev when omitted; the secret is never listed)",
   "database webhook get":
@@ -1186,6 +1199,8 @@ export class ProductCli {
         return success("project notes set", { status: "succeeded", notes });
       }
       if (command.kind === "project-status") return await this.getProjectStatus(command, signal);
+      if (command.kind === "project-development-add")
+        return await this.addProjectDevelopment(command, signal);
       if (command.kind === "project-dev-access-create")
         return await this.createDevAccessTicket(command, signal);
       if (command.kind === "project-flag-status" || command.kind === "project-flag-set") {
@@ -1294,6 +1309,12 @@ export class ProductCli {
         return await this.createDatabaseTable(command, signal);
       if (command.kind === "database-webhook-create")
         return await this.createDatabaseWebhook(command, signal);
+      if (
+        command.kind === "database-webhook-subscription-activate" ||
+        command.kind === "database-webhook-subscription-deactivate" ||
+        command.kind === "database-webhook-subscription-status"
+      )
+        return await this.databaseWebhookSubscription(command, signal);
       if (command.kind === "database-webhook-list")
         return await this.listDatabaseWebhooks(command, signal);
       if (command.kind === "database-webhook-get")
@@ -1382,7 +1403,7 @@ export class ProductCli {
       }
       return await this.deleteEnvironmentSecret(command, signal);
     } catch (error) {
-      if (error instanceof UserTokenFileError)
+      if (error instanceof UserTokenFileError || error instanceof PrivateSecretFileError)
         return failure(name, 3, error.code, false, error.message);
       if (error instanceof InteractiveSessionRequiredError)
         return failure(
@@ -1957,6 +1978,9 @@ export class ProductCli {
         name: command.name,
         ...(command.dataMode === undefined ? {} : { dataMode: command.dataMode }),
         ...(command.devAccessMode === undefined ? {} : { devAccessMode: command.devAccessMode }),
+        ...(command.includeDevelopmentEnvironment === undefined
+          ? {}
+          : { includeDevelopmentEnvironment: command.includeDevelopmentEnvironment }),
         ...(command.region === undefined ? {} : { region: command.region }),
         idempotencyKey: command.idempotencyKey,
       }),
@@ -2010,6 +2034,20 @@ export class ProductCli {
     const api = await this.authenticatedApi(command.credentialStore, signal);
     const project = parseProjectStatus(await api.getProjectStatus(command.projectId));
     return success("project status", { status: "succeeded", project, context: this.context() });
+  }
+
+  private async addProjectDevelopment(
+    command: Extract<ProductCliCommand, { kind: "project-development-add" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const operation = parseOperation(
+      await api.addProjectDevelopmentEnvironment({
+        projectId: command.projectId,
+        idempotencyKey: command.idempotencyKey,
+      }),
+    );
+    return success("project dev add", { status: "accepted", operation });
   }
 
   private async createDevAccessTicket(
@@ -2157,6 +2195,63 @@ export class ProductCli {
       headers: request.headers,
     });
     return success("database webhook create", { status: "succeeded", webhook });
+  }
+
+  private async databaseWebhookSubscription(
+    command: Extract<
+      ProductCliCommand,
+      {
+        kind:
+          | "database-webhook-subscription-activate"
+          | "database-webhook-subscription-deactivate"
+          | "database-webhook-subscription-status";
+      }
+    >,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const common = {
+      projectId: command.projectId,
+      environment: command.environment,
+      subscriptionId: command.subscriptionId,
+    };
+    if (command.kind === "database-webhook-subscription-activate") {
+      const request = await webhookCreateRequest(command);
+      const file = await preparePrivateSecretFile(command.outputPath);
+      try {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        const value = await api.activateDatabaseWebhookSubscription({
+          ...common,
+          generation: command.generation,
+          idempotencyKey: command.idempotencyKey,
+          request,
+        });
+        await file.save(value.secret);
+        const subscription = {
+          id: value.id,
+          environment: value.environment,
+          state: value.state,
+          generation: value.generation,
+          provider_id: value.provider_id,
+        };
+        return success(parsedCommandName(command), {
+          status: "succeeded",
+          subscription,
+          secret_file: file.path,
+        });
+      } finally {
+        await file.close();
+      }
+    }
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const subscription =
+      command.kind === "database-webhook-subscription-status"
+        ? await api.getDatabaseWebhookSubscription(common)
+        : await api.deactivateDatabaseWebhookSubscription({
+            ...common,
+            generation: command.generation,
+            idempotencyKey: command.idempotencyKey,
+          });
+    return success(parsedCommandName(command), { status: "succeeded", subscription });
   }
 
   private async listDatabaseWebhooks(
@@ -2795,7 +2890,7 @@ export class ProductCli {
             await api.planDeployment({
               projectId: command.projectId,
               commitSha: command.commitSha,
-              environment: command.environment,
+              ...(command.environment === undefined ? {} : { environment: command.environment }),
             }),
           );
     let accepted: unknown;
@@ -2830,7 +2925,7 @@ export class ProductCli {
     const notes =
       operation.state === "succeeded"
         ? [
-            `Check project status for dev_access_mode. For protected Dev, run '${this.dependencies.commandPrefix} project dev-share link --project ULID --json' and open or share its persistent share_url; public Dev opens directly.`,
+            `If this is a Dev deployment, check project status for dev_access_mode. For protected Dev, run '${this.dependencies.commandPrefix} project dev-share link --project ULID --json' and open or share its persistent share_url; public Dev opens directly.`,
           ]
         : [];
     return success("deploy", {
@@ -3524,17 +3619,42 @@ const readBoundedUtf8File = async (
   path: string,
   maxBytes: number,
   refusal: () => ProductCliFailure,
+  privateFile = false,
 ): Promise<string> => {
   let file: Awaited<ReturnType<typeof open>>;
+  let before: Awaited<ReturnType<typeof lstat>> | undefined;
   try {
-    file = await open(path, "r");
+    if (privateFile) {
+      if (!isAbsolute(path)) throw refusal();
+      before = await lstat(path);
+      if (
+        !before.isFile() ||
+        before.isSymbolicLink() ||
+        before.nlink !== 1 ||
+        (process.platform !== "win32" &&
+          (before.uid !== process.getuid?.() || (before.mode & 0o077) !== 0))
+      )
+        throw refusal();
+    }
+    file = await open(path, privateFile ? constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) : "r");
   } catch {
     throw refusal();
   }
   const buffer = Buffer.alloc(maxBytes + 1);
   try {
     const stat = await file.stat();
-    if (!stat.isFile() || stat.size > maxBytes) throw refusal();
+    if (
+      !stat.isFile() ||
+      stat.size > maxBytes ||
+      (before !== undefined &&
+        (stat.ino !== before.ino ||
+          stat.dev !== before.dev ||
+          stat.nlink !== 1 ||
+          stat.size !== before.size ||
+          (process.platform !== "win32" &&
+            (stat.uid !== process.getuid?.() || (stat.mode & 0o077) !== 0))))
+    )
+      throw refusal();
     let length = 0;
     while (length < buffer.length) {
       const read = await file.read(buffer, length, buffer.length - length, null);
@@ -3554,14 +3674,19 @@ const readBoundedUtf8File = async (
 
 /** The create request with the headers of `--headers-file`; a refused file sends nothing. */
 const webhookCreateRequest = async (
-  command: Extract<ProductCliCommand, { kind: "database-webhook-create" }>,
+  command: {
+    readonly url: string;
+    readonly eventTypes: readonly import("@ohmyhost/contracts/database-events").DatabaseWebhookEventPattern[];
+    readonly headersFile: string | null;
+  },
+  privateHeaders = false,
 ) => {
   const headersFailure = () =>
     new ProductCliFailure(2, "headers_file_invalid", false, HEADERS_FILE_INVALID_ACTION);
   const headers =
     command.headersFile === null
       ? undefined
-      : await readBoundedUtf8File(command.headersFile, 8_192, headersFailure).then(
+      : await readBoundedUtf8File(command.headersFile, 8_192, headersFailure, privateHeaders).then(
           (text: string): unknown => {
             try {
               return JSON.parse(text) as unknown;
@@ -3580,6 +3705,13 @@ const webhookCreateRequest = async (
     throw headersFailure();
   }
 };
+
+/** The local MCP webhook action reads only an absolute, owner-private header file, never a raw argument. */
+export const readPrivateWebhookCreateRequest = (input: {
+  readonly url: string;
+  readonly eventTypes: readonly import("@ohmyhost/contracts/database-events").DatabaseWebhookEventPattern[];
+  readonly headersFile: string | null;
+}) => webhookCreateRequest(input, true);
 
 /**
  * The schedule request of `database schedule set`: the statements file is a UTF-8 JSON array, and
@@ -3766,6 +3898,7 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "project-context") return "project context";
   if (command.kind === "project-notes-set") return "project notes set";
   if (command.kind === "project-status") return "project status";
+  if (command.kind === "project-development-add") return "project dev add";
   if (command.kind === "project-dev-access-create") return "project dev-access create";
   if (command.kind === "project-dev-share-link") return "project dev-share link";
   if (command.kind === "project-dev-share-rotate") return "project dev-share rotate";
@@ -3786,6 +3919,12 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "database-watch-delete") return "database watch delete";
   if (command.kind === "database-table-create") return "database table create";
   if (command.kind === "database-webhook-create") return "database webhook create";
+  if (command.kind === "database-webhook-subscription-activate")
+    return "database webhook subscription activate";
+  if (command.kind === "database-webhook-subscription-deactivate")
+    return "database webhook subscription deactivate";
+  if (command.kind === "database-webhook-subscription-status")
+    return "database webhook subscription status";
   if (command.kind === "database-webhook-list") return "database webhook list";
   if (command.kind === "database-webhook-get") return "database webhook get";
   if (command.kind === "database-webhook-delete") return "database webhook delete";
