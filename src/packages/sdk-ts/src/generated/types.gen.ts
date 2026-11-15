@@ -4498,6 +4498,12 @@ export type GetAccountProfileResponse =
 export type RecordSignupSourceData = {
   body: {
     source: string | null;
+    /**
+     * Optional first campaign snapshot; empty freezes an empty snapshot. Up to 20 lowercase utm_ keys, values up to 256 Unicode characters, and at most 1024 UTF-8 bytes as JSON.
+     */
+    utm?: {
+      [key: string]: string;
+    };
   };
   path?: never;
   query?: never;
