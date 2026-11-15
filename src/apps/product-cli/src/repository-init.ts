@@ -111,6 +111,10 @@ const MAIL_RUNTIME_BINDINGS = Object.freeze([
   "OHMYHOST_PROJECT_ID",
 ]);
 const AI_RUNTIME_BINDINGS = Object.freeze(["OHMYHOST_AI_BASE_URL", "OHMYHOST_AI_KEY"]);
+const BROWSER_RUNTIME_BINDINGS = Object.freeze([
+  "OHMYHOST_BROWSER_BASE_URL",
+  "OHMYHOST_BROWSER_KEY",
+]);
 // The runtime release is published unchanged as `@amerged/ohmyhost-runtime`; this pinned alias keeps
 // its import name and, unlike the website archive each release removes, stays installable.
 const CUSTOMER_RUNTIME_SOURCE = `npm:@amerged/ohmyhost-runtime@${cliPackage.version}`;
@@ -384,6 +388,7 @@ export async function initializeRepository(
   // Mail stays an explicit choice: Better Auth or a detected mail package never enables it.
   const targetMail = existingConfiguration?.mail?.enabled === true;
   const targetAi = existingConfiguration?.ai?.enabled === true;
+  const targetBrowser = existingConfiguration?.browser?.enabled === true;
   const targetStorage = r2 || supabaseStorage;
   // TanStack Start binds storage only on edge, as a Vite app does through its companion.
   const tanStackRuntime =
@@ -432,6 +437,7 @@ export async function initializeRepository(
     auth: targetBetterAuth,
     mail: targetMail,
     ai: targetAi,
+    browser: targetBrowser,
     storage: targetStorage,
   });
   const companion = companionRequired
@@ -1618,6 +1624,7 @@ type RuntimeCapabilities = Readonly<{
   auth: boolean;
   mail: boolean;
   ai: boolean;
+  browser: boolean;
   storage: boolean;
 }>;
 
@@ -1635,6 +1642,7 @@ function runtimeContract(capabilities: RuntimeCapabilities): Readonly<{
           ...(capabilities.database ? ["OHMYHOST_DATABASE"] : []),
           ...(capabilities.mail ? MAIL_RUNTIME_BINDINGS : []),
           ...(capabilities.ai ? AI_RUNTIME_BINDINGS : []),
+          ...(capabilities.browser ? BROWSER_RUNTIME_BINDINGS : []),
         ]),
       ].sort(),
     ),

@@ -1226,6 +1226,26 @@ export type DatabaseWebhookCreated = {
   secret: string;
 };
 
+export type DatabaseWebhookSubscription = {
+  id: Ulid;
+  environment: "dev" | "prod";
+  state: "creating" | "active" | "deactivating" | "inactive";
+  generation: number;
+  provider_id: string | null;
+};
+
+export type DatabaseWebhookSubscriptionActivation = {
+  id: Ulid;
+  environment: "dev" | "prod";
+  state: "active";
+  generation: number;
+  provider_id: string;
+  /**
+   * Generation signing secret available only on the exact authorized activation or retry.
+   */
+  secret: string;
+};
+
 export type DatabaseWebhookPage = {
   items: Array<DatabaseWebhook>;
 };
@@ -1416,7 +1436,7 @@ export type DevAccessTicket = {
 export type PlanDeploymentRequest = {
   commit_sha: GitCommitSha;
   /**
-   * The environment the deployment builds into. Prod skips Dev and switches Prod traffic once activated.
+   * The environment the deployment builds into. Omission selects Dev when it exists, otherwise Prod. Prod switches Prod traffic once activated.
    */
   environment?: "dev" | "prod";
 };
@@ -1622,6 +1642,10 @@ export type FeedbackUpdate = {
  * Phase 1 project creation request. The server assigns resource identifiers.
  */
 export type CreateProjectRequest = {
+  /**
+   * Set false to create only Prod; Dev can be added later. Omission preserves existing Dev and Prod creation behavior.
+   */
+  include_development_environment?: boolean;
   source?: {
     provider: "managed";
     template: "vite-react" | "empty";
@@ -1758,6 +1782,14 @@ export type ProjectHandleAvailability = {
 
 export type ProjectStatus = {
   /**
+   * Custom hostnames of this project with their environment and current configuration state.
+   */
+  custom_domains?: Array<{
+    hostname: string;
+    environment: "prod";
+    state: "awaiting_deployment" | "pending" | "active" | "deleting";
+  }>;
+  /**
    * Optimistic-concurrency token for changing this project address; use it as If-Match on the handle endpoint.
    */
   etag: string;
@@ -1811,6 +1843,8 @@ export type ProblemDetails = {
     | "mail_capacity_unavailable"
     | "storage_jurisdiction_conflict"
     | "shared_data_requires_promotion"
+    | "development_environment_exists"
+    | "development_environment_missing"
     | "production_deployment_required"
     | "framework_conversion_required"
     | "repository_configuration_missing"
@@ -1915,6 +1949,7 @@ export type Operation = {
  * Current deployment dependency observation, separate from immutable operation history. Poll the same operation; mail readiness does not mean application activation.
  */
 export type OperationDeploymentProgress = {
+  mail?: DeploymentMailProgress;
   /**
    * Actual successful build completion time when this operation ran a build; omitted for reused artifacts without a current build.
    */
@@ -1925,6 +1960,48 @@ export type OperationDeploymentProgress = {
   observed_at: string;
   next_poll_after_seconds: 60;
   suggested_action: string;
+};
+
+/**
+ * Current mail verification details, present only while waiting_for_mail. Follow these records without rebuilding the deployment.
+ */
+export type DeploymentMailProgress = {
+  domain: string;
+  status:
+    | "configured"
+    | "delegation_required"
+    | "ready"
+    | "verification_pending"
+    | "verification_failed";
+  configured_at: string;
+  observed_at?: string;
+  verification_issue?:
+    | "identity_missing"
+    | "identity_verification_failed"
+    | "dkim_verification_failed"
+    | "dkim_records_changed"
+    | "tenant_association_missing"
+    | null;
+  next_check_after_seconds?: 60 | 3600 | null;
+  sending?: "disabled" | "pending" | "ready" | "failed";
+  receiving?: "disabled" | "pending" | "ready" | "failed";
+  dns_records: Array<{
+    type: "MX" | "TXT" | "CNAME";
+    name: string;
+    value: string;
+    status: string;
+    priority?: number;
+  }>;
+};
+
+/**
+ * Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.
+ */
+export type MigrationFailureDiagnostic = {
+  reason: "catalog_changed" | "execution_failed" | "ledger_conflict" | "not_admitted";
+  file: string | null;
+  statement_index?: number;
+  sqlstate?: string;
 };
 
 export type OperationReconciliation = {
@@ -2062,6 +2139,7 @@ export type ProjectExportArchive = {
 };
 
 export type OperationFailure = {
+  migration?: MigrationFailureDiagnostic;
   code:
     | "operation_failed"
     | "operation_abandoned"
@@ -2275,6 +2353,16 @@ export type DatabaseEnvironment = "dev" | "prod";
  * Database webhook identifier.
  */
 export type DatabaseWebhookId = string;
+
+/**
+ * Stable, client-chosen subscription ULID.
+ */
+export type DatabaseWebhookSubscriptionId = Ulid;
+
+/**
+ * Positive activation generation, starting at one.
+ */
+export type DatabaseWebhookGeneration = number;
 
 /**
  * Database webhook delivery identifier.
@@ -6655,6 +6743,74 @@ export type SetProjectNotesResponses = {
 
 export type SetProjectNotesResponse = SetProjectNotesResponses[keyof SetProjectNotesResponses];
 
+export type AddProjectDevelopmentEnvironmentData = {
+  body: {
+    [key: string]: never;
+  };
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/dev";
+};
+
+export type AddProjectDevelopmentEnvironmentErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type AddProjectDevelopmentEnvironmentError =
+  AddProjectDevelopmentEnvironmentErrors[keyof AddProjectDevelopmentEnvironmentErrors];
+
+export type AddProjectDevelopmentEnvironmentResponses = {
+  /**
+   * The mutation was accepted for asynchronous processing.
+   */
+  202: Operation;
+};
+
+export type AddProjectDevelopmentEnvironmentResponse =
+  AddProjectDevelopmentEnvironmentResponses[keyof AddProjectDevelopmentEnvironmentResponses];
+
 export type GetProjectStatusData = {
   body?: never;
   headers?: {
@@ -9795,6 +9951,219 @@ export type DeleteProjectDatabaseWatchResponses = {
 
 export type DeleteProjectDatabaseWatchResponse =
   DeleteProjectDatabaseWatchResponses[keyof DeleteProjectDatabaseWatchResponses];
+
+export type GetDatabaseWebhookSubscriptionData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Stable, client-chosen subscription ULID.
+     */
+    subscription_id: Ulid;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/webhook-subscriptions/{subscription_id}";
+};
+
+export type GetDatabaseWebhookSubscriptionErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetDatabaseWebhookSubscriptionError =
+  GetDatabaseWebhookSubscriptionErrors[keyof GetDatabaseWebhookSubscriptionErrors];
+
+export type GetDatabaseWebhookSubscriptionResponses = {
+  /**
+   * Current subscription state, without secret.
+   */
+  200: DatabaseWebhookSubscription;
+};
+
+export type GetDatabaseWebhookSubscriptionResponse =
+  GetDatabaseWebhookSubscriptionResponses[keyof GetDatabaseWebhookSubscriptionResponses];
+
+export type DeactivateDatabaseWebhookSubscriptionData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Stable, client-chosen subscription ULID.
+     */
+    subscription_id: Ulid;
+    /**
+     * Positive activation generation, starting at one.
+     */
+    generation: number;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/webhook-subscriptions/{subscription_id}/activations/{generation}";
+};
+
+export type DeactivateDatabaseWebhookSubscriptionErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DeactivateDatabaseWebhookSubscriptionError =
+  DeactivateDatabaseWebhookSubscriptionErrors[keyof DeactivateDatabaseWebhookSubscriptionErrors];
+
+export type DeactivateDatabaseWebhookSubscriptionResponses = {
+  /**
+   * The confirmed inactive generation, without its secret.
+   */
+  200: DatabaseWebhookSubscription;
+};
+
+export type DeactivateDatabaseWebhookSubscriptionResponse =
+  DeactivateDatabaseWebhookSubscriptionResponses[keyof DeactivateDatabaseWebhookSubscriptionResponses];
+
+export type ActivateDatabaseWebhookSubscriptionData = {
+  body: DatabaseWebhookCreateRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Stable, client-chosen subscription ULID.
+     */
+    subscription_id: Ulid;
+    /**
+     * Positive activation generation, starting at one.
+     */
+    generation: number;
+  };
+  query: {
+    /**
+     * Application environment the mutation applies to.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/database/webhook-subscriptions/{subscription_id}/activations/{generation}";
+};
+
+export type ActivateDatabaseWebhookSubscriptionErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ActivateDatabaseWebhookSubscriptionError =
+  ActivateDatabaseWebhookSubscriptionErrors[keyof ActivateDatabaseWebhookSubscriptionErrors];
+
+export type ActivateDatabaseWebhookSubscriptionResponses = {
+  /**
+   * Active generation with its signing secret; only this exact activation or retry returns it.
+   */
+  200: DatabaseWebhookSubscriptionActivation;
+};
+
+export type ActivateDatabaseWebhookSubscriptionResponse =
+  ActivateDatabaseWebhookSubscriptionResponses[keyof ActivateDatabaseWebhookSubscriptionResponses];
 
 export type ListProjectDatabaseWebhooksData = {
   body?: never;

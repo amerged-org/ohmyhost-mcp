@@ -349,6 +349,7 @@ export type ProductCliCommand =
       readonly name: string;
       readonly dataMode?: "shared" | "isolated";
       readonly devAccessMode?: "protected" | "public";
+      readonly includeDevelopmentEnvironment?: boolean;
       readonly region?: "us" | "eu";
       readonly idempotencyKey: string;
       readonly credentialStore: "native";
@@ -362,6 +363,12 @@ export type ProductCliCommand =
   | {
       readonly kind: "project-status";
       readonly projectId: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "project-development-add";
+      readonly projectId: string;
+      readonly idempotencyKey: string;
       readonly credentialStore: "native";
     }
   | {
@@ -488,6 +495,37 @@ export type ProductCliCommand =
       readonly url: string;
       readonly eventTypes: readonly DatabaseWebhookEventPattern[];
       readonly headersFile: string | null;
+      readonly idempotencyKey: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-webhook-subscription-status";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly subscriptionId: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-webhook-subscription-activate";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly subscriptionId: string;
+      readonly generation: number;
+      readonly url: string;
+      readonly eventTypes: readonly DatabaseWebhookEventPattern[];
+      readonly headersFile: string | null;
+      readonly outputPath: string;
+      readonly idempotencyKey: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "database-webhook-subscription-deactivate";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly subscriptionId: string;
+      readonly generation: number;
       readonly idempotencyKey: string;
       readonly yes: true;
       readonly credentialStore: "native";
@@ -636,7 +674,7 @@ export type ProductCliCommand =
       readonly kind: "plan";
       readonly projectId: string;
       readonly commitSha: string;
-      readonly environment: "dev" | "prod";
+      readonly environment?: "dev" | "prod";
       readonly credentialStore: "native";
     }
   | {
@@ -645,7 +683,7 @@ export type ProductCliCommand =
       /** Exactly one of an existing plan or a commit that is planned first. */
       readonly planId: string | null;
       readonly commitSha: string | null;
-      readonly environment: "dev" | "prod";
+      readonly environment?: "dev" | "prod";
       readonly idempotencyKey: string;
       readonly yes: true;
       readonly wait: boolean;
@@ -1076,6 +1114,7 @@ export type RecognizedCommandLabel =
   | "github disconnect"
   | "project list"
   | "project status"
+  | "project dev add"
   | "project dev-access create"
   | "project dev-share link"
   | "project dev-share rotate"
@@ -1095,6 +1134,9 @@ export type RecognizedCommandLabel =
   | "database watch delete"
   | "database table create"
   | "database webhook create"
+  | "database webhook subscription activate"
+  | "database webhook subscription deactivate"
+  | "database webhook subscription status"
   | "database webhook list"
   | "database webhook get"
   | "database webhook delete"
@@ -1241,6 +1283,7 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     if (value === "project" && values[0] === "notes" && values[1] === "set")
       return "project notes set";
     if (value === "project" && values[0] === "status") return "project status";
+    if (value === "project" && values[0] === "dev" && values[1] === "add") return "project dev add";
     if (value === "project" && values[0] === "handle" && values[1] === "check")
       return "project handle check";
     if (value === "project" && values[0] === "handle" && values[1] === "set")
@@ -1282,6 +1325,11 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     if (value === "database" && values[0] === "table" && values[1] === "create")
       return "database table create";
     if (value === "database" && values[0] === "webhook") {
+      if (
+        values[1] === "subscription" &&
+        ["activate", "deactivate", "status"].includes(values[2] ?? "")
+      )
+        return `database webhook subscription ${values[2]}` as RecognizedCommandLabel;
       if (values[1] === "create") return "database webhook create";
       if (values[1] === "list") return "database webhook list";
       if (values[1] === "get") return "database webhook get";
@@ -2081,6 +2129,16 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
   }
   if (first === "project") {
     const subcommand = values.shift();
+    if (subcommand === "dev" && values.shift() === "add") {
+      if (yes || wait || follow || stdin) throw new InvalidCommandError();
+      const options = parseOptions(values, ["--project", "--idempotency-key"]);
+      return {
+        kind: "project-development-add",
+        projectId: options["--project"],
+        idempotencyKey: options["--idempotency-key"],
+        credentialStore,
+      };
+    }
     if (subcommand === "data") {
       const action = values.shift();
       if (follow || stdin || (action !== "plan" && action !== "change"))
@@ -2246,10 +2304,12 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       "--idempotency-key",
       "--data-mode",
       "--dev-access-mode",
+      "--include-development-environment",
       "--region",
     ]);
     const dataMode = options["--data-mode"];
     const devAccessMode = options["--dev-access-mode"];
+    const includeDevelopmentEnvironment = options["--include-development-environment"];
     const region = options["--region"];
     if (
       !options["--organization"] ||
@@ -2259,6 +2319,9 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       (devAccessMode !== undefined &&
         devAccessMode !== "protected" &&
         devAccessMode !== "public") ||
+      (includeDevelopmentEnvironment !== undefined &&
+        includeDevelopmentEnvironment !== "true" &&
+        includeDevelopmentEnvironment !== "false") ||
       (region !== undefined && region !== "us" && region !== "eu")
     )
       throw new InvalidCommandError();
@@ -2268,6 +2331,9 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       name: options["--name"],
       ...(dataMode === undefined ? {} : { dataMode }),
       ...(devAccessMode === undefined ? {} : { devAccessMode }),
+      ...(includeDevelopmentEnvironment === undefined
+        ? {}
+        : { includeDevelopmentEnvironment: includeDevelopmentEnvironment === "true" }),
       ...(region === undefined ? {} : { region }),
       idempotencyKey: options["--idempotency-key"],
       credentialStore,
@@ -2561,6 +2627,117 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
   if (first === "database" && values[0] === "webhook") {
     values.shift();
     const subcommand = values.shift();
+    if (subcommand === "subscription") {
+      const action = values.shift();
+      if (
+        !["activate", "deactivate", "status"].includes(action ?? "") ||
+        wait ||
+        follow ||
+        revoke ||
+        stdin ||
+        yes !== (action !== "status")
+      )
+        throw new InvalidCommandError();
+      const options = parseOptionalOptions(values, [
+        "--project",
+        "--environment",
+        "--subscription",
+        "--generation",
+        "--url",
+        "--event-types",
+        "--headers-file",
+        "--out",
+        "--idempotency-key",
+      ]);
+      const projectId = options["--project"],
+        environment = options["--environment"] ?? (action === "status" ? "dev" : undefined),
+        subscriptionId = options["--subscription"];
+      if (
+        !isValue(projectId) ||
+        !subscriptionId ||
+        !ORGANIZATION_ULID.test(subscriptionId) ||
+        (environment !== "dev" && environment !== "prod")
+      )
+        throw new InvalidCommandError();
+      if (action === "status") {
+        if (
+          (
+            [
+              "--generation",
+              "--url",
+              "--event-types",
+              "--headers-file",
+              "--out",
+              "--idempotency-key",
+            ] as const
+          ).some((key) => options[key] !== undefined)
+        )
+          throw new InvalidCommandError();
+        return {
+          kind: "database-webhook-subscription-status",
+          projectId,
+          environment,
+          subscriptionId,
+          credentialStore,
+        };
+      }
+      const generationText = options["--generation"],
+        idempotencyKey = options["--idempotency-key"];
+      if (
+        !generationText ||
+        !/^[1-9][0-9]*$/u.test(generationText) ||
+        Number(generationText) > 2147483647 ||
+        !isValue(idempotencyKey)
+      )
+        throw new InvalidCommandError();
+      const generation = Number(generationText);
+      if (action === "deactivate") {
+        if (
+          (["--url", "--event-types", "--headers-file", "--out"] as const).some(
+            (key) => options[key] !== undefined,
+          )
+        )
+          throw new InvalidCommandError();
+        return {
+          kind: "database-webhook-subscription-deactivate",
+          projectId,
+          environment,
+          subscriptionId,
+          generation,
+          idempotencyKey,
+          yes: true,
+          credentialStore,
+        };
+      }
+      const url = options["--url"],
+        eventTypes = options["--event-types"],
+        headersFile = options["--headers-file"],
+        outputPath = options["--out"];
+      if (
+        !isValue(url) ||
+        !isValue(eventTypes) ||
+        !isValue(outputPath) ||
+        (headersFile !== undefined && !isValue(headersFile))
+      )
+        throw new InvalidCommandError();
+      const request = contractValue(() =>
+        parseDatabaseWebhookCreateRequest({ url, event_types: eventTypes.split(",") }),
+      );
+      return {
+        kind: "database-webhook-subscription-activate",
+        projectId,
+        environment,
+        subscriptionId,
+        generation,
+        url: request.url,
+        eventTypes: request.event_types,
+        headersFile: headersFile ?? null,
+        outputPath,
+        idempotencyKey,
+        yes: true,
+        credentialStore,
+      };
+    }
     if (subcommand === "create") {
       if (!yes || wait || follow || revoke || stdin) throw new InvalidCommandError();
       const options = parseOptionalOptions(values, [
@@ -3020,7 +3197,9 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       kind: "plan",
       projectId,
       commitSha,
-      environment: deploymentEnvironment(options["--environment"]),
+      ...(options["--environment"] === undefined
+        ? {}
+        : { environment: deploymentEnvironment(options["--environment"]) }),
       credentialStore,
     };
   }
@@ -3050,7 +3229,9 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       projectId,
       planId,
       commitSha,
-      environment: deploymentEnvironment(options["--environment"]),
+      ...(options["--environment"] === undefined
+        ? {}
+        : { environment: deploymentEnvironment(options["--environment"]) }),
       idempotencyKey,
       yes,
       wait,

@@ -107,7 +107,7 @@ export function assertOrganizationCreditUsage(
             throw new TypeError("Invalid usage meter");
         if (
           typeof meter["quantity"] !== "string" ||
-          !/^(0|[1-9][0-9]{0,29})(\.[0-9]{1,12})?$/u.test(meter["quantity"]) ||
+          !/^(0|[1-9][0-9]{0,29})(\.[0-9]{1,20})?$/u.test(meter["quantity"]) ||
           !amount(meter["charged_micros"])
         )
           throw new TypeError("Invalid usage amount");

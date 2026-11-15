@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.56; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.57; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.56 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.57 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -71,6 +71,9 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `database_webhook_delivery_list`: List recent database webhook deliveries, newest first, optionally for one webhook.
 - `database_webhook_delivery_replay`: Queue one more attempt for a database webhook delivery that is no longer being retried.
 - `database_webhook_list`: List this project's database webhooks of one Dev or Prod environment (dev when omitted), without signing secrets.
+- `database_webhook_subscription_activate`: Activate a stable subscription ULID and generation.
+- `database_webhook_subscription_deactivate`: Deactivate one generation.
+- `database_webhook_subscription_status`: Read a webhook subscription generation and state, without its signing secret.
 - `database_webhook_test`: Send one signed test request to a database webhook and report the outcome synchronously.
 - `database_write`: Execute one explicitly authorized INSERT, UPDATE or DELETE/upsert in the chosen Dev or Prod database.
 - `delete_execute`: Execute a reviewed project deletion
@@ -146,6 +149,7 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `project_dev_share_link_get`: Owner only: get or create the persistent protected Dev link.
 - `project_dev_share_link_revoke`: Owner only: revoke the persistent Dev link and active sessions immediately without changing the Dev access mode.
 - `project_dev_share_link_rotate`: Owner only: replace the persistent Dev link and immediately revoke old links and sessions.
+- `project_development_add`: Add Dev to an existing project.
 - `project_export_create`: Owner-only: request an asynchronous password-encrypted SQL ZIP, including at zero credits.
 - `project_export_download_link_create`: Owner-only: sign one 24-hour download link of a succeeded SQL ZIP export read by project_export_get, and audit it under the caller.
 - `project_export_get`: Owner-only: read the original SQL ZIP export's progress and error only.
@@ -153,7 +157,7 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `project_handle_check`: Check whether a project address is free before offering it to the customer.
 - `project_handle_set`: Move a project to an address the customer chose, after project_handle_check said it is free.
 - `project_notes_set`: Save shared project to-dos, at most 250 lines / 16384 UTF-8 bytes.
-- `project_status`: Get source, both Dev/Prod environment IDs, deployment URLs, Dev access mode, latest operation and cleanup status.
+- `project_status`: Get source, existing environment IDs, deployment URLs, custom production domains, Dev access mode, latest operation and cleanup status.
 - `projects_list`: List projects visible to the current identity
 - `promotion_execute`: Execute an explicitly confirmed Dev-to-Prod promotion using the unchanged plan guards.
 - `promotion_plan`: Plan promotion of the current Dev artifact to Prod without a rebuild.
@@ -199,7 +203,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.56 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.57 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

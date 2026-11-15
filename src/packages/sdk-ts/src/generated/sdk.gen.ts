@@ -11,6 +11,10 @@ import {
   type TDataShape,
 } from "./client/index.js";
 import type {
+  ActivateDatabaseWebhookSubscriptionErrors,
+  ActivateDatabaseWebhookSubscriptionResponses,
+  AddProjectDevelopmentEnvironmentErrors,
+  AddProjectDevelopmentEnvironmentResponses,
   ApplicationDomainIdentityRequest,
   ApplyPaidProjectDomainErrors,
   ApplyPaidProjectDomainResponses,
@@ -88,6 +92,8 @@ import type {
   DatabaseTableCreateRequest,
   DatabaseWatchCreateRequest,
   DatabaseWebhookCreateRequest,
+  DeactivateDatabaseWebhookSubscriptionErrors,
+  DeactivateDatabaseWebhookSubscriptionResponses,
   DeclareApplicationDomainIdentityErrors,
   DeclareApplicationDomainIdentityResponses,
   DeleteEnvironmentSecretErrors,
@@ -133,6 +139,8 @@ import type {
   GetCurrentIdentityResponses,
   GetDatabaseComputeErrors,
   GetDatabaseComputeResponses,
+  GetDatabaseWebhookSubscriptionErrors,
+  GetDatabaseWebhookSubscriptionResponses,
   GetDeploymentErrors,
   GetDeploymentLogsErrors,
   GetDeploymentLogsResponses,
@@ -3496,6 +3504,59 @@ export const setProjectNotes = <ThrowOnError extends boolean = true>(
 };
 
 /**
+ * Add Dev to a production-only project
+ *
+ * Creates a Dev environment without changing Prod. Shared data reuses the current Prod data assignment; isolated data receives its own assignment. An identical idempotent retry returns the original accepted operation. Projects that already have Dev return development_environment_exists.
+ */
+export const addProjectDevelopmentEnvironment = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    body: {
+      [key: string]: never;
+    };
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  AddProjectDevelopmentEnvironmentResponses,
+  AddProjectDevelopmentEnvironmentErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { key: "body", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    AddProjectDevelopmentEnvironmentResponses,
+    AddProjectDevelopmentEnvironmentErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/environments/dev",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
  * Get the current project deployment status
  *
  * Returns the immutable project handle, current source, default environment, head deployment, independently evidenced dev and prod gateway origins, latest operation, and cleanup state without exposing provider credentials.
@@ -4986,7 +5047,7 @@ export const applyPaidProjectDomain = <ThrowOnError extends boolean = true>(
 /**
  * Plan a deployment
  *
- * Resolves immutable inputs and estimates effects without provider mutation or billable work. The plan targets Dev unless `environment` is `prod`; a Prod plan builds straight into Prod, except that a project with shared data and a database only reaches Prod through promotion. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. A commit the platform does not admit answers 409 with a nonretryable problem code; for framework_conversion_required, detail is a fixed catalog sentence that names the file, the rule and the required change whenever the refusal is typed.
+ * Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. A commit the platform does not admit answers 409 with a nonretryable problem code; for framework_conversion_required, detail is a fixed catalog sentence that names the file, the rule and the required change whenever the refusal is typed.
  */
 export const planDeployment = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -5752,6 +5813,159 @@ export const deleteProjectDatabaseWatch = <ThrowOnError extends boolean = true>(
     url: "/v1/projects/{project_id}/database/watches/{watch_id}",
     ...options,
     ...params,
+  });
+};
+
+/**
+ * Read a database webhook subscription
+ *
+ * Returns the current activation generation and state. This read never returns a signing secret.
+ */
+export const getDatabaseWebhookSubscription = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    subscription_id: Ulid;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetDatabaseWebhookSubscriptionResponses,
+  GetDatabaseWebhookSubscriptionErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "subscription_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetDatabaseWebhookSubscriptionResponses,
+    GetDatabaseWebhookSubscriptionErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/webhook-subscriptions/{subscription_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Deactivate one webhook subscription generation
+ *
+ * Deactivation is confirmed before a new generation can start. Repeat the same key after an uncertain response. Pending deliveries have no delivery guarantee while the generation is deactivating or inactive.
+ */
+export const deactivateDatabaseWebhookSubscription = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    subscription_id: Ulid;
+    generation: number;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  DeactivateDatabaseWebhookSubscriptionResponses,
+  DeactivateDatabaseWebhookSubscriptionErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "subscription_id" },
+          { in: "path", key: "generation" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    DeactivateDatabaseWebhookSubscriptionResponses,
+    DeactivateDatabaseWebhookSubscriptionErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/webhook-subscriptions/{subscription_id}/activations/{generation}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Activate or reconcile one webhook subscription generation
+ *
+ * The client chooses a stable subscription ULID and starts with generation 1. Repeat the identical request and Idempotency-Key after an uncertain reply to recover the original signing secret. A new generation needs a new key and is accepted only after the previous one is confirmed inactive. A late retry of an old generation is refused. Status reads never reveal the secret; save this authorized response privately. If the provider outcome remains unknown near the end of its 24-hour idempotency window, the operation stays pending rather than risk creating a duplicate. The five-webhook database limit includes existing webhooks.
+ */
+export const activateDatabaseWebhookSubscription = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    subscription_id: Ulid;
+    generation: number;
+    environment: "dev" | "prod";
+    databaseWebhookCreateRequest: DatabaseWebhookCreateRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  ActivateDatabaseWebhookSubscriptionResponses,
+  ActivateDatabaseWebhookSubscriptionErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "subscription_id" },
+          { in: "path", key: "generation" },
+          { in: "query", key: "environment" },
+          { key: "databaseWebhookCreateRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).put<
+    ActivateDatabaseWebhookSubscriptionResponses,
+    ActivateDatabaseWebhookSubscriptionErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/database/webhook-subscriptions/{subscription_id}/activations/{generation}",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
   });
 };
 
@@ -6796,7 +7010,7 @@ export const putEnvironmentSecret = <ThrowOnError extends boolean = true>(
 /**
  * Rotate an installed platform key
  *
- * Replaces the value of an installed platform key (OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY or BETTER_AUTH_SECRET) with a value the platform generates. The request has no body and the value is never returned. The earlier value stops authorizing at once, and the new value reaches the running environment without a deployment. Other names answer 400; an installed key the environment does not hold answers 404. Repeating the same idempotency key replays the stored metadata.
+ * Replaces the value of an installed platform key (OHMYHOST_AI_KEY, OHMYHOST_BROWSER_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY or BETTER_AUTH_SECRET) with a value the platform generates. The request has no body and the value is never returned. The earlier value stops authorizing at once, and the new value reaches the running environment without a deployment. Other names answer 400; an installed key the environment does not hold answers 404. Repeating the same idempotency key replays the stored metadata.
  */
 export const rotateEnvironmentSecret = <ThrowOnError extends boolean = true>(
   parameters: {

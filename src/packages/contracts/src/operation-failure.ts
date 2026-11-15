@@ -1,4 +1,8 @@
-import { frameworkConversionDetail } from "./framework-admission.js";
+import {
+  frameworkConversionDetail,
+  parseFrameworkConversionDiagnostic,
+  type FrameworkConversionDiagnostic,
+} from "./framework-admission.js";
 
 const failures = {
   authorization_changed: [
@@ -147,6 +151,70 @@ export interface PublicOperationFailure {
   readonly suggested_action: string;
   /** The catalog sentence naming the refused file and its fix, only for an auto-deploy rejection. */
   readonly detail?: string;
+  readonly migration?: MigrationFailureDiagnostic;
+}
+
+export interface MigrationFailureDiagnostic {
+  readonly reason: "catalog_changed" | "execution_failed" | "ledger_conflict" | "not_admitted";
+  readonly file: string | null;
+  readonly statement_index?: number;
+  readonly sqlstate?: string;
+}
+export type OperationFailureDiagnostic = FrameworkConversionDiagnostic | MigrationFailureDiagnostic;
+
+/** Each diagnostic variant validates its exact closed shape before crossing a read boundary. */
+export function parseOperationFailureDiagnostic(value: unknown): OperationFailureDiagnostic | null {
+  return parseFrameworkConversionDiagnostic(value) ?? parseMigrationFailureDiagnostic(value);
+}
+
+/** Closed metadata only: PostgreSQL messages, SQL and parameters are never public diagnostics. */
+export function parseMigrationFailureDiagnostic(value: unknown): MigrationFailureDiagnostic | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const r = value as Record<string, unknown>;
+  if (
+    Object.keys(r).some(
+      (key) => !["reason", "file", "statement_index", "sqlstate"].includes(key),
+    ) ||
+    !["catalog_changed", "execution_failed", "ledger_conflict", "not_admitted"].includes(
+      String(r["reason"]),
+    ) ||
+    !(
+      r["file"] === null ||
+      (typeof r["file"] === "string" &&
+        r["file"].length <= 512 &&
+        /^(?:[A-Za-z0-9][A-Za-z0-9._-]*\/)*\d{14}_[a-z0-9][a-z0-9_-]*\.sql$/u.test(r["file"]))
+    )
+  )
+    return null;
+  const ordinal = r["statement_index"],
+    state = r["sqlstate"];
+  if (
+    (Object.hasOwn(r, "statement_index") && ordinal === undefined) ||
+    (Object.hasOwn(r, "sqlstate") && state === undefined)
+  )
+    return null;
+  if (
+    (ordinal === undefined) !== (state === undefined) ||
+    (ordinal !== undefined &&
+      (r["reason"] !== "execution_failed" ||
+        r["file"] === null ||
+        typeof ordinal !== "number" ||
+        !Number.isSafeInteger(ordinal) ||
+        ordinal < 1)) ||
+    (state !== undefined &&
+      (ordinal === undefined ||
+        typeof state !== "string" ||
+        !/^[0-9A-Z]{5}$/u.test(state) ||
+        state.startsWith("08") ||
+        /^57P0[123]$/u.test(state)))
+  )
+    return null;
+  return Object.freeze({
+    reason: r["reason"] as MigrationFailureDiagnostic["reason"],
+    file: r["file"] as string | null,
+    ...(ordinal === undefined ? {} : { statement_index: ordinal as number }),
+    ...(state === undefined ? {} : { sqlstate: state as string }),
+  });
 }
 
 export interface OperationReconciliationObservation {
@@ -198,11 +266,14 @@ export function publicOperationFailure(
   const [message, suggested_action] = failures[code];
   const detail =
     code === "auto_deploy_plan_rejected" ? frameworkConversionDetail(diagnostic) : null;
+  const migration =
+    code === "database_migration_failed" ? parseMigrationFailureDiagnostic(diagnostic) : null;
   return Object.freeze({
     code,
     message,
     retryable: false,
     suggested_action,
     ...(detail === null ? {} : { detail }),
+    ...(migration === null ? {} : { migration }),
   });
 }

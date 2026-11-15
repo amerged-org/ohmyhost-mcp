@@ -46,6 +46,8 @@ import {
   assertDatabaseWatchDeleted,
   assertDatabaseWatchPage,
   assertDatabaseWebhookTest,
+  assertDatabaseWebhookSubscription,
+  assertDatabaseWebhookSubscriptionActivation,
   type DatabaseExecutionUsagePage,
   type DatabaseSchedule,
   type DatabaseScheduleDeleted,
@@ -65,6 +67,9 @@ import {
   type DatabaseWebhookPage,
   type DatabaseWebhookReplayAccepted,
   type DatabaseWebhookTestResult,
+  type DatabaseWebhookCreateRequest,
+  type DatabaseWebhookSubscription,
+  type DatabaseWebhookSubscriptionActivation,
 } from "@ohmyhost/contracts/database-events";
 import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
 import {
@@ -128,6 +133,7 @@ import {
   setProjectPoweredByFlag,
   createDeployment,
   createProject,
+  addProjectDevelopmentEnvironment,
   planProjectDataChange,
   createProjectDataChange,
   submitFeedback,
@@ -175,6 +181,9 @@ import {
   listProjectDatabaseAccess,
   revokeProjectDatabaseAccess,
   createProjectDatabaseWebhook,
+  activateDatabaseWebhookSubscription,
+  deactivateDatabaseWebhookSubscription,
+  getDatabaseWebhookSubscription,
   listProjectDatabaseWebhooks,
   getProjectDatabaseWebhook,
   deleteProjectDatabaseWebhook,
@@ -232,8 +241,15 @@ export interface ProjectCreateInput {
   readonly name: string;
   readonly dataMode?: "shared" | "isolated";
   readonly devAccessMode?: "protected" | "public";
+  readonly includeDevelopmentEnvironment?: boolean;
   readonly region?: "us" | "eu";
   readonly idempotencyKey: string;
+}
+
+interface WebhookSubscriptionScope {
+  readonly projectId: string;
+  readonly environment: "dev" | "prod";
+  readonly subscriptionId: string;
 }
 
 /** One column of a table to create; nullable, identity and default are optional as the REST body allows. */
@@ -400,6 +416,22 @@ export interface ProductApi {
     readonly eventTypes: readonly DatabaseWebhookEventPattern[];
     readonly headers: Readonly<Record<string, string>>;
   }): Promise<DatabaseWebhookCreated>;
+  getDatabaseWebhookSubscription(
+    input: WebhookSubscriptionScope,
+  ): Promise<DatabaseWebhookSubscription>;
+  activateDatabaseWebhookSubscription(
+    input: WebhookSubscriptionScope & {
+      readonly generation: number;
+      readonly idempotencyKey: string;
+      readonly request: DatabaseWebhookCreateRequest;
+    },
+  ): Promise<DatabaseWebhookSubscriptionActivation>;
+  deactivateDatabaseWebhookSubscription(
+    input: WebhookSubscriptionScope & {
+      readonly generation: number;
+      readonly idempotencyKey: string;
+    },
+  ): Promise<DatabaseWebhookSubscription>;
   listProjectDatabaseWebhooks(input: {
     readonly projectId: string;
     readonly environment: "dev" | "prod";
@@ -543,6 +575,10 @@ export interface ProductApi {
     cursor?: string,
   ): Promise<import("@ohmyhost/sdk-ts").FeedbackStatus>;
   createProject(input: ProjectCreateInput): Promise<Operation>;
+  addProjectDevelopmentEnvironment(input: {
+    readonly projectId: string;
+    readonly idempotencyKey: string;
+  }): Promise<Operation>;
   getOperation(operationId: string): Promise<Operation>;
   reconcileOperation(input: {
     readonly operationId: string;
@@ -585,7 +621,7 @@ export interface ProductApi {
   planDeployment(input: {
     readonly projectId: string;
     readonly commitSha: string;
-    readonly environment: "dev" | "prod";
+    readonly environment?: "dev" | "prod";
   }): Promise<DeploymentPlan>;
   createDeployment(input: {
     readonly projectId: string;
@@ -1150,6 +1186,77 @@ export class GeneratedSdkProductApi implements ProductApi {
     return value;
   }
 
+  public async getDatabaseWebhookSubscription(
+    input: WebhookSubscriptionScope,
+  ): Promise<DatabaseWebhookSubscription> {
+    const value = await getDatabaseWebhookSubscription(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        subscription_id: input.subscriptionId,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookSubscription(value);
+    if (value.id !== input.subscriptionId || value.environment !== input.environment)
+      throw new TypeError(WEBHOOK_SCOPE_MISMATCH);
+    return value;
+  }
+  public async activateDatabaseWebhookSubscription(
+    input: WebhookSubscriptionScope & {
+      generation: number;
+      idempotencyKey: string;
+      request: DatabaseWebhookCreateRequest;
+    },
+  ): Promise<DatabaseWebhookSubscriptionActivation> {
+    const value = await activateDatabaseWebhookSubscription(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        subscription_id: input.subscriptionId,
+        generation: input.generation,
+        "Idempotency-Key": input.idempotencyKey,
+        databaseWebhookCreateRequest: {
+          ...input.request,
+          event_types: [...input.request.event_types],
+          headers: { ...input.request.headers },
+        },
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookSubscriptionActivation(value);
+    if (
+      value.id !== input.subscriptionId ||
+      value.environment !== input.environment ||
+      value.generation !== input.generation
+    )
+      throw new TypeError(WEBHOOK_SCOPE_MISMATCH);
+    return value;
+  }
+  public async deactivateDatabaseWebhookSubscription(
+    input: WebhookSubscriptionScope & { generation: number; idempotencyKey: string },
+  ): Promise<DatabaseWebhookSubscription> {
+    const value = await deactivateDatabaseWebhookSubscription(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        subscription_id: input.subscriptionId,
+        generation: input.generation,
+        "Idempotency-Key": input.idempotencyKey,
+      },
+      { client: this.#client },
+    );
+    assertDatabaseWebhookSubscription(value);
+    if (
+      value.id !== input.subscriptionId ||
+      value.environment !== input.environment ||
+      value.generation !== input.generation ||
+      value.state !== "inactive"
+    )
+      throw new TypeError(WEBHOOK_SCOPE_MISMATCH);
+    return value;
+  }
+
   public async listProjectDatabaseWebhooks(
     input: Parameters<ProductApi["listProjectDatabaseWebhooks"]>[0],
   ): Promise<DatabaseWebhookPage> {
@@ -1520,9 +1627,22 @@ export class GeneratedSdkProductApi implements ProductApi {
           name: input.name,
           ...(input.dataMode === undefined ? {} : { data_mode: input.dataMode }),
           ...(input.devAccessMode === undefined ? {} : { dev_access_mode: input.devAccessMode }),
+          ...(input.includeDevelopmentEnvironment === undefined
+            ? {}
+            : { include_development_environment: input.includeDevelopmentEnvironment }),
           ...(input.region === undefined ? {} : { region: input.region }),
         },
       },
+      { client: this.#client },
+    );
+  }
+
+  public async addProjectDevelopmentEnvironment(input: {
+    projectId: string;
+    idempotencyKey: string;
+  }): Promise<Operation> {
+    return addProjectDevelopmentEnvironment(
+      { project_id: input.projectId, "Idempotency-Key": input.idempotencyKey, body: {} },
       { client: this.#client },
     );
   }
@@ -1668,12 +1788,15 @@ export class GeneratedSdkProductApi implements ProductApi {
   public async planDeployment(input: {
     readonly projectId: string;
     readonly commitSha: string;
-    readonly environment: "dev" | "prod";
+    readonly environment?: "dev" | "prod";
   }): Promise<DeploymentPlan> {
     return planDeployment(
       {
         project_id: input.projectId,
-        planDeploymentRequest: { commit_sha: input.commitSha, environment: input.environment },
+        planDeploymentRequest: {
+          commit_sha: input.commitSha,
+          ...(input.environment === undefined ? {} : { environment: input.environment }),
+        },
       },
       { client: this.#client },
     );

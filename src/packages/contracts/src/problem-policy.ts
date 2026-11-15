@@ -441,8 +441,20 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "Plan and deploy this commit to Dev, then run 'ohmyhost deployment promote plan' to reach Prod.",
+      "This is a legacy deployment restriction. Update the CLI and MCP to the current release, then plan with environment prod. The current platform permits direct Prod deployment with shared data; its migrations affect both environments when Dev exists. If the restriction persists, report the request ID.",
     title: "Shared data requires promotion",
+  },
+  development_environment_exists: {
+    status: 409,
+    retryable: false,
+    action: "Read project status and use the existing Dev environment ID.",
+    title: "Development environment already exists",
+  },
+  development_environment_missing: {
+    status: 409,
+    retryable: false,
+    action: "Select environment prod, or add Dev with 'ohmyhost project dev add'.",
+    title: "Development environment is missing",
   },
   production_deployment_required: {
     status: 409,
