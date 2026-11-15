@@ -5,6 +5,11 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./signup-attribution": {
+      "source": "./src/signup-attribution.ts",
+      "types": "./dist/signup-attribution.d.ts",
+      "import": "./dist/signup-attribution.js"
+    },
     "./native-auth": {
       "source": "./src/native-auth.ts",
       "types": "./dist/native-auth.d.ts",

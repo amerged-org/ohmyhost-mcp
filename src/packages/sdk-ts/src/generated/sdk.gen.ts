@@ -1838,10 +1838,23 @@ export const getAccountProfile = <ThrowOnError extends boolean = true>(
 export const recordSignupSource = <ThrowOnError extends boolean = true>(
   parameters: {
     source: string | null;
+    utm?: {
+      [key: string]: string;
+    };
   },
   options?: Options<never, ThrowOnError>,
 ): RequestResult<RecordSignupSourceResponses, RecordSignupSourceErrors, ThrowOnError, "data"> => {
-  const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "source" }] }]);
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "body", key: "source" },
+          { in: "body", key: "utm" },
+        ],
+      },
+    ],
+  );
   return (options?.client ?? client).put<
     RecordSignupSourceResponses,
     RecordSignupSourceErrors,
