@@ -419,6 +419,14 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost project notes set --project ULID --version NUMBER --markdown TEXT --idempotency-key KEY --json (no credentials or signed URLs)",
   "project status": "ohmyhost project status --project ULID --json",
   "project dev add": "ohmyhost project dev add --project ULID --idempotency-key KEY --json",
+  "project preview get":
+    "ohmyhost project preview get --project ULID --environment dev|prod --json",
+  "project preview open":
+    "ohmyhost project preview open --project ULID --environment dev|prod --json",
+  "project preview stop":
+    "ohmyhost project preview stop --project ULID --environment dev|prod --idempotency-key KEY --yes --json",
+  "project preview rotate":
+    "ohmyhost project preview rotate --project ULID --environment dev|prod --idempotency-key KEY --yes --json",
   "project dev-access create": "ohmyhost project dev-access create --project ULID --json",
   "project dev-share link": "ohmyhost project dev-share link --project ULID --json",
   "project dev-share rotate":
@@ -1201,6 +1209,29 @@ export class ProductCli {
       if (command.kind === "project-status") return await this.getProjectStatus(command, signal);
       if (command.kind === "project-development-add")
         return await this.addProjectDevelopment(command, signal);
+      if (
+        command.kind === "project-preview-get" ||
+        command.kind === "project-preview-open" ||
+        command.kind === "project-preview-stop" ||
+        command.kind === "project-preview-rotate"
+      ) {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        if (!api.preview) throw new Error("Preview unavailable");
+        const action = command.kind.slice("project-preview-".length) as
+          | "get"
+          | "open"
+          | "stop"
+          | "rotate";
+        const preview = await api.preview(action, {
+          projectId: command.projectId,
+          environment: command.environment,
+          ...("idempotencyKey" in command ? { idempotencyKey: command.idempotencyKey } : {}),
+        });
+        return success(`project preview ${action}` as RecognizedCommandLabel, {
+          status: "succeeded",
+          preview,
+        });
+      }
       if (command.kind === "project-dev-access-create")
         return await this.createDevAccessTicket(command, signal);
       if (command.kind === "project-flag-status" || command.kind === "project-flag-set") {
@@ -1401,7 +1432,9 @@ export class ProductCli {
         if (!api.managedMail) throw new Error("Mail unavailable");
         return success(command.label, { mail: await api.managedMail(command.request) });
       }
-      return await this.deleteEnvironmentSecret(command, signal);
+      if (command.kind === "secret-delete")
+        return await this.deleteEnvironmentSecret(command, signal);
+      throw new Error("Unsupported command");
     } catch (error) {
       if (error instanceof UserTokenFileError || error instanceof PrivateSecretFileError)
         return failure(name, 3, error.code, false, error.message);
@@ -3899,6 +3932,10 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "project-notes-set") return "project notes set";
   if (command.kind === "project-status") return "project status";
   if (command.kind === "project-development-add") return "project dev add";
+  if (command.kind === "project-preview-get") return "project preview get";
+  if (command.kind === "project-preview-open") return "project preview open";
+  if (command.kind === "project-preview-stop") return "project preview stop";
+  if (command.kind === "project-preview-rotate") return "project preview rotate";
   if (command.kind === "project-dev-access-create") return "project dev-access create";
   if (command.kind === "project-dev-share-link") return "project dev-share link";
   if (command.kind === "project-dev-share-rotate") return "project dev-share rotate";

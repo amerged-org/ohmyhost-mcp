@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { parsePreviewView } from "@ohmyhost/contracts";
 import {
   executeManagedMail,
   executeSharedMail,
@@ -63,6 +64,10 @@ import {
   setProjectPoweredByFlag,
   rotateProjectDevShareLink,
   revokeProjectDevShareLink,
+  getProjectPreview,
+  openProjectPreview,
+  stopProjectPreview,
+  rotateProjectPreviewToken,
   createCloudflareDnsAuthorization,
   getAccountProfile,
   getCloudflareDnsAuthorizationStatus,
@@ -704,6 +709,31 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
   }
   public getProject(projectId: string) {
     return getProject({ project_id: projectId }, { client: this.#client });
+  }
+  public async preview(
+    action: "get" | "open" | "stop" | "rotate",
+    input: { projectId: string; environment: "dev" | "prod"; idempotencyKey?: string },
+  ) {
+    const args = { project_id: input.projectId, environment: input.environment };
+    const result =
+      action === "get"
+        ? await getProjectPreview(args, { client: this.#client })
+        : action === "open"
+          ? await openProjectPreview(args, { client: this.#client })
+          : input.idempotencyKey === undefined
+            ? (() => {
+                throw new TypeError("Preview idempotency key is required");
+              })()
+            : action === "stop"
+              ? await stopProjectPreview(
+                  { ...args, "Idempotency-Key": input.idempotencyKey },
+                  { client: this.#client },
+                )
+              : await rotateProjectPreviewToken(
+                  { ...args, "Idempotency-Key": input.idempotencyKey },
+                  { client: this.#client },
+                );
+    return parsePreviewView(result, input);
   }
   public async ensureDevShareLink(projectId: string): Promise<DevAccessState> {
     const result = parseDevAccessState(

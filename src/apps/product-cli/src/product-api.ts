@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { parsePreviewView } from "@ohmyhost/contracts";
 import {
   executeManagedMail,
   executeSharedMail,
@@ -126,6 +127,10 @@ import {
   createCloudflareDnsAuthorization,
   createProjectDevAccessTicket,
   ensureProjectDevShareLink,
+  getProjectPreview,
+  openProjectPreview,
+  stopProjectPreview,
+  rotateProjectPreviewToken,
   rotateProjectDevShareLink,
   revokeProjectDevShareLink,
   setProjectDevAccessMode,
@@ -286,6 +291,10 @@ export interface DatabaseTableAnswer {
 }
 
 export interface ProductApi {
+  preview?(
+    action: "get" | "open" | "stop" | "rotate",
+    input: { projectId: string; environment: "dev" | "prod"; idempotencyKey?: string },
+  ): Promise<import("@ohmyhost/sdk-ts").Preview>;
   nativeAuth?(input: NativeAuthCommand): Promise<unknown>;
   readonly managedSource?: ManagedSourceApi;
   planProjectDataChange(input: {
@@ -1524,6 +1533,31 @@ export class GeneratedSdkProductApi implements ProductApi {
 
   public async ensureDevShareLink(projectId: string) {
     return ensureProjectDevShareLink({ project_id: projectId }, { client: this.#client });
+  }
+  public async preview(
+    action: "get" | "open" | "stop" | "rotate",
+    input: { projectId: string; environment: "dev" | "prod"; idempotencyKey?: string },
+  ) {
+    const args = { project_id: input.projectId, environment: input.environment };
+    const result =
+      action === "get"
+        ? await getProjectPreview(args, { client: this.#client })
+        : action === "open"
+          ? await openProjectPreview(args, { client: this.#client })
+          : input.idempotencyKey === undefined
+            ? (() => {
+                throw new TypeError("Preview idempotency key is required");
+              })()
+            : action === "stop"
+              ? await stopProjectPreview(
+                  { ...args, "Idempotency-Key": input.idempotencyKey },
+                  { client: this.#client },
+                )
+              : await rotateProjectPreviewToken(
+                  { ...args, "Idempotency-Key": input.idempotencyKey },
+                  { client: this.#client },
+                );
+    return parsePreviewView(result, input);
   }
   public async rotateDevShareLink(projectId: string, idempotencyKey: string) {
     return rotateProjectDevShareLink(

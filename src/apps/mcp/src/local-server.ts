@@ -146,6 +146,10 @@ interface DatabaseScheduleSetInput extends DatabaseScheduleTarget {
 }
 
 export interface LocalMcpProductClient {
+  preview?(
+    action: "get" | "open" | "stop" | "rotate",
+    input: { projectId: string; environment: "dev" | "prod"; idempotencyKey?: string },
+  ): Promise<import("@ohmyhost/sdk-ts").Preview>;
   nativeAuth?(input: import("@ohmyhost/product-cli").NativeAuthCommand): Promise<unknown>;
   readonly managedSource?: ManagedSourceApi;
   readonly productApiOrigin?: string;
@@ -1989,6 +1993,72 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
         idempotencyKey: input.idempotency_key,
       }),
     mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "preview_get",
+    "Read the private stable preview URL and source state for this project environment.",
+    z.object({ project_id: identifier, environment: z.enum(["dev", "prod"]) }),
+    (client, input) => {
+      if (!client.preview) throw new Error("Preview unavailable");
+      return client.preview("get", { projectId: input.project_id, environment: input.environment });
+    },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "preview_open",
+    "Open or create a private stable preview URL. Saved source updates it without deploying; the URL has no expiry until rotated.",
+    z.object({ project_id: identifier, environment: z.enum(["dev", "prod"]) }),
+    (client, input) => {
+      if (!client.preview) throw new Error("Preview unavailable");
+      return client.preview("open", {
+        projectId: input.project_id,
+        environment: input.environment,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "preview_stop",
+    "Stop the preview and remove backups while preserving its URL. Retry uncertain requests with the same key.",
+    z.object({
+      project_id: identifier,
+      environment: z.enum(["dev", "prod"]),
+      idempotency_key: idempotencyKey,
+    }),
+    (client, input) => {
+      if (!client.preview) throw new Error("Preview unavailable");
+      return client.preview("stop", {
+        projectId: input.project_id,
+        environment: input.environment,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "preview_rotate",
+    "Rotate the preview URL and close old connections. Retry uncertain requests with the same key.",
+    z.object({
+      project_id: identifier,
+      environment: z.enum(["dev", "prod"]),
+      idempotency_key: idempotencyKey,
+    }),
+    (client, input) => {
+      if (!client.preview) throw new Error("Preview unavailable");
+      return client.preview("rotate", {
+        projectId: input.project_id,
+        environment: input.environment,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    destructiveAnnotations(),
   );
   registerProductTool(
     server,

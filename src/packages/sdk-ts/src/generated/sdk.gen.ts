@@ -196,6 +196,8 @@ import type {
   GetProjectMailDomainBindingResponses,
   GetProjectPoweredByFlagErrors,
   GetProjectPoweredByFlagResponses,
+  GetProjectPreviewErrors,
+  GetProjectPreviewResponses,
   GetProjectResponses,
   GetProjectSourceAutoDeployErrors,
   GetProjectSourceAutoDeployResponses,
@@ -264,6 +266,8 @@ import type {
   NativeAuthConfigurationUpdate,
   NativeAuthProviderUpdateWritable,
   NativeAuthUserCreate,
+  OpenProjectPreviewErrors,
+  OpenProjectPreviewResponses,
   PaidDomainRequest,
   PlanDeploymentErrors,
   PlanDeploymentPromotionErrors,
@@ -340,6 +344,8 @@ import type {
   RotateManagedMailWebhookSecretResponses,
   RotateProjectDevShareLinkErrors,
   RotateProjectDevShareLinkResponses,
+  RotateProjectPreviewTokenErrors,
+  RotateProjectPreviewTokenResponses,
   RunProjectDatabaseScheduleErrors,
   RunProjectDatabaseScheduleResponses,
   SetDevAccessModeRequest,
@@ -356,6 +362,8 @@ import type {
   SetProjectPoweredByFlagErrors,
   SetProjectPoweredByFlagResponses,
   SharedMailDnsAuthorizationRequest,
+  StopProjectPreviewErrors,
+  StopProjectPreviewResponses,
   StreamDeploymentLogsErrors,
   StreamDeploymentLogsResponse,
   StreamDeploymentLogsResponses,
@@ -402,6 +410,171 @@ export type Options<
    * used to access values that aren't defined as part of the SDK function.
    */
   meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
+};
+
+/**
+ * Stop a project environment preview
+ *
+ * Stops the runtime and removes its backups while preserving the stable URL. Repeat uncertain calls with the same idempotency key.
+ */
+export const stopProjectPreview = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<StopProjectPreviewResponses, StopProjectPreviewErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).delete<
+    StopProjectPreviewResponses,
+    StopProjectPreviewErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/preview",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Read the preview for a project environment
+ *
+ * Requires project write permission to retrieve the private capability URL. Free projects have Prod; Paid projects can also have Dev.
+ */
+export const getProjectPreview = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<GetProjectPreviewResponses, GetProjectPreviewErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetProjectPreviewResponses,
+    GetProjectPreviewErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/preview",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Open or create a project environment preview
+ *
+ * Requires project write permission. Returns the existing stable URL or creates one. Opening its URL starts a sleeping preview; source saves update it independently of deployments.
+ */
+export const openProjectPreview = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<OpenProjectPreviewResponses, OpenProjectPreviewErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    OpenProjectPreviewResponses,
+    OpenProjectPreviewErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/preview",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Rotate a preview capability URL
+ *
+ * Invalidates the previous URL and closes its existing connections before returning the new URL. Repeat uncertain calls with the same idempotency key.
+ */
+export const rotateProjectPreviewToken = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment: "dev" | "prod";
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  RotateProjectPreviewTokenResponses,
+  RotateProjectPreviewTokenErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "query", key: "environment" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    RotateProjectPreviewTokenResponses,
+    RotateProjectPreviewTokenErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/projects/{project_id}/preview/token",
+    ...options,
+    ...params,
+  });
 };
 
 /**

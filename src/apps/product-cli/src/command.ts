@@ -372,6 +372,32 @@ export type ProductCliCommand =
       readonly credentialStore: "native";
     }
   | {
+      readonly kind: "project-preview-get";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "project-preview-open";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "project-preview-stop";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly idempotencyKey: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "project-preview-rotate";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly idempotencyKey: string;
+      readonly credentialStore: "native";
+    }
+  | {
       readonly kind: "project-dev-share-link";
       readonly projectId: string;
       readonly credentialStore: "native";
@@ -1117,6 +1143,10 @@ export type RecognizedCommandLabel =
   | "project dev add"
   | "project dev-access create"
   | "project dev-share link"
+  | "project preview get"
+  | "project preview open"
+  | "project preview stop"
+  | "project preview rotate"
   | "project dev-share rotate"
   | "project dev-share revoke"
   | "project dev-access mode"
@@ -1284,6 +1314,12 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
       return "project notes set";
     if (value === "project" && values[0] === "status") return "project status";
     if (value === "project" && values[0] === "dev" && values[1] === "add") return "project dev add";
+    if (
+      value === "project" &&
+      values[0] === "preview" &&
+      ["get", "open", "stop", "rotate"].includes(values[1] ?? "")
+    )
+      return `project preview ${values[1]}` as RecognizedCommandLabel;
     if (value === "project" && values[0] === "handle" && values[1] === "check")
       return "project handle check";
     if (value === "project" && values[0] === "handle" && values[1] === "set")
@@ -2188,6 +2224,41 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       if (yes || wait || follow || stdin) throw new InvalidCommandError();
       const options = parseOptions(values, ["--handle"]);
       return { kind: "project-handle-check", handle: options["--handle"], credentialStore };
+    }
+    if (subcommand === "preview") {
+      const action = values.shift();
+      if (
+        !action ||
+        !["get", "open", "stop", "rotate"].includes(action) ||
+        wait ||
+        follow ||
+        stdin ||
+        (action === "stop" || action === "rotate") !== yes
+      )
+        throw new InvalidCommandError();
+      const changing = action === "stop" || action === "rotate";
+      const options = parseOptions(
+        values,
+        changing
+          ? ["--project", "--environment", "--idempotency-key"]
+          : ["--project", "--environment"],
+      );
+      const environment = options["--environment"];
+      if (environment !== "dev" && environment !== "prod") throw new InvalidCommandError();
+      if (changing)
+        return {
+          kind: action === "stop" ? "project-preview-stop" : "project-preview-rotate",
+          projectId: options["--project"],
+          environment,
+          idempotencyKey: options["--idempotency-key"],
+          credentialStore,
+        };
+      return {
+        kind: action === "get" ? "project-preview-get" : "project-preview-open",
+        projectId: options["--project"],
+        environment,
+        credentialStore,
+      };
     }
     if (subcommand === "dev-share") {
       const action = values.shift();

@@ -191,6 +191,11 @@
       "source": "./src/usage-log.ts",
       "types": "./dist/usage-log.d.ts",
       "import": "./dist/usage-log.js"
+    },
+    "./previews": {
+      "source": "./src/previews.ts",
+      "types": "./dist/previews.d.ts",
+      "import": "./dist/previews.js"
     }
   },
   "scripts": {

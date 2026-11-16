@@ -4,6 +4,21 @@ export type ClientOptions = {
   baseUrl: "https://app.ohmyho.st" | "https://dev.app.ohmyho.st" | (string & {});
 };
 
+export type Preview = {
+  id: Ulid;
+  project_id: Ulid;
+  environment: "dev" | "prod";
+  status: "cold" | "starting" | "ready" | "sleeping";
+  /**
+   * Stable private capability URL without an expiration time.
+   */
+  url: string;
+  source: null | {
+    sequence: number;
+    commit_sha: string;
+  };
+};
+
 export type NativeAuthConfiguration = {
   /**
    * Persistent Owner setting; source deployment cannot clear a pause.
@@ -2295,6 +2310,11 @@ export type DeploymentPlanWritable = {
 };
 
 /**
+ * The concrete project environment to preview.
+ */
+export type PreviewEnvironment = "dev" | "prod";
+
+/**
  * Opaque continuation cursor returned by the preceding page.
  */
 export type AuditCursor = string;
@@ -2443,6 +2463,255 @@ export type ProjectFilter = Ulid;
  * Restricts the page to one visible operation.
  */
 export type OperationFilter = Ulid;
+
+export type StopProjectPreviewData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    /**
+     * The concrete project environment to preview.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/preview";
+};
+
+export type StopProjectPreviewErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type StopProjectPreviewError = StopProjectPreviewErrors[keyof StopProjectPreviewErrors];
+
+export type StopProjectPreviewResponses = {
+  /**
+   * The authorized preview and its private capability URL. Do not cache or publish the URL.
+   */
+  200: Preview;
+};
+
+export type StopProjectPreviewResponse =
+  StopProjectPreviewResponses[keyof StopProjectPreviewResponses];
+
+export type GetProjectPreviewData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    /**
+     * The concrete project environment to preview.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/preview";
+};
+
+export type GetProjectPreviewErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetProjectPreviewError = GetProjectPreviewErrors[keyof GetProjectPreviewErrors];
+
+export type GetProjectPreviewResponses = {
+  /**
+   * The authorized preview and its private capability URL. Do not cache or publish the URL.
+   */
+  200: Preview;
+};
+
+export type GetProjectPreviewResponse =
+  GetProjectPreviewResponses[keyof GetProjectPreviewResponses];
+
+export type OpenProjectPreviewData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    /**
+     * The concrete project environment to preview.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/preview";
+};
+
+export type OpenProjectPreviewErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type OpenProjectPreviewError = OpenProjectPreviewErrors[keyof OpenProjectPreviewErrors];
+
+export type OpenProjectPreviewResponses = {
+  /**
+   * The authorized preview and its private capability URL. Do not cache or publish the URL.
+   */
+  200: Preview;
+};
+
+export type OpenProjectPreviewResponse =
+  OpenProjectPreviewResponses[keyof OpenProjectPreviewResponses];
+
+export type RotateProjectPreviewTokenData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    /**
+     * The concrete project environment to preview.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/preview/token";
+};
+
+export type RotateProjectPreviewTokenErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RotateProjectPreviewTokenError =
+  RotateProjectPreviewTokenErrors[keyof RotateProjectPreviewTokenErrors];
+
+export type RotateProjectPreviewTokenResponses = {
+  /**
+   * The authorized preview and its private capability URL. Do not cache or publish the URL.
+   */
+  200: Preview;
+};
+
+export type RotateProjectPreviewTokenResponse =
+  RotateProjectPreviewTokenResponses[keyof RotateProjectPreviewTokenResponses];
 
 export type GetNativeAuthConfigurationData = {
   body?: never;
