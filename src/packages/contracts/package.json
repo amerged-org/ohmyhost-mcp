@@ -181,6 +181,16 @@
       "source": "./src/managed-sources.ts",
       "types": "./dist/managed-sources.d.ts",
       "import": "./dist/managed-sources.js"
+    },
+    "./growth-events": {
+      "source": "./src/growth-events.ts",
+      "types": "./dist/growth-events.d.ts",
+      "import": "./dist/growth-events.js"
+    },
+    "./usage-log": {
+      "source": "./src/usage-log.ts",
+      "types": "./dist/usage-log.d.ts",
+      "import": "./dist/usage-log.js"
     }
   },
   "scripts": {
