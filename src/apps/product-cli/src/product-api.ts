@@ -1,4 +1,14 @@
+import { parseConnectionResponse } from "@ohmyhost/contracts/connection-management";
+import {
+  beginConnection,
+  listConnections,
+  getConnectionRequest,
+  discoverConnection,
+  disconnectConnection,
+} from "@ohmyhost/sdk-ts";
+import type { ProductCliCommand } from "./command.js";
 import { randomUUID } from "node:crypto";
+import { parsePreviewView } from "@ohmyhost/contracts";
 import {
   executeManagedMail,
   executeSharedMail,
@@ -126,6 +136,10 @@ import {
   createCloudflareDnsAuthorization,
   createProjectDevAccessTicket,
   ensureProjectDevShareLink,
+  getProjectPreview,
+  openProjectPreview,
+  stopProjectPreview,
+  rotateProjectPreviewToken,
   rotateProjectDevShareLink,
   revokeProjectDevShareLink,
   setProjectDevAccessMode,
@@ -285,7 +299,23 @@ export interface DatabaseTableAnswer {
   };
 }
 
+export type ConnectionCommand = Extract<
+  ProductCliCommand,
+  {
+    kind:
+      | "connection-begin"
+      | "connection-list"
+      | "connection-status"
+      | "connection-discover"
+      | "connection-disconnect";
+  }
+>;
 export interface ProductApi {
+  connection?(command: ConnectionCommand): Promise<unknown>;
+  preview?(
+    action: "get" | "open" | "stop" | "rotate",
+    input: { projectId: string; environment: "dev" | "prod"; idempotencyKey?: string },
+  ): Promise<import("@ohmyhost/sdk-ts").Preview>;
   nativeAuth?(input: NativeAuthCommand): Promise<unknown>;
   readonly managedSource?: ManagedSourceApi;
   planProjectDataChange(input: {
@@ -753,8 +783,65 @@ function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): 
   return Object.keys(value).sort().join(",") === [...keys].sort().join(",");
 }
 
+export async function executeConnectionCommand(
+  client: OhMyHostClient,
+  origin: string,
+  command: ConnectionCommand,
+): Promise<unknown> {
+  const organization_id = command.organizationId;
+  let result: unknown;
+  switch (command.kind) {
+    case "connection-begin":
+      result = await beginConnection(
+        {
+          organization_id,
+          "Idempotency-Key": command.idempotencyKey,
+          connectionBegin: {
+            provider: "make",
+            project_id: command.projectId,
+            environment_id: command.environmentId,
+          },
+        },
+        { client: client },
+      );
+      break;
+    case "connection-list":
+      result = await listConnections({ organization_id }, { client: client });
+      break;
+    case "connection-status":
+      result = await getConnectionRequest(
+        { organization_id, request_id: command.requestId },
+        { client: client },
+      );
+      break;
+    case "connection-discover":
+      result = await discoverConnection(
+        {
+          organization_id,
+          grant_id: command.grantId,
+          project_id: command.projectId,
+          environment_id: command.environmentId,
+          ...(command.providerOrganizationId === undefined
+            ? {}
+            : { provider_organization_id: command.providerOrganizationId }),
+          ...(command.teamId === undefined ? {} : { team_id: command.teamId }),
+        },
+        { client: client },
+      );
+      break;
+    case "connection-disconnect":
+      result = await disconnectConnection(
+        { organization_id, grant_id: command.grantId, "Idempotency-Key": command.idempotencyKey },
+        { client: client },
+      );
+      break;
+  }
+  return parseConnectionResponse(command.kind, result, origin);
+}
+
 export class GeneratedSdkProductApi implements ProductApi {
   readonly #client: OhMyHostClient;
+  readonly #connectionOrigin: string;
   public readonly managedSource: ManagedSourceApi;
 
   public constructor(
@@ -762,8 +849,13 @@ export class GeneratedSdkProductApi implements ProductApi {
     accessToken: string | (() => Promise<string>),
     fetch: typeof globalThis.fetch,
   ) {
+    this.#connectionOrigin = new URL(baseUrl).origin;
     this.#client = createClient({ auth: accessToken, baseUrl, fetch, throwOnError: true });
     this.managedSource = new GeneratedSdkManagedSourceApi(() => this.#client);
+  }
+
+  public async connection(command: ConnectionCommand): Promise<unknown> {
+    return executeConnectionCommand(this.#client, this.#connectionOrigin, command);
   }
 
   public async changeDatabaseCompute(
@@ -1524,6 +1616,31 @@ export class GeneratedSdkProductApi implements ProductApi {
 
   public async ensureDevShareLink(projectId: string) {
     return ensureProjectDevShareLink({ project_id: projectId }, { client: this.#client });
+  }
+  public async preview(
+    action: "get" | "open" | "stop" | "rotate",
+    input: { projectId: string; environment: "dev" | "prod"; idempotencyKey?: string },
+  ) {
+    const args = { project_id: input.projectId, environment: input.environment };
+    const result =
+      action === "get"
+        ? await getProjectPreview(args, { client: this.#client })
+        : action === "open"
+          ? await openProjectPreview(args, { client: this.#client })
+          : input.idempotencyKey === undefined
+            ? (() => {
+                throw new TypeError("Preview idempotency key is required");
+              })()
+            : action === "stop"
+              ? await stopProjectPreview(
+                  { ...args, "Idempotency-Key": input.idempotencyKey },
+                  { client: this.#client },
+                )
+              : await rotateProjectPreviewToken(
+                  { ...args, "Idempotency-Key": input.idempotencyKey },
+                  { client: this.#client },
+                );
+    return parsePreviewView(result, input);
   }
   public async rotateDevShareLink(projectId: string, idempotencyKey: string) {
     return rotateProjectDevShareLink(

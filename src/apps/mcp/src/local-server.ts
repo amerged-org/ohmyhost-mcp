@@ -146,6 +146,11 @@ interface DatabaseScheduleSetInput extends DatabaseScheduleTarget {
 }
 
 export interface LocalMcpProductClient {
+  connection?(command: import("@ohmyhost/product-cli").ConnectionCommand): Promise<unknown>;
+  preview?(
+    action: "get" | "open" | "stop" | "rotate",
+    input: { projectId: string; environment: "dev" | "prod"; idempotencyKey?: string },
+  ): Promise<import("@ohmyhost/sdk-ts").Preview>;
   nativeAuth?(input: import("@ohmyhost/product-cli").NativeAuthCommand): Promise<unknown>;
   readonly managedSource?: ManagedSourceApi;
   readonly productApiOrigin?: string;
@@ -1993,6 +1998,72 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
   registerProductTool(
     server,
     dependencies,
+    "preview_get",
+    "Read the private stable preview URL and source state for this project environment.",
+    z.object({ project_id: identifier, environment: z.enum(["dev", "prod"]) }),
+    (client, input) => {
+      if (!client.preview) throw new Error("Preview unavailable");
+      return client.preview("get", { projectId: input.project_id, environment: input.environment });
+    },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "preview_open",
+    "Open or create a private stable preview URL. Saved source updates it without deploying; the URL has no expiry until rotated.",
+    z.object({ project_id: identifier, environment: z.enum(["dev", "prod"]) }),
+    (client, input) => {
+      if (!client.preview) throw new Error("Preview unavailable");
+      return client.preview("open", {
+        projectId: input.project_id,
+        environment: input.environment,
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "preview_stop",
+    "Stop the preview and remove backups while preserving its URL. Retry uncertain requests with the same key.",
+    z.object({
+      project_id: identifier,
+      environment: z.enum(["dev", "prod"]),
+      idempotency_key: idempotencyKey,
+    }),
+    (client, input) => {
+      if (!client.preview) throw new Error("Preview unavailable");
+      return client.preview("stop", {
+        projectId: input.project_id,
+        environment: input.environment,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "preview_rotate",
+    "Rotate the preview URL and close old connections. Retry uncertain requests with the same key.",
+    z.object({
+      project_id: identifier,
+      environment: z.enum(["dev", "prod"]),
+      idempotency_key: idempotencyKey,
+    }),
+    (client, input) => {
+      if (!client.preview) throw new Error("Preview unavailable");
+      return client.preview("rotate", {
+        projectId: input.project_id,
+        environment: input.environment,
+        idempotencyKey: input.idempotency_key,
+      });
+    },
+    destructiveAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
     "project_dev_share_link_get",
     "Owner only: get or create the persistent protected Dev link. The same link works for multiple visitors and has no automatic expiry. Keep it out of notes and logs.",
     z.object({ project_id: identifier }),
@@ -2073,6 +2144,123 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     z.object({ project_id: identifier }),
     (client, input) => client.createDevAccessTicket(input.project_id),
     { ...mutationAnnotations(), idempotentHint: false },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "integration_connection_begin",
+    "Create a protected Make consent link for the workspace Owner.",
+    z
+      .object({
+        organization_id: identifier,
+        project_id: identifier,
+        environment_id: identifier,
+        idempotency_key: idempotencyKey,
+      })
+      .strict(),
+    (client, input) => {
+      if (!client.connection) throw new Error("connection_provider_unavailable");
+      return client.connection({
+        kind: "connection-begin",
+        organizationId: input.organization_id,
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        idempotencyKey: input.idempotency_key,
+        credentialStore: "native",
+      });
+    },
+    mutationAnnotations(),
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "integration_connection_list",
+    "List the caller's connection grants.",
+    z.object({ organization_id: identifier }).strict(),
+    (client, input) => {
+      if (!client.connection) throw new Error("connection_provider_unavailable");
+      return client.connection({
+        kind: "connection-list",
+        organizationId: input.organization_id,
+        credentialStore: "native",
+      });
+    },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "integration_connection_status",
+    "Read a consent request status.",
+    z
+      .object({ organization_id: identifier, request_id: z.string().regex(/^[a-f0-9]{64}$/u) })
+      .strict(),
+    (client, input) => {
+      if (!client.connection) throw new Error("connection_provider_unavailable");
+      return client.connection({
+        kind: "connection-status",
+        organizationId: input.organization_id,
+        requestId: input.request_id,
+        credentialStore: "native",
+      });
+    },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "integration_connection_discover",
+    "Read accessible Make organizations, teams and connection metadata.",
+    z
+      .object({
+        organization_id: identifier,
+        project_id: identifier,
+        environment_id: identifier,
+        grant_id: identifier,
+        provider_organization_id: z.number().int().positive().safe().optional(),
+        team_id: z.number().int().positive().safe().optional(),
+      })
+      .strict()
+      .refine((i) => i.team_id === undefined || i.provider_organization_id !== undefined),
+    (client, input) => {
+      if (!client.connection) throw new Error("connection_provider_unavailable");
+      return client.connection({
+        kind: "connection-discover",
+        organizationId: input.organization_id,
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        grantId: input.grant_id,
+        ...(input.provider_organization_id === undefined
+          ? {}
+          : { providerOrganizationId: input.provider_organization_id }),
+        ...(input.team_id === undefined ? {} : { teamId: input.team_id }),
+        credentialStore: "native",
+      });
+    },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "integration_connection_disconnect",
+    "Disconnect a connection grant and revoke its provider credential.",
+    z
+      .object({
+        organization_id: identifier,
+        grant_id: identifier,
+        idempotency_key: idempotencyKey,
+        confirmed: z.literal(true),
+      })
+      .strict(),
+    (client, input) => {
+      if (!client.connection) throw new Error("connection_provider_unavailable");
+      return client.connection({
+        kind: "connection-disconnect",
+        organizationId: input.organization_id,
+        grantId: input.grant_id,
+        idempotencyKey: input.idempotency_key,
+        yes: true,
+        credentialStore: "native",
+      });
+    },
+    destructiveAnnotations(),
   );
   registerProductTool(
     server,
