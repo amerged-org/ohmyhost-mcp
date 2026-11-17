@@ -4,6 +4,72 @@ export type ClientOptions = {
   baseUrl: "https://app.ohmyho.st" | "https://dev.app.ohmyho.st" | (string & {});
 };
 
+export type Preview = {
+  id: Ulid;
+  project_id: Ulid;
+  environment: "dev" | "prod";
+  status: "cold" | "starting" | "ready" | "sleeping";
+  /**
+   * Stable private capability URL without an expiration time.
+   */
+  url: string;
+  source: null | {
+    sequence: number;
+    commit_sha: string;
+  };
+};
+
+export type ConnectionBegin = {
+  provider: "make";
+  project_id: Ulid;
+  environment_id: Ulid;
+};
+
+export type ConnectionHandoff = {
+  request_id: string;
+  url: string;
+  expires_at: string;
+};
+
+export type ConnectionRequestStatus = {
+  state: "pending" | "consumed" | "expired";
+  expires_at: string;
+};
+
+export type ConnectionDisconnection = {
+  state: "disconnected" | "revocation_pending";
+};
+
+export type ConnectionGrant = {
+  id: Ulid;
+  provider: "make";
+  state: "active" | "refreshing" | "reconnect_required" | "disconnecting" | "disconnected";
+  created_at: string;
+};
+
+export type ConnectionGrantList = {
+  connections: Array<ConnectionGrant>;
+};
+
+export type ConnectionProviders = {
+  providers: Array<{
+    provider: "make";
+    status: "available" | "unavailable";
+  }>;
+  catalog_available: boolean;
+};
+
+export type ConnectionDiscoveryItem = {
+  id: number;
+  name: string;
+};
+
+export type ConnectionDiscovery = {
+  organizations: Array<ConnectionDiscoveryItem>;
+  teams: Array<ConnectionDiscoveryItem>;
+  connections: Array<ConnectionDiscoveryItem>;
+};
+
 export type NativeAuthConfiguration = {
   /**
    * Persistent Owner setting; source deployment cannot clear a pause.
@@ -2295,6 +2361,11 @@ export type DeploymentPlanWritable = {
 };
 
 /**
+ * The concrete project environment to preview.
+ */
+export type PreviewEnvironment = "dev" | "prod";
+
+/**
  * Opaque continuation cursor returned by the preceding page.
  */
 export type AuditCursor = string;
@@ -2443,6 +2514,580 @@ export type ProjectFilter = Ulid;
  * Restricts the page to one visible operation.
  */
 export type OperationFilter = Ulid;
+
+export type StopProjectPreviewData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    /**
+     * The concrete project environment to preview.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/preview";
+};
+
+export type StopProjectPreviewErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type StopProjectPreviewError = StopProjectPreviewErrors[keyof StopProjectPreviewErrors];
+
+export type StopProjectPreviewResponses = {
+  /**
+   * The authorized preview and its private capability URL. Do not cache or publish the URL.
+   */
+  200: Preview;
+};
+
+export type StopProjectPreviewResponse =
+  StopProjectPreviewResponses[keyof StopProjectPreviewResponses];
+
+export type GetProjectPreviewData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    /**
+     * The concrete project environment to preview.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/preview";
+};
+
+export type GetProjectPreviewErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetProjectPreviewError = GetProjectPreviewErrors[keyof GetProjectPreviewErrors];
+
+export type GetProjectPreviewResponses = {
+  /**
+   * The authorized preview and its private capability URL. Do not cache or publish the URL.
+   */
+  200: Preview;
+};
+
+export type GetProjectPreviewResponse =
+  GetProjectPreviewResponses[keyof GetProjectPreviewResponses];
+
+export type OpenProjectPreviewData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    /**
+     * The concrete project environment to preview.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/preview";
+};
+
+export type OpenProjectPreviewErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type OpenProjectPreviewError = OpenProjectPreviewErrors[keyof OpenProjectPreviewErrors];
+
+export type OpenProjectPreviewResponses = {
+  /**
+   * The authorized preview and its private capability URL. Do not cache or publish the URL.
+   */
+  200: Preview;
+};
+
+export type OpenProjectPreviewResponse =
+  OpenProjectPreviewResponses[keyof OpenProjectPreviewResponses];
+
+export type RotateProjectPreviewTokenData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query: {
+    /**
+     * The concrete project environment to preview.
+     */
+    environment: "dev" | "prod";
+  };
+  url: "/v1/projects/{project_id}/preview/token";
+};
+
+export type RotateProjectPreviewTokenErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type RotateProjectPreviewTokenError =
+  RotateProjectPreviewTokenErrors[keyof RotateProjectPreviewTokenErrors];
+
+export type RotateProjectPreviewTokenResponses = {
+  /**
+   * The authorized preview and its private capability URL. Do not cache or publish the URL.
+   */
+  200: Preview;
+};
+
+export type RotateProjectPreviewTokenResponse =
+  RotateProjectPreviewTokenResponses[keyof RotateProjectPreviewTokenResponses];
+
+export type ListConnectionsData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/connections";
+};
+
+export type ListConnectionsErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListConnectionsError = ListConnectionsErrors[keyof ListConnectionsErrors];
+
+export type ListConnectionsResponses = {
+  /**
+   * Connection result.
+   */
+  200: ConnectionGrantList;
+};
+
+export type ListConnectionsResponse = ListConnectionsResponses[keyof ListConnectionsResponses];
+
+export type ListConnectionProvidersData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/connections/providers";
+};
+
+export type ListConnectionProvidersErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ListConnectionProvidersError =
+  ListConnectionProvidersErrors[keyof ListConnectionProvidersErrors];
+
+export type ListConnectionProvidersResponses = {
+  /**
+   * Connection result.
+   */
+  200: ConnectionProviders;
+};
+
+export type ListConnectionProvidersResponse =
+  ListConnectionProvidersResponses[keyof ListConnectionProvidersResponses];
+
+export type BeginConnectionData = {
+  body: ConnectionBegin;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    organization_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/connections/begin";
+};
+
+export type BeginConnectionErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type BeginConnectionError = BeginConnectionErrors[keyof BeginConnectionErrors];
+
+export type BeginConnectionResponses = {
+  /**
+   * Connection result.
+   */
+  201: ConnectionHandoff;
+};
+
+export type BeginConnectionResponse = BeginConnectionResponses[keyof BeginConnectionResponses];
+
+export type GetConnectionRequestData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+    request_id: string;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/connections/requests/{request_id}";
+};
+
+export type GetConnectionRequestErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetConnectionRequestError =
+  GetConnectionRequestErrors[keyof GetConnectionRequestErrors];
+
+export type GetConnectionRequestResponses = {
+  /**
+   * Connection result.
+   */
+  200: ConnectionRequestStatus;
+};
+
+export type GetConnectionRequestResponse =
+  GetConnectionRequestResponses[keyof GetConnectionRequestResponses];
+
+export type DiscoverConnectionData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+    grant_id: string;
+  };
+  query: {
+    project_id: Ulid;
+    environment_id: Ulid;
+    provider_organization_id?: number;
+    team_id?: number;
+  };
+  url: "/v1/organizations/{organization_id}/connections/{grant_id}/catalog";
+};
+
+export type DiscoverConnectionErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DiscoverConnectionError = DiscoverConnectionErrors[keyof DiscoverConnectionErrors];
+
+export type DiscoverConnectionResponses = {
+  /**
+   * Connection result.
+   */
+  200: ConnectionDiscovery;
+};
+
+export type DiscoverConnectionResponse =
+  DiscoverConnectionResponses[keyof DiscoverConnectionResponses];
+
+export type DisconnectConnectionData = {
+  body?: never;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    organization_id: Ulid;
+    grant_id: string;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/connections/{grant_id}";
+};
+
+export type DisconnectConnectionErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type DisconnectConnectionError =
+  DisconnectConnectionErrors[keyof DisconnectConnectionErrors];
+
+export type DisconnectConnectionResponses = {
+  /**
+   * Connection result.
+   */
+  200: ConnectionDisconnection;
+};
+
+export type DisconnectConnectionResponse =
+  DisconnectConnectionResponses[keyof DisconnectConnectionResponses];
 
 export type GetNativeAuthConfigurationData = {
   body?: never;

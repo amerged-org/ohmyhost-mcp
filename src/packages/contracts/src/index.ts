@@ -16,6 +16,8 @@ export * from "./browser-capabilities.js";
 export * from "./problem-policy.js";
 export * from "./secret-names.js";
 export * from "./project-data-changes.js";
+export * from "./preview-view.js";
+export type * from "./previews.js";
 
 export type OhmyhostRuntimeMode = "static" | "edge" | "functions" | "auto";
 
@@ -234,6 +236,8 @@ function forbiddenEgressHostname(hostname: string): boolean {
     /(?:^|\.)ohmyho-(?:mail|storage)-gateway-[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*\.workers\.dev\.?$/u.test(
       normalized,
     ) ||
+    normalized.replace(/\.+$/u, "") === "connect.ohmyho.st" ||
+    normalized.replace(/\.+$/u, "").endsWith(".connect.ohmyho.st") ||
     normalized === "localhost" ||
     normalized.endsWith(".localhost") ||
     normalized.endsWith(".local") ||

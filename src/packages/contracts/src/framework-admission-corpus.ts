@@ -124,7 +124,7 @@ export const FRAMEWORK_ADMISSION_CONFORMANCE_CORPUS: Readonly<{
     Readonly<{ diagnostic: FrameworkConversionDiagnostic }>)[];
 }> = Object.freeze({
   admitted: Object.freeze([
-    corpusCase("Next.js 16.4.1 with npm on the edge runtime", nextSource()),
+    corpusCase("Next.js 16.4.5 with npm on the edge runtime", nextSource()),
     corpusCase("Next.js 17.0.0, a later stable major", nextSource({ declared: "17.0.0" })),
     corpusCase(
       "Vite ^8.2.0 resolved to 8.3.4 by pnpm-lock.yaml",
@@ -144,26 +144,26 @@ export const FRAMEWORK_ADMISSION_CONFORMANCE_CORPUS: Readonly<{
     Object.freeze({
       ...corpusCase(
         "Next.js ^16.3.0 with bun.lock, which ohmyho.st does not resolve",
-        nextSource({ declared: "^16.3.0", resolved: "16.4.1", manager: "bun" }),
+        nextSource({ declared: "^16.3.0", resolved: "16.4.5", manager: "bun" }),
       ),
       packages: Object.freeze(["next"] as const),
     }),
   ]),
   refused: Object.freeze([
     refusedCase(
-      "Next.js 16.4.0 below the 16.x security minimum",
-      nextSource({ declared: "16.4.0" }),
-      versionFinding("package-lock.json", "next", "16.4.0", "16.4.1"),
+      "Next.js 16.4.4 below the 16.x security minimum",
+      nextSource({ declared: "16.4.4" }),
+      versionFinding("package-lock.json", "next", "16.4.4", "16.4.5"),
     ),
     refusedCase(
       "Next.js 15.5.28 declared with yarn, because no 15.x release is admitted",
       nextSource({ declared: "15.5.28", manager: "yarn" }),
-      versionFinding("package.json", "next", "15.5.28", "16.4.1"),
+      versionFinding("package.json", "next", "15.5.28", "16.4.5"),
     ),
     refusedCase(
       "Next.js ^16.3.0 resolved to 16.4.0 by package-lock.json",
       nextSource({ declared: "^16.3.0", resolved: "16.4.0" }),
-      versionFinding("package-lock.json", "next", "16.4.0", "16.4.1"),
+      versionFinding("package-lock.json", "next", "16.4.0", "16.4.5"),
     ),
     refusedCase(
       "TanStack Start 1.168.59 resolved by pnpm-lock.yaml below its security minimum",
@@ -351,7 +351,7 @@ function nextSource(
 ): Readonly<Record<string, string>> {
   const manager = options.manager ?? "npm";
   const [packageManager, lockfile] = CORPUS_MANAGERS[manager];
-  const next = options.declared ?? "16.4.1";
+  const next = options.declared ?? "16.4.5";
   const react = { react: "19.1.2", "react-dom": "19.1.2" };
   const runtime = options.field === "devDependencies" ? react : { next, ...react };
   return Object.freeze({
@@ -377,8 +377,8 @@ function nextSource(
 }
 
 /**
- * The next.config.ts and Tailwind CSS files and packages `create-next-app@16.4.1 --yes` writes, in
- * an App Router source with the packageManager, lockfile and ohmyhost.yaml ohmyho.st requires;
+ * The next.config.ts and Tailwind CSS files modeled on `create-next-app@16.4.1 --yes`, with patched
+ * Next.js packages in an App Router source and the packageManager, lockfile and ohmyhost.yaml ohmyho.st requires;
  * `tailwind: false` is its --no-tailwind output. On Turbopack, its default bundler, it adds only the
  * Turbopack rule for Tailwind CSS; `postcss` adds the postcss.config.mjs and @tailwindcss/postcss it
  * writes for any other bundler.
@@ -387,7 +387,7 @@ function createNextAppSource(
   options: Readonly<{ tailwind: boolean; postcss?: boolean }>,
 ): Readonly<Record<string, string>> {
   const [packageManager, lockfile] = CORPUS_MANAGERS.npm;
-  const runtime = { next: "16.4.1", react: "19.3.0", "react-dom": "19.3.0" };
+  const runtime = { next: "16.4.5", react: "19.3.0", "react-dom": "19.3.0" };
   const postcss = options.postcss === true;
   return Object.freeze({
     "ohmyhost.yaml": corpusConfiguration("npm", ".open-next/assets", "edge"),
