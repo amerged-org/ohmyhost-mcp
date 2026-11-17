@@ -358,6 +358,14 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost whoami [--profile-name NAME] --json (the effective user, organization and saved login)",
   "profile list":
     "ohmyhost profile list --json (saved logins on this computer: name, user and organization, never a token; pass --profile-name NAME or set OHMYHOST_PROFILE to choose one)",
+  "connection begin":
+    "ohmyhost connection begin --organization ULID --project ULID --environment ULID --idempotency-key KEY --json",
+  "connection list": "ohmyhost connection list --organization ULID --json",
+  "connection status": "ohmyhost connection status --organization ULID --request HASH --json",
+  "connection discover":
+    "ohmyhost connection discover --organization ULID --project ULID --environment ULID --grant ULID [--provider-organization ID] [--team ID] --json",
+  "connection disconnect":
+    "ohmyhost connection disconnect --organization ULID --grant ULID --idempotency-key KEY --yes --json",
   "github connect":
     "ohmyhost github connect --organization ULID --idempotency-key KEY --json (connect once, then link covered repositories without another browser consent)",
   "github status": "ohmyhost github status --organization ULID --json",
@@ -419,6 +427,14 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost project notes set --project ULID --version NUMBER --markdown TEXT --idempotency-key KEY --json (no credentials or signed URLs)",
   "project status": "ohmyhost project status --project ULID --json",
   "project dev add": "ohmyhost project dev add --project ULID --idempotency-key KEY --json",
+  "project preview get":
+    "ohmyhost project preview get --project ULID --environment dev|prod --json",
+  "project preview open":
+    "ohmyhost project preview open --project ULID --environment dev|prod --json",
+  "project preview stop":
+    "ohmyhost project preview stop --project ULID --environment dev|prod --idempotency-key KEY --yes --json",
+  "project preview rotate":
+    "ohmyhost project preview rotate --project ULID --environment dev|prod --idempotency-key KEY --yes --json",
   "project dev-access create": "ohmyhost project dev-access create --project ULID --json",
   "project dev-share link": "ohmyhost project dev-share link --project ULID --json",
   "project dev-share rotate":
@@ -903,6 +919,18 @@ export class ProductCli {
             : { next_action: this.githubConnectAction(command.organizationId) }),
         });
       }
+      if (
+        command.kind === "connection-begin" ||
+        command.kind === "connection-list" ||
+        command.kind === "connection-status" ||
+        command.kind === "connection-discover" ||
+        command.kind === "connection-disconnect"
+      ) {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        if (!api.connection) throw new ResponseContractError();
+        const result = await api.connection(command);
+        return success(name, { status: "ok", result });
+      }
       if (command.kind === "organization-mcp-connections-list") {
         const api = await this.authenticatedApi(command.credentialStore, signal);
         const page = parseOrganizationMcpConnectionList(
@@ -1201,6 +1229,29 @@ export class ProductCli {
       if (command.kind === "project-status") return await this.getProjectStatus(command, signal);
       if (command.kind === "project-development-add")
         return await this.addProjectDevelopment(command, signal);
+      if (
+        command.kind === "project-preview-get" ||
+        command.kind === "project-preview-open" ||
+        command.kind === "project-preview-stop" ||
+        command.kind === "project-preview-rotate"
+      ) {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        if (!api.preview) throw new Error("Preview unavailable");
+        const action = command.kind.slice("project-preview-".length) as
+          | "get"
+          | "open"
+          | "stop"
+          | "rotate";
+        const preview = await api.preview(action, {
+          projectId: command.projectId,
+          environment: command.environment,
+          ...("idempotencyKey" in command ? { idempotencyKey: command.idempotencyKey } : {}),
+        });
+        return success(`project preview ${action}` as RecognizedCommandLabel, {
+          status: "succeeded",
+          preview,
+        });
+      }
       if (command.kind === "project-dev-access-create")
         return await this.createDevAccessTicket(command, signal);
       if (command.kind === "project-flag-status" || command.kind === "project-flag-set") {
@@ -1401,7 +1452,9 @@ export class ProductCli {
         if (!api.managedMail) throw new Error("Mail unavailable");
         return success(command.label, { mail: await api.managedMail(command.request) });
       }
-      return await this.deleteEnvironmentSecret(command, signal);
+      if (command.kind === "secret-delete")
+        return await this.deleteEnvironmentSecret(command, signal);
+      throw new Error("Unsupported command");
     } catch (error) {
       if (error instanceof UserTokenFileError || error instanceof PrivateSecretFileError)
         return failure(name, 3, error.code, false, error.message);
@@ -3888,6 +3941,11 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "github-connect") return "github connect";
   if (command.kind === "github-status") return "github status";
   if (command.kind === "github-disconnect") return "github disconnect";
+  if (command.kind === "connection-begin") return "connection begin";
+  if (command.kind === "connection-list") return "connection list";
+  if (command.kind === "connection-status") return "connection status";
+  if (command.kind === "connection-discover") return "connection discover";
+  if (command.kind === "connection-disconnect") return "connection disconnect";
   if (command.kind === "organization-mcp-connections-list")
     return "organization mcp-connections list";
   if (command.kind === "organization-mcp-connection-revoke")
@@ -3899,6 +3957,10 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "project-notes-set") return "project notes set";
   if (command.kind === "project-status") return "project status";
   if (command.kind === "project-development-add") return "project dev add";
+  if (command.kind === "project-preview-get") return "project preview get";
+  if (command.kind === "project-preview-open") return "project preview open";
+  if (command.kind === "project-preview-stop") return "project preview stop";
+  if (command.kind === "project-preview-rotate") return "project preview rotate";
   if (command.kind === "project-dev-access-create") return "project dev-access create";
   if (command.kind === "project-dev-share-link") return "project dev-share link";
   if (command.kind === "project-dev-share-rotate") return "project dev-share rotate";

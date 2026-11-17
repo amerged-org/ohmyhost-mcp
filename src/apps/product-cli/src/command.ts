@@ -132,6 +132,43 @@ export type ProductCliCommand =
       readonly credentialStore: "native";
     }
   | {
+      readonly kind: "connection-begin";
+      readonly organizationId: string;
+      readonly projectId: string;
+      readonly environmentId: string;
+      readonly idempotencyKey: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "connection-list";
+      readonly organizationId: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "connection-status";
+      readonly organizationId: string;
+      readonly requestId: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "connection-discover";
+      readonly organizationId: string;
+      readonly projectId: string;
+      readonly environmentId: string;
+      readonly grantId: string;
+      readonly providerOrganizationId?: number;
+      readonly teamId?: number;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "connection-disconnect";
+      readonly organizationId: string;
+      readonly grantId: string;
+      readonly idempotencyKey: string;
+      readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
       readonly kind: "organization-mcp-connections-list";
       readonly organizationId: string;
       readonly credentialStore: "native";
@@ -368,6 +405,32 @@ export type ProductCliCommand =
   | {
       readonly kind: "project-development-add";
       readonly projectId: string;
+      readonly idempotencyKey: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "project-preview-get";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "project-preview-open";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "project-preview-stop";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly idempotencyKey: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "project-preview-rotate";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
       readonly idempotencyKey: string;
       readonly credentialStore: "native";
     }
@@ -1109,6 +1172,11 @@ export type RecognizedCommandLabel =
   | "organization use"
   | "organization mcp-connections list"
   | "organization mcp-connections revoke"
+  | "connection begin"
+  | "connection list"
+  | "connection status"
+  | "connection discover"
+  | "connection disconnect"
   | "github connect"
   | "github status"
   | "github disconnect"
@@ -1117,6 +1185,10 @@ export type RecognizedCommandLabel =
   | "project dev add"
   | "project dev-access create"
   | "project dev-share link"
+  | "project preview get"
+  | "project preview open"
+  | "project preview stop"
+  | "project preview rotate"
   | "project dev-share rotate"
   | "project dev-share revoke"
   | "project dev-access mode"
@@ -1239,6 +1311,11 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     )
       return value;
     if (value === "profile" && values[0] === "list") return "profile list";
+    if (
+      value === "connection" &&
+      ["begin", "list", "status", "discover", "disconnect"].includes(values[0] ?? "")
+    )
+      return `connection ${values[0]}` as RecognizedCommandLabel;
     if (value === "github" && values[0] === "connect") return "github connect";
     if (value === "github" && values[0] === "status") return "github status";
     if (value === "github" && values[0] === "disconnect") return "github disconnect";
@@ -1284,6 +1361,12 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
       return "project notes set";
     if (value === "project" && values[0] === "status") return "project status";
     if (value === "project" && values[0] === "dev" && values[1] === "add") return "project dev add";
+    if (
+      value === "project" &&
+      values[0] === "preview" &&
+      ["get", "open", "stop", "rotate"].includes(values[1] ?? "")
+    )
+      return `project preview ${values[1]}` as RecognizedCommandLabel;
     if (value === "project" && values[0] === "handle" && values[1] === "check")
       return "project handle check";
     if (value === "project" && values[0] === "handle" && values[1] === "set")
@@ -2070,6 +2153,108 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
         }
       : { kind: "github-status", organizationId, credentialStore };
   }
+  if (first === "connection") {
+    const operation = values.shift();
+    if (wait || follow || stdin || yes !== (operation === "disconnect"))
+      throw new InvalidCommandError();
+    const options = parseOptionalOptions(values, [
+      "--organization",
+      "--project",
+      "--environment",
+      "--grant",
+      "--request",
+      "--idempotency-key",
+      "--provider-organization",
+      "--team",
+    ] as const);
+    const org = options["--organization"];
+    if (!org || !ORGANIZATION_ULID.test(org)) throw new InvalidCommandError();
+    const exact = (names: string[]) =>
+      Object.keys(options).every((k) => names.includes(k)) &&
+      names.every((k) => Object.hasOwn(options, k));
+    const scoped = () =>
+      options["--project"] &&
+      options["--environment"] &&
+      ORGANIZATION_ULID.test(options["--project"]) &&
+      ORGANIZATION_ULID.test(options["--environment"]);
+    if (operation === "list" && exact(["--organization"]))
+      return { kind: "connection-list", organizationId: org, credentialStore };
+    if (
+      operation === "begin" &&
+      scoped() &&
+      exact(["--organization", "--project", "--environment", "--idempotency-key"])
+    )
+      return {
+        kind: "connection-begin",
+        organizationId: org,
+        projectId: options["--project"] ?? "",
+        environmentId: options["--environment"] ?? "",
+        idempotencyKey: options["--idempotency-key"] ?? "",
+        credentialStore,
+      };
+    if (
+      operation === "status" &&
+      exact(["--organization", "--request"]) &&
+      /^[a-f0-9]{64}$/u.test(options["--request"] ?? "")
+    )
+      return {
+        kind: "connection-status",
+        organizationId: org,
+        requestId: options["--request"] ?? "",
+        credentialStore,
+      };
+    if (
+      operation === "disconnect" &&
+      exact(["--organization", "--grant", "--idempotency-key"]) &&
+      ORGANIZATION_ULID.test(options["--grant"] ?? "")
+    )
+      return {
+        kind: "connection-disconnect",
+        organizationId: org,
+        grantId: options["--grant"] ?? "",
+        idempotencyKey: options["--idempotency-key"] ?? "",
+        yes: true,
+        credentialStore,
+      };
+    if (
+      operation === "discover" &&
+      scoped() &&
+      ORGANIZATION_ULID.test(options["--grant"] ?? "") &&
+      Object.keys(options).every((k) =>
+        [
+          "--organization",
+          "--project",
+          "--environment",
+          "--grant",
+          "--provider-organization",
+          "--team",
+        ].includes(k),
+      )
+    ) {
+      const number = (v: string | undefined) =>
+        v && /^[1-9][0-9]{0,14}$/u.test(v) && Number.isSafeInteger(Number(v))
+          ? Number(v)
+          : undefined;
+      const providerOrganizationId = number(options["--provider-organization"]),
+        teamId = number(options["--team"]);
+      if (
+        (options["--provider-organization"] && !providerOrganizationId) ||
+        (options["--team"] && (!teamId || !providerOrganizationId))
+      )
+        throw new InvalidCommandError();
+      return {
+        kind: "connection-discover",
+        organizationId: org,
+        projectId: options["--project"] ?? "",
+        environmentId: options["--environment"] ?? "",
+        grantId: options["--grant"] ?? "",
+        ...(providerOrganizationId ? { providerOrganizationId } : {}),
+        ...(teamId ? { teamId } : {}),
+        credentialStore,
+      };
+    }
+    throw new InvalidCommandError();
+  }
   if (first === "organization" && values[0] === "mcp-connections") {
     values.shift();
     const subcommand = values.shift();
@@ -2188,6 +2373,41 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       if (yes || wait || follow || stdin) throw new InvalidCommandError();
       const options = parseOptions(values, ["--handle"]);
       return { kind: "project-handle-check", handle: options["--handle"], credentialStore };
+    }
+    if (subcommand === "preview") {
+      const action = values.shift();
+      if (
+        !action ||
+        !["get", "open", "stop", "rotate"].includes(action) ||
+        wait ||
+        follow ||
+        stdin ||
+        (action === "stop" || action === "rotate") !== yes
+      )
+        throw new InvalidCommandError();
+      const changing = action === "stop" || action === "rotate";
+      const options = parseOptions(
+        values,
+        changing
+          ? ["--project", "--environment", "--idempotency-key"]
+          : ["--project", "--environment"],
+      );
+      const environment = options["--environment"];
+      if (environment !== "dev" && environment !== "prod") throw new InvalidCommandError();
+      if (changing)
+        return {
+          kind: action === "stop" ? "project-preview-stop" : "project-preview-rotate",
+          projectId: options["--project"],
+          environment,
+          idempotencyKey: options["--idempotency-key"],
+          credentialStore,
+        };
+      return {
+        kind: action === "get" ? "project-preview-get" : "project-preview-open",
+        projectId: options["--project"],
+        environment,
+        credentialStore,
+      };
     }
     if (subcommand === "dev-share") {
       const action = values.shift();

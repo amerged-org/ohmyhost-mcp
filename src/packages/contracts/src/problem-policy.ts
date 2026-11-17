@@ -1,5 +1,12 @@
 /** Canonical public status, retry policy and recovery text shared by the API and clients. */
 export const PROBLEM_POLICY = {
+  preview_version_conflict: {
+    status: 409,
+    retryable: true,
+    action:
+      "Read the preview state, then repeat the original request with the same idempotency key.",
+    title: "Preview changed",
+  },
   source_generation_conflict: {
     status: 409,
     retryable: false,
