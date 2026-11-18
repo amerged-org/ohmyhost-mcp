@@ -21,8 +21,26 @@ export type Preview = {
 
 export type ConnectionBegin = {
   provider: "make";
+  project_id?: Ulid;
+  environment_id?: Ulid;
+};
+
+export type ConnectionImportRequest = {
   project_id: Ulid;
   environment_id: Ulid;
+  provider_organization_id: number;
+  team_id: number;
+  connection_id: number;
+};
+
+export type ConnectionImport = {
+  id: Ulid;
+  grant_id: Ulid;
+  project_id: Ulid;
+  environment_id: Ulid;
+  provider_organization_id: number;
+  team_id: number;
+  connection_id: number;
 };
 
 export type ConnectionHandoff = {
@@ -2775,7 +2793,12 @@ export type ListConnectionsData = {
   path: {
     organization_id: Ulid;
   };
-  query?: never;
+  query?: {
+    /**
+     * Select workspace grants; omit for the legacy unfiltered list.
+     */
+    scope?: "workspace";
+  };
   url: "/v1/organizations/{organization_id}/connections";
 };
 
@@ -2985,9 +3008,15 @@ export type DiscoverConnectionData = {
     organization_id: Ulid;
     grant_id: string;
   };
-  query: {
-    project_id: Ulid;
-    environment_id: Ulid;
+  query?: {
+    /**
+     * Supply together with environment_id only for a legacy project-bound grant.
+     */
+    project_id?: Ulid;
+    /**
+     * Supply together with project_id only for a legacy project-bound grant.
+     */
+    environment_id?: Ulid;
     provider_organization_id?: number;
     team_id?: number;
   };
@@ -3028,6 +3057,64 @@ export type DiscoverConnectionResponses = {
 
 export type DiscoverConnectionResponse =
   DiscoverConnectionResponses[keyof DiscoverConnectionResponses];
+
+export type ImportConnectionData = {
+  body: ConnectionImportRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    organization_id: Ulid;
+    grant_id: string;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/connections/{grant_id}/imports";
+};
+
+export type ImportConnectionErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type ImportConnectionError = ImportConnectionErrors[keyof ImportConnectionErrors];
+
+export type ImportConnectionResponses = {
+  /**
+   * Imported project connection reference.
+   */
+  201: ConnectionImport;
+};
+
+export type ImportConnectionResponse = ImportConnectionResponses[keyof ImportConnectionResponses];
 
 export type DisconnectConnectionData = {
   body?: never;

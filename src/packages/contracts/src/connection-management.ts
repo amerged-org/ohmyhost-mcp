@@ -31,7 +31,8 @@ export function parseConnectionResponse(
     | "connection-list"
     | "connection-status"
     | "connection-discover"
-    | "connection-disconnect",
+    | "connection-disconnect"
+    | "connection-import",
   raw: unknown,
   expectedOrigin?: string,
 ): unknown {
@@ -63,6 +64,22 @@ export function parseConnectionResponse(
     const v = record(raw, ["state"]);
     if (!["disconnected", "revocation_pending"].includes(String(v["state"])))
       throw new TypeError("Invalid connection response");
+  } else if (kind === "connection-import") {
+    const v = record(raw, [
+      "id",
+      "grant_id",
+      "project_id",
+      "environment_id",
+      "provider_organization_id",
+      "team_id",
+      "connection_id",
+    ]);
+    for (const key of ["id", "grant_id", "project_id", "environment_id"])
+      if (typeof v[key] !== "string" || !ulid.test(v[key] as string))
+        throw new TypeError("Invalid connection response");
+    for (const key of ["provider_organization_id", "team_id", "connection_id"])
+      if (!Number.isSafeInteger(v[key]) || Number(v[key]) < 1)
+        throw new TypeError("Invalid connection response");
   } else if (kind === "connection-discover") {
     const v = record(raw, ["organizations", "teams", "connections"]);
     items(v["organizations"]);

@@ -359,11 +359,13 @@ const HELP_USAGE = Object.freeze({
   "profile list":
     "ohmyhost profile list --json (saved logins on this computer: name, user and organization, never a token; pass --profile-name NAME or set OHMYHOST_PROFILE to choose one)",
   "connection begin":
-    "ohmyhost connection begin --organization ULID --project ULID --environment ULID --idempotency-key KEY --json",
+    "ohmyhost connection begin --organization ULID [--project ULID --environment ULID] --idempotency-key KEY --json",
   "connection list": "ohmyhost connection list --organization ULID --json",
   "connection status": "ohmyhost connection status --organization ULID --request HASH --json",
   "connection discover":
-    "ohmyhost connection discover --organization ULID --project ULID --environment ULID --grant ULID [--provider-organization ID] [--team ID] --json",
+    "ohmyhost connection discover --organization ULID [--project ULID --environment ULID] --grant ULID [--provider-organization ID] [--team ID] --json",
+  "connection import":
+    "ohmyhost connection import --organization ULID --grant ULID --project ULID --environment ULID --provider-organization ID --team ID --connection ID --idempotency-key KEY --json",
   "connection disconnect":
     "ohmyhost connection disconnect --organization ULID --grant ULID --idempotency-key KEY --yes --json",
   "github connect":
@@ -924,6 +926,7 @@ export class ProductCli {
         command.kind === "connection-list" ||
         command.kind === "connection-status" ||
         command.kind === "connection-discover" ||
+        command.kind === "connection-import" ||
         command.kind === "connection-disconnect"
       ) {
         const api = await this.authenticatedApi(command.credentialStore, signal);
@@ -3945,6 +3948,7 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "connection-list") return "connection list";
   if (command.kind === "connection-status") return "connection status";
   if (command.kind === "connection-discover") return "connection discover";
+  if (command.kind === "connection-import") return "connection import";
   if (command.kind === "connection-disconnect") return "connection disconnect";
   if (command.kind === "organization-mcp-connections-list")
     return "organization mcp-connections list";

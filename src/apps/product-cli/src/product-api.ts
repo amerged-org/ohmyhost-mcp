@@ -1,6 +1,7 @@
 import { parseConnectionResponse } from "@ohmyhost/contracts/connection-management";
 import {
   beginConnection,
+  importConnection,
   listConnections,
   getConnectionRequest,
   discoverConnection,
@@ -307,7 +308,8 @@ export type ConnectionCommand = Extract<
       | "connection-list"
       | "connection-status"
       | "connection-discover"
-      | "connection-disconnect";
+      | "connection-disconnect"
+      | "connection-import";
   }
 >;
 export interface ProductApi {
@@ -789,6 +791,11 @@ export async function executeConnectionCommand(
   command: ConnectionCommand,
 ): Promise<unknown> {
   const organization_id = command.organizationId;
+  if (
+    (command.kind === "connection-begin" || command.kind === "connection-discover") &&
+    (command.projectId === undefined) !== (command.environmentId === undefined)
+  )
+    throw new TypeError("Invalid connection scope");
   let result: unknown;
   switch (command.kind) {
     case "connection-begin":
@@ -798,15 +805,16 @@ export async function executeConnectionCommand(
           "Idempotency-Key": command.idempotencyKey,
           connectionBegin: {
             provider: "make",
-            project_id: command.projectId,
-            environment_id: command.environmentId,
+            ...(command.projectId
+              ? { project_id: command.projectId, environment_id: command.environmentId }
+              : {}),
           },
         },
         { client: client },
       );
       break;
     case "connection-list":
-      result = await listConnections({ organization_id }, { client: client });
+      result = await listConnections({ organization_id, scope: "workspace" }, { client: client });
       break;
     case "connection-status":
       result = await getConnectionRequest(
@@ -819,14 +827,32 @@ export async function executeConnectionCommand(
         {
           organization_id,
           grant_id: command.grantId,
-          project_id: command.projectId,
-          environment_id: command.environmentId,
+          ...(command.projectId
+            ? { project_id: command.projectId, environment_id: command.environmentId }
+            : {}),
           ...(command.providerOrganizationId === undefined
             ? {}
             : { provider_organization_id: command.providerOrganizationId }),
           ...(command.teamId === undefined ? {} : { team_id: command.teamId }),
         },
         { client: client },
+      );
+      break;
+    case "connection-import":
+      result = await importConnection(
+        {
+          organization_id,
+          grant_id: command.grantId,
+          "Idempotency-Key": command.idempotencyKey,
+          connectionImportRequest: {
+            project_id: command.projectId,
+            environment_id: command.environmentId,
+            provider_organization_id: command.providerOrganizationId,
+            team_id: command.teamId,
+            connection_id: command.connectionId,
+          },
+        },
+        { client },
       );
       break;
     case "connection-disconnect":
