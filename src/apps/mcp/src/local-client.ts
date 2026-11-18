@@ -168,6 +168,7 @@ import {
   type OhMyHostClient,
   type Operation,
   type OperationEvent,
+  type ProjectCreateOperation,
   type ProjectSource,
 } from "@ohmyhost/sdk-ts";
 
@@ -1364,7 +1365,9 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
       ),
     );
   }
-  public createProject(input: Parameters<LocalMcpProductClient["createProject"]>[0]) {
+  public createProject(
+    input: Parameters<LocalMcpProductClient["createProject"]>[0],
+  ): Promise<ProjectCreateOperation> {
     return createProject(
       {
         "Idempotency-Key": input.idempotencyKey,

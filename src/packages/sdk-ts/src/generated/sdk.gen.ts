@@ -2627,6 +2627,7 @@ export const getOrganizationReferral = <ThrowOnError extends boolean = true>(
  */
 export const getOrganizationAccount = <ThrowOnError extends boolean = true>(
   parameters: {
+    "X-Request-Id"?: string;
     organization_id: Ulid;
   },
   options?: Options<never, ThrowOnError>,
@@ -2638,7 +2639,14 @@ export const getOrganizationAccount = <ThrowOnError extends boolean = true>(
 > => {
   const params = buildClientParams(
     [parameters],
-    [{ args: [{ in: "path", key: "organization_id" }] }],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "organization_id" },
+        ],
+      },
+    ],
   );
   return (options?.client ?? client).get<
     GetOrganizationAccountResponses,
@@ -2657,7 +2665,7 @@ export const getOrganizationAccount = <ThrowOnError extends boolean = true>(
 /**
  * Submit a contact or privacy question
  *
- * Stores a private contact request for twelve months, with idempotent replay and no account creation or marketing enrollment.
+ * Stores a private contact request for twelve months, with idempotent replay and no account creation or marketing enrollment. Any other method answers 405 with the Problem code invalid_request.
  */
 export const submitContactRequest = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -2735,7 +2743,7 @@ export const getFeatureInterests = <ThrowOnError extends boolean = true>(
 /**
  * Set or remove this anonymous browser's roadmap vote
  *
- * Store a desired choice once per request key for twelve months. Replaying an earlier request never overwrites a later choice. A null choice removes the vote; this is not toggle-on-every-request behavior.
+ * Store a desired choice once per request key for twelve months. Replaying an earlier request never overwrites a later choice. A null choice removes the vote; this is not toggle-on-every-request behavior. After the voter header check, any method other than GET or POST answers 405 with the Problem code invalid_request.
  */
 export const registerFeatureInterest = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -2784,6 +2792,8 @@ export const registerFeatureInterest = <ThrowOnError extends boolean = true>(
 
 /**
  * Read distinct active projects successfully deployed in the past seven days
+ *
+ * Any other method answers 404 with the Problem code resource_not_found.
  */
 export const getPublicDeploymentStats = <ThrowOnError extends boolean = true>(
   options?: Options<never, ThrowOnError>,
@@ -3496,7 +3506,7 @@ export const getOrganizationCredits = <ThrowOnError extends boolean = true>(
 /**
  * Read recent measured usage by day, project and meter
  *
- * Owner-only. days holds the credit-log charges of the last up to 14 UTC days (today included, oldest first), grouped by day, project and meter. projects holds what each project has used so far in the current UTC month. A null environment_id means a project-shared cost, never a guessed Dev allocation. Only billed usage is included; charges may arrive later, so this is not a complete provider invoice or a zero-usage guarantee. No credit is granted or charged by this read; it remains usable at zero credits.
+ * Owner-only. days holds the credit-log charges of the last up to 14 UTC days (today included, oldest first), grouped by day, project and meter; a refund is not netted into days. projects holds what each project has used so far in the current UTC month, after refunds. A null environment_id means a project-shared cost, never a guessed Dev allocation. Only billed usage is included; charges may arrive later, so this is not a complete provider invoice or a zero-usage guarantee. No credit is granted or charged by this read; it remains usable at zero credits.
  */
 export const getOrganizationCreditUsage = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -3799,7 +3809,7 @@ export const listProjects = <ThrowOnError extends boolean = true>(
 /**
  * Create a project
  *
- * Atomically records the project and a durable operation for asynchronous processing.
+ * Atomically records the project and a durable operation for asynchronous processing. The accepted answer and an identical idempotent replay both return the new project_id.
  */
 export const createProject = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -5406,6 +5416,8 @@ export const planPaidProjectDomain = <ThrowOnError extends boolean = true>(
 
 /**
  * Delete one exact Paid customer-owned hostname
+ *
+ * A changed request under a used key returns idempotency_key_reused (409). A repeated delete of an already deleted connection answers the deleted state (200), under its own key or a fresh one, and records no further deletion. The project's connection of another hostname answers domain_already_configured (409), and a deletion already running under another key answers domain_deleting (409).
  */
 export const deletePaidProjectDomain = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -5496,7 +5508,7 @@ export const getPaidProjectDomain = <ThrowOnError extends boolean = true>(
 /**
  * Apply one Paid customer-owned hostname
  *
- * Requires Paid access (a Stripe period or a grant) or, for a Free workspace, a project that currently shows the powered-by flag, and no expired credit-exhaustion grace. Returns paid_plan_required otherwise, or insufficient_organization_credits after seven days with no available credits, without provider mutation. Top-ups lift a credit-exhaustion block but never start or extend Paid access. Without an active Prod deployment, apply declares the hostname as awaiting_deployment, enabling Cloudflare consent without provider resources, DNS changes or domain charges. After a successful Prod deployment, replay the same hostname and idempotency key to activate it. A changed request under a used key returns idempotency_key_reused (409).
+ * Requires Paid access (a Stripe period or a grant) or, for a Free workspace, a project that currently shows the powered-by flag, and no expired credit-exhaustion grace. Returns paid_plan_required otherwise, or insufficient_organization_credits after seven days with no available credits, without provider mutation. Top-ups lift a credit-exhaustion block but never start or extend Paid access. Without an active Prod deployment, apply declares the hostname as awaiting_deployment, enabling Cloudflare consent without provider resources, DNS changes or domain charges. After a successful Prod deployment, replay the same hostname and idempotency key to activate it. A key already used for this connection returns idempotency_key_reused (409) when its request changed or its connection has since ended. The same member's fresh key for this hostname's live connection is answered with that connection as it stands and provisions nothing; only the original key activates an awaiting_deployment connection. A fresh key for another hostname, or for a connection another member configured, answers domain_already_configured (409); the project's one connection must be deleted first to replace it. A connection still being deleted answers domain_deleting (409) until its deletion finishes.
  */
 export const applyPaidProjectDomain = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -5759,6 +5771,8 @@ export const streamDeploymentLogs = <ThrowOnError extends boolean = true>(
     "X-Request-Id"?: string;
     project_id: Ulid;
     deployment_id: Ulid;
+    cursor?: string;
+    limit?: number;
   },
   options?: Options<never, ThrowOnError, StreamDeploymentLogsResponse>,
 ): Promise<ServerSentEventsResult<StreamDeploymentLogsResponses>> => {
@@ -5770,6 +5784,8 @@ export const streamDeploymentLogs = <ThrowOnError extends boolean = true>(
           { in: "headers", key: "X-Request-Id" },
           { in: "path", key: "project_id" },
           { in: "path", key: "deployment_id" },
+          { in: "query", key: "cursor" },
+          { in: "query", key: "limit" },
         ],
       },
     ],

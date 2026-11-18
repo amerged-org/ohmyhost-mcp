@@ -35,6 +35,9 @@ function requestManagedMail(client: Client, input: ManagedMailCommand) {
   const scope = { project_id: input.projectId, environment_id: input.environmentId };
   switch (input.action) {
     case "configure":
+      // The contract accepts only sending true, so a setup that does not send is refused before any request.
+      if (input.sending !== true)
+        throw new TypeError("A managed mail domain must send: sending must be true.");
       return configureManagedMailDomain(
         {
           ...scope,

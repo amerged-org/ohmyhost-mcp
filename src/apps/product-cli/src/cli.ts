@@ -139,6 +139,9 @@ import {
   type PublicEnvironmentSecret,
   parseOperation,
   parseOperationEvent,
+  parseDeploymentPage,
+  parseDeploymentRecord,
+  parseProjectCreateAccepted,
   parseProjectPage,
   parseProjectStatus,
   parseProjectSourceBinding,
@@ -281,7 +284,11 @@ export interface ProductCliDependencies {
   readonly currentIdentity?: (accessToken: () => Promise<string>) => Promise<unknown>;
   readonly deviceFlow: WorkosDeviceFlowClient;
   readonly deviceAuthorizationPresenter: DeviceAuthorizationPresenter;
-  readonly productApi: (accessToken: () => Promise<string>) => ProductApi;
+  /** The optional parent signal bounds only the requests of that API; by default the process signal does. */
+  readonly productApi: (
+    accessToken: () => Promise<string>,
+    parentSignal?: AbortSignal,
+  ) => ProductApi;
   /**
    * Reads the signed-in customer's workspaces through a separate read-only dependency,
    * keeping product mutation capabilities out of login.
@@ -549,7 +556,11 @@ const HELP_USAGE = Object.freeze({
   deploy:
     "ohmyhost deploy --project ULID (--plan-id ULID | --commit SHA [--environment dev|prod]) --idempotency-key KEY --yes [--wait] --json",
   logs: "ohmyhost logs OPERATION_ULID --follow --json",
-  "deployment logs": "ohmyhost deployment logs --project ULID --deployment ULID --follow --json",
+  "deployment list":
+    "ohmyhost deployment list --project ULID [--cursor CURSOR] [--limit 1-100] --json (newest first; a returned deployment ULID is a rollback target)",
+  "deployment get": "ohmyhost deployment get --project ULID --deployment ULID --json",
+  "deployment logs":
+    "ohmyhost deployment logs --project ULID --deployment ULID [--cursor CURSOR] --json (one page of diagnostics, newest first; a next_cursor in the answer reads the older page)",
   "rollback plan": "ohmyhost rollback plan --project ULID --deployment DEPLOYMENT_ULID --json",
   rollback:
     "ohmyhost rollback --project ULID --deployment DEPLOYMENT_ULID --if-match ETAG --confirmation-token TOKEN --idempotency-key KEY --yes --json",
@@ -634,9 +645,18 @@ const HELP_COMMANDS = Object.freeze(
 const helpEntries = (topic: string | undefined) => {
   if (topic === undefined) return HELP_COMMANDS;
   const exact = HELP_COMMANDS.filter((entry) => entry.command === topic);
-  return exact.length > 0
-    ? exact
-    : HELP_COMMANDS.filter((entry) => entry.command.startsWith(`${topic} `));
+  if (exact.length > 0) return exact;
+  const under = HELP_COMMANDS.filter((entry) => entry.command.startsWith(`${topic} `));
+  if (under.length > 0) return under;
+  // A deeper subcommand, such as `auth users list`, is documented by its longest leading group, `auth`.
+  const words = topic.split(" ");
+  const group = HELP_COMMANDS.filter((entry) => {
+    const entryWords = entry.command.split(" ");
+    return (
+      entryWords.length <= words.length && entryWords.every((word, index) => word === words[index])
+    );
+  }).sort((left, right) => right.command.split(" ").length - left.command.split(" ").length);
+  return group.slice(0, 1);
 };
 
 export const helpTopicKnown = (topic: string): boolean => helpEntries(topic).length > 0;
@@ -671,6 +691,8 @@ export const invalidCommandAction = (argv: readonly string[], commandPrefix: str
   const usage = Object.hasOwn(HELP_USAGE, label)
     ? HELP_USAGE[label as CustomerCommandLabel].split("\n")[0]
     : undefined;
+  if (label === "help")
+    return "Unknown help topic; nothing was sent. 'ohmyhost --help --json' lists every command with its flags.";
   if (usage === undefined)
     return "Unknown command; nothing was sent. 'ohmyhost --help --json' lists every command with its flags. If a documented command is missing, this CLI is older than https://ohmyho.st/client-release.json: install the published version.";
   // A required --project may come from this checkout's link; an optional one never needs it.
@@ -1416,6 +1438,8 @@ export class ProductCli {
       if (command.kind === "deploy") return await this.deploy(command, signal);
       if (command.kind === "logs") return await this.logs(command, signal);
       if (command.kind === "deployment-logs") return await this.deploymentLogs(command, signal);
+      if (command.kind === "deployment-list") return await this.listDeployments(command, signal);
+      if (command.kind === "deployment-get") return await this.getDeployment(command, signal);
       if (command.kind === "rollback-plan") return await this.planRollback(command, signal);
       if (command.kind === "rollback") return await this.rollback(command, signal);
       if (command.kind === "promotion-plan") return await this.planPromotion(command, signal);
@@ -2028,7 +2052,7 @@ export class ProductCli {
     signal: AbortSignal,
   ): Promise<CliResult> {
     const api = await this.authenticatedApi(command.credentialStore, signal);
-    const operation = parseOperation(
+    const accepted = parseProjectCreateAccepted(
       await api.createProject({
         organizationId: command.organizationId,
         name: command.name,
@@ -2041,7 +2065,12 @@ export class ProductCli {
         idempotencyKey: command.idempotencyKey,
       }),
     );
-    return success("project create", { status: "accepted", operation });
+    return success("project create", {
+      status: "accepted",
+      project_id: accepted.project_id,
+      operation: accepted.operation,
+      next_action: `Run '${this.dependencies.commandPrefix} operation get ${accepted.operation.id} --json' until it succeeds; the new project is ${accepted.project_id}. A retry with the same idempotency key returns the same project_id.`,
+    });
   }
 
   private async listProjects(
@@ -2518,6 +2547,13 @@ export class ProductCli {
     const { connection_uri, psql_command, ...access } = credential;
     void connection_uri;
     void psql_command;
+    // The revoke runs on its own bounded requests: Ctrl-C or SIGTERM must not cancel the cleanup.
+    const cleanupSignal = new AbortController().signal;
+    const cleanup = this.dependencies.productApi(
+      () => this.authenticatedToken(command.credentialStore, cleanupSignal),
+      cleanupSignal,
+    );
+    const revokeAction = `The temporary credential could not be revoked. Run '${this.dependencies.commandPrefix} database access revoke --project ${command.projectId} --access ${credential.access_id} --yes --json' now; it expires on its own at ${credential.expires_at}.`;
     let exitCode: number;
     try {
       exitCode = await spawnPsql({
@@ -2530,13 +2566,20 @@ export class ProductCli {
         signal,
       });
     } catch (error) {
-      await this.revokeIssuedAccess(api, command.projectId, credential.access_id);
+      const revoked = await this.revokeIssuedAccess(
+        cleanup,
+        command.projectId,
+        credential.access_id,
+      );
       if (error instanceof PsqlUnavailableError) return psqlUnavailable();
+      if (!revoked && (signal.aborted || isCancellation(error)))
+        return failure("database psql", 130, "command_cancelled", true, revokeAction);
       throw error;
     }
-    await this.revokeIssuedAccess(api, command.projectId, credential.access_id);
+    const revoked = await this.revokeIssuedAccess(cleanup, command.projectId, credential.access_id);
+    const notRevoked = revoked ? {} : { next_action: revokeAction };
     if (exitCode === 0)
-      return success("database psql", { status: "succeeded", access, exit_code: 0 });
+      return success("database psql", { status: "succeeded", access, exit_code: 0, ...notRevoked });
     return {
       exitCode,
       stdout: `${JSON.stringify({
@@ -2546,8 +2589,9 @@ export class ProductCli {
         error: {
           code: "psql_failed",
           retryable: false,
-          suggested_action:
-            "Read the psql output above. The temporary credential was revoked; request a new one with 'ohmyhost database access create'.",
+          suggested_action: revoked
+            ? "Read the psql output above. The temporary credential was revoked; request a new one with 'ohmyhost database access create'."
+            : revokeAction,
         },
       })}\n`,
       stderr: "",
@@ -2558,11 +2602,12 @@ export class ProductCli {
     api: ProductApi,
     projectId: string,
     accessId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await api.revokeProjectDatabaseAccess({ projectId, accessId });
+      return true;
     } catch {
-      // The credential expires on its own; a failed revoke must not hide the psql result.
+      return false;
     }
   }
 
@@ -2988,7 +3033,9 @@ export class ProductCli {
       status: command.wait ? "completed" : "accepted",
       operation,
       ...(plan === null ? {} : { plan }),
-      ...(notes.length > 0 && plan?.["environment"] !== "prod" ? { notes } : {}),
+      // The note is conditional ("if this is a Dev deployment"), so a --plan-id deploy, whose environment the CLI
+      // cannot read, gets it too. A plan known to target Prod gets none.
+      ...(notes.length > 0 && (plan === null || plan["environment"] === "dev") ? { notes } : {}),
     });
   }
 
@@ -3038,6 +3085,32 @@ export class ProductCli {
       operation,
     );
   }
+  private async listDeployments(
+    command: Extract<ProductCliCommand, { kind: "deployment-list" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const page = parseDeploymentPage(
+      await api.listDeployments({
+        projectId: command.projectId,
+        ...(command.cursor === undefined ? {} : { cursor: command.cursor }),
+        ...(command.limit === undefined ? {} : { limit: command.limit }),
+      }),
+    );
+    return success("deployment list", { items: page.items, next_cursor: page.next_cursor });
+  }
+
+  private async getDeployment(
+    command: Extract<ProductCliCommand, { kind: "deployment-get" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const deployment = parseDeploymentRecord(
+      await api.getDeployment({ projectId: command.projectId, deploymentId: command.deploymentId }),
+    );
+    return success("deployment get", { deployment });
+  }
+
   private async deploymentLogs(
     command: Extract<ProductCliCommand, { kind: "deployment-logs" }>,
     signal: AbortSignal,
@@ -3049,10 +3122,15 @@ export class ProductCli {
       projectId: command.projectId,
       deploymentId: command.deploymentId,
       limit: 100,
+      ...(command.cursor === undefined ? {} : { cursor: command.cursor }),
     });
     for (const item of page.items)
       this.dependencies.operationEventSink?.write(`${JSON.stringify(item)}\n`);
-    return success("deployment logs", { status: "completed", event_count: page.items.length });
+    return success("deployment logs", {
+      status: "completed",
+      event_count: page.items.length,
+      ...(page.next_cursor === undefined ? {} : { next_cursor: page.next_cursor }),
+    });
   }
 
   private async planRollback(
@@ -3598,6 +3676,14 @@ const classifyFailure = (
       "Retry only after the remote response is repaired.",
     );
   }
+  if (isLocalFileError(error))
+    return failure(
+      command,
+      2,
+      "local_state_unavailable",
+      false,
+      `The local CLI state could not be read or written (${error.code}). Check the permissions and free space of the local directories named in the error, then retry. A remote change that already succeeded is not undone.`,
+    );
   if (looksLikeProblem(error)) {
     try {
       const problem = parseSafeProblem(error);
@@ -4016,6 +4102,8 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "rollback-plan") return "rollback plan";
   if (command.kind === "promotion-plan") return "deployment promote plan";
   if (command.kind === "deployment-logs") return "deployment logs";
+  if (command.kind === "deployment-list") return "deployment list";
+  if (command.kind === "deployment-get") return "deployment get";
   if (command.kind === "promote") return "deployment promote";
   if (command.kind === "delete-plan") return "delete plan";
   if (command.kind === "secret-list") return "secret list";
@@ -4075,6 +4163,31 @@ const looksLikeProblem = (error: unknown): boolean =>
   typeof error === "object" &&
   error !== null &&
   ("code" in error || "status" in error || "suggested_action" in error);
+
+/**
+ * Node filesystem errors describe local state, never a remote response. Network codes such as ECONNRESET or EPIPE
+ * are not local; ENOENT is local only when it names the path that is missing.
+ */
+const LOCAL_FILE_ERROR_CODES: ReadonlySet<string> = new Set([
+  "EACCES",
+  "EPERM",
+  "ENOSPC",
+  "EROFS",
+  "EDQUOT",
+  "EMFILE",
+  "ENFILE",
+  "EEXIST",
+  "EISDIR",
+  "ENOTDIR",
+  "EBUSY",
+  "ENAMETOOLONG",
+]);
+const isLocalFileError = (error: unknown): error is Error & { code: string } =>
+  error instanceof Error &&
+  "code" in error &&
+  typeof error.code === "string" &&
+  (LOCAL_FILE_ERROR_CODES.has(error.code) ||
+    (error.code === "ENOENT" && "path" in error && typeof error.path === "string"));
 
 const looksLikeRemoteObject = (error: unknown): boolean =>
   typeof error === "object" && error !== null && !(error instanceof Error);
@@ -4140,6 +4253,8 @@ const diagnosticDescriptor = (
       };
     }
   }
+  if (isLocalFileError(error))
+    return { category: "configuration", subsystem: "runtime", errorKind: "unavailable" };
   if (looksLikeProblem(error)) {
     try {
       parseSafeProblem(error);

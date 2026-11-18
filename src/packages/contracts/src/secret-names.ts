@@ -1,6 +1,8 @@
 /** Customer names and the platform's installed keys share one rule in API, CLI and MCP. */
 export const USER_SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,127}$/u;
-const FIXED_PLATFORM_NAMES = new Set([
+/** The largest write-only secret value in bytes, shared by the secrets API and the portal forms. */
+export const SECRET_VALUE_MAXIMUM_BYTES = 5_120;
+export const FIXED_PLATFORM_NAMES = new Set([
   "BETTER_AUTH_SECRET",
   "BETTER_AUTH_URL",
   "DATABASE_URL",

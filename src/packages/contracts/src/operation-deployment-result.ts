@@ -91,9 +91,9 @@ const deploymentProgressActions = {
   publishing:
     "The build has completed. Runtime preparation or publication is still running; poll this same operation.",
   waiting_for_mail:
-    "Read 'ohmyhost mail status --project PROJECT --environment PROD_ENVIRONMENT_ULID --json' (MCP mail_status) now, with the Prod environment ID from 'ohmyhost project status', and follow its verification issue and DNS records. Keep this operation; do not rebuild or repeat correct DNS changes.",
+    "Read the Prod mail status with 'ohmyhost mail status --project PROJECT --environment PROD_ENVIRONMENT_ULID --json' (MCP mail_status). An agent without that tool reads workspace_mail_domain_get or mail_binding_get, or REST GET /v1/projects/{project_id}/environments/{environment_id}/mail-domain. Use the Prod environment ID from 'ohmyhost project status', follow its verification issue and DNS records, keep this operation, and do not rebuild or repeat correct DNS changes.",
   mail_status_unavailable:
-    "Mail readiness could not be observed. Read 'ohmyhost mail status --project PROJECT --environment PROD_ENVIRONMENT_ULID --json' (MCP mail_status) with the Prod environment ID from 'ohmyhost project status', and report a persistent error; keep this operation.",
+    "Mail readiness could not be observed. Read 'ohmyhost mail status --project PROJECT --environment PROD_ENVIRONMENT_ULID --json' (MCP mail_status). Without that tool, read REST GET /v1/projects/{project_id}/environments/{environment_id}/mail-domain. Use the Prod environment ID from 'ohmyhost project status', report a persistent error, and keep this operation.",
 } as const;
 export type DeploymentProgressPhase = keyof typeof deploymentProgressActions;
 export interface DeploymentMailProgress {

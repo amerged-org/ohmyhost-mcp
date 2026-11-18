@@ -45,6 +45,11 @@
       "types": "./dist/credit-pricing.d.ts",
       "import": "./dist/credit-pricing.js"
     },
+    "./egress-origin": {
+      "source": "./src/egress-origin.ts",
+      "types": "./dist/egress-origin.d.ts",
+      "import": "./dist/egress-origin.js"
+    },
     "./platform-origins": {
       "source": "./src/platform-origins.ts",
       "types": "./dist/platform-origins.d.ts",

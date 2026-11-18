@@ -5,6 +5,7 @@ import schema from "../schemas/ohmyhost.schema.json" with { type: "json" };
 import { normalizeApplicationRoot, type ApplicationRoot } from "./application-root.js";
 import { normalizeCrons } from "./functions.js";
 import { normalizeBrowserPolicy, type BrowserPolicy } from "./browser-capabilities.js";
+import { isCustomerEgressOrigin } from "./egress-origin.js";
 
 export * from "./application-root.js";
 export * from "./framework-admission.js";
@@ -67,15 +68,6 @@ export interface OhmyhostConfig {
   }>;
   readonly browser?: Readonly<{ enabled: boolean }>;
   readonly functions?: Readonly<{ crons: readonly string[] }>;
-  readonly credits?: Readonly<{
-    monthly_budget: number;
-    auto_recharge?: Readonly<{
-      enabled: boolean;
-      threshold?: number;
-      amount_usd_micros?: number;
-      monthly_cap_usd_micros?: number;
-    }>;
-  }>;
 }
 
 const validateOhmyhostConfig = new Ajv2020({
@@ -154,32 +146,6 @@ export function parseOhmyhostConfig(value: unknown): OhmyhostConfig {
       : {
           functions: Object.freeze({ crons: normalizeCrons(input.functions.crons) }),
         }),
-    ...(input.credits === undefined
-      ? {}
-      : {
-          credits: Object.freeze({
-            monthly_budget: input.credits.monthly_budget,
-            ...(input.credits.auto_recharge === undefined
-              ? {}
-              : {
-                  auto_recharge: Object.freeze({
-                    enabled: input.credits.auto_recharge.enabled,
-                    ...(input.credits.auto_recharge.threshold === undefined
-                      ? {}
-                      : { threshold: input.credits.auto_recharge.threshold }),
-                    ...(input.credits.auto_recharge.amount_usd_micros === undefined
-                      ? {}
-                      : { amount_usd_micros: input.credits.auto_recharge.amount_usd_micros }),
-                    ...(input.credits.auto_recharge.monthly_cap_usd_micros === undefined
-                      ? {}
-                      : {
-                          monthly_cap_usd_micros:
-                            input.credits.auto_recharge.monthly_cap_usd_micros,
-                        }),
-                  }),
-                }),
-          }),
-        }),
   };
 
   return Object.freeze(config);
@@ -201,51 +167,16 @@ function normalizeHealthcheck(value: string | undefined): string {
   return candidate;
 }
 
+// Egress is routed and staged by DNS name on the default HTTPS port, so every origin must pass the one shared rule.
 function normalizeEgressOrigins(value: readonly string[] | undefined): readonly string[] {
   const origins = [...(value ?? [])];
   for (const origin of origins) {
-    let parsed: URL;
-    try {
-      parsed = new URL(origin);
-    } catch {
-      throw new TypeError("ohmyhost.yaml runtime egress origin is invalid");
-    }
-    if (
-      parsed.protocol !== "https:" ||
-      parsed.port !== "" ||
-      parsed.username !== "" ||
-      parsed.password !== "" ||
-      parsed.origin !== origin ||
-      parsed.pathname !== "/" ||
-      parsed.search !== "" ||
-      parsed.hash !== "" ||
-      forbiddenEgressHostname(parsed.hostname)
-    ) {
+    if (!isCustomerEgressOrigin(origin)) {
       throw new TypeError("ohmyhost.yaml runtime egress origin is invalid");
     }
   }
   origins.sort();
   return Object.freeze(origins);
-}
-
-// Egress is routed and staged by DNS name on the default HTTPS port: an IP literal (public or
-// private, v4 or v6) can never become a working origin, and a local name never resolves.
-function forbiddenEgressHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  return (
-    /(?:^|\.)ohmyho-(?:mail|storage)-gateway-[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*\.workers\.dev\.?$/u.test(
-      normalized,
-    ) ||
-    normalized.replace(/\.+$/u, "") === "connect.ohmyho.st" ||
-    normalized.replace(/\.+$/u, "").endsWith(".connect.ohmyho.st") ||
-    normalized === "localhost" ||
-    normalized.endsWith(".localhost") ||
-    normalized.endsWith(".local") ||
-    normalized.endsWith(".internal") ||
-    /^\d{1,3}(?:\.\d{1,3}){3}$/u.test(normalized) ||
-    normalized.startsWith("[") ||
-    normalized.endsWith("]")
-  );
 }
 
 /** The application build of a static or edge configuration. */

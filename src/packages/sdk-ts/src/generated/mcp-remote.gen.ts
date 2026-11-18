@@ -72,9 +72,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "24727146b1480476c72d955114cf0f764291003414d62ce3cc8484d8c4d55b7b";
+  "048aebe1bf5cf6a90904447a535656954b0a14aa0dfd055246191f0674c58403";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.65";
+export const remoteMcpReleaseVersion = "0.1.66";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -2263,7 +2263,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         domain: {
           type: "string",
@@ -2320,9 +2322,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -2492,7 +2495,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         expected_revision: { type: "integer", minimum: 0 },
       },
@@ -2541,9 +2546,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -2622,7 +2628,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         expected_revision: { type: "integer", minimum: 1 },
         zone: {
@@ -2685,9 +2693,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -2794,7 +2803,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         expected_revision: { type: "integer", minimum: 0 },
       },
@@ -2843,9 +2854,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -3010,7 +3022,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         mail_domain_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
         sending: { type: "boolean" },
@@ -3094,9 +3108,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -3178,7 +3193,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         expected_revision: { type: "integer", minimum: 0 },
       },
@@ -3227,9 +3244,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -3386,7 +3404,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         hostname: {
           type: "string",
@@ -3441,9 +3461,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -3503,7 +3524,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         expected_revision: { type: "integer", minimum: 0 },
       },
@@ -3546,9 +3569,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -3608,7 +3632,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         expected_revision: { type: "integer", minimum: 0 },
       },
@@ -3651,9 +3677,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -3713,7 +3740,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         expected_revision: { type: "integer", minimum: 1 },
         zone: {
@@ -3770,9 +3799,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -3869,7 +3899,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         expected_revision: { type: "integer", minimum: 0 },
       },
@@ -3912,9 +3944,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -4544,6 +4577,13 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         required: true,
         schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
       },
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
     ],
     outputSchema: {
       type: "object",
@@ -4624,7 +4664,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/contact-requests",
     summary: "Submit a contact or privacy question",
     description:
-      "Stores a private contact request for twelve months, with idempotent replay and no account creation or marketing enrollment.",
+      "Stores a private contact request for twelve months, with idempotent replay and no account creation or marketing enrollment. Any other method answers 405 with the Problem code invalid_request.",
     disposition: "excluded",
     toolNames: [],
     reason: "Public website contact submission, outside authenticated application management.",
@@ -4726,7 +4766,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/site/feature-interests",
     summary: "Set or remove this anonymous browser's roadmap vote",
     description:
-      "Store a desired choice once per request key for twelve months. Replaying an earlier request never overwrites a later choice. A null choice removes the vote; this is not toggle-on-every-request behavior.",
+      "Store a desired choice once per request key for twelve months. Replaying an earlier request never overwrites a later choice. A null choice removes the vote; this is not toggle-on-every-request behavior. After the voter header check, any method other than GET or POST answers 405 with the Problem code invalid_request.",
     disposition: "excluded",
     toolNames: [],
     reason: "Public website feature-interest UI, outside authenticated application management.",
@@ -4778,7 +4818,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     method: "GET",
     path: "/v1/site/stats",
     summary: "Read distinct active projects successfully deployed in the past seven days",
-    description: "Read distinct active projects successfully deployed in the past seven days",
+    description: "Any other method answers 404 with the Problem code resource_not_found.",
     disposition: "excluded",
     toolNames: [],
     reason: "Public marketing statistics, not tenant application management.",
@@ -4802,7 +4842,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
         organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
         name: { type: "string", minLength: 1, maxLength: 64 },
@@ -4842,9 +4884,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
       {
         name: "organization_id",
@@ -5035,7 +5078,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
           allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
         },
         organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -5079,7 +5124,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                   type: "string",
                   minLength: 1,
                   maxLength: 128,
-                  description: "Identifies one mutation and its canonical request payload.",
+                  pattern: "^[A-Za-z0-9._:-]+$",
+                  description:
+                    "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
                   allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
                 },
                 organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -5129,7 +5176,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                   type: "string",
                   minLength: 1,
                   maxLength: 128,
-                  description: "Identifies one mutation and its canonical request payload.",
+                  pattern: "^[A-Za-z0-9._:-]+$",
+                  description:
+                    "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
                   allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
                 },
                 organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -5175,7 +5224,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                   type: "string",
                   minLength: 1,
                   maxLength: 128,
-                  description: "Identifies one mutation and its canonical request payload.",
+                  pattern: "^[A-Za-z0-9._:-]+$",
+                  description:
+                    "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
                   allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
                 },
                 organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -5225,7 +5276,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                   type: "string",
                   minLength: 1,
                   maxLength: 128,
-                  description: "Identifies one mutation and its canonical request payload.",
+                  pattern: "^[A-Za-z0-9._:-]+$",
+                  description:
+                    "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
                   allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
                 },
                 organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -5324,9 +5377,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -5622,7 +5676,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         },
       },
       required: ["idempotency_key"],
@@ -5649,9 +5705,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
     ],
     outputSchema: {
@@ -5755,7 +5812,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
           allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
         },
         organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -5808,9 +5867,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
       {
         name: "organization_id",
@@ -6136,7 +6196,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
           allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
         },
         organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -6201,9 +6263,10 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "Idempotency-Key",
         in: "header",
-        description: "Identifies one mutation and its canonical request payload.",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
         required: true,
-        schema: { type: "string", minLength: 1, maxLength: 128 },
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
       },
       {
         name: "organization_id",
@@ -6367,7 +6430,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/organizations/{organization_id}/credit-usage",
     summary: "Read recent measured usage by day, project and meter",
     description:
-      "Owner-only. days holds the credit-log charges of the last up to 14 UTC days (today included, oldest first), grouped by day, project and meter. projects holds what each project has used so far in the current UTC month. A null environment_id means a project-shared cost, never a guessed Dev allocation. Only billed usage is included; charges may arrive later, so this is not a complete provider invoice or a zero-usage guarantee. No credit is granted or charged by this read; it remains usable at zero credits.",
+      "Owner-only. days holds the credit-log charges of the last up to 14 UTC days (today included, oldest first), grouped by day, project and meter; a refund is not netted into days. projects holds what each project has used so far in the current UTC month, after refunds. A null environment_id means a project-shared cost, never a guessed Dev allocation. Only billed usage is included; charges may arrive later, so this is not a complete provider invoice or a zero-usage guarantee. No credit is granted or charged by this read; it remains usable at zero credits.",
     disposition: "named",
     toolNames: ["organization_usage_get"],
     parameters: [
@@ -6651,6 +6714,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -6912,6 +6976,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                     "storage_jurisdiction_conflict",
                     "provider_state_absent",
                     "auto_deploy_plan_rejected",
+                    "auto_deploy_repository_renamed",
                     "promotion_source_stale",
                     "promotion_target_stale",
                     "project_handle_taken",
@@ -7421,7 +7486,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects",
     summary: "Create a project",
     description:
-      "Atomically records the project and a durable operation for asynchronous processing.",
+      "Atomically records the project and a durable operation for asynchronous processing. The accepted answer and an identical idempotent replay both return the new project_id.",
     disposition: "named",
     toolNames: ["project_create"],
     requestBody: {
@@ -7495,214 +7560,15 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     outputSchema: {
       type: "object",
       description:
-        "Durable record returned for an accepted asynchronous mutation. Optional reconciliation is a current observation for queued/running work, separate from immutable terminal state. A completed reconciliation attempt alone does not mean the operation succeeded.",
+        "Durable record of an accepted project creation. project_id identifies the new project; it is returned unchanged by an identical idempotent replay.",
       additionalProperties: false,
-      required: ["id", "state", "created_at", "updated_at"],
+      required: ["id", "state", "created_at", "updated_at", "project_id"],
       properties: {
-        blocking_operation_id: {
-          type: "string",
-          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
-          description:
-            "The active operation holding this queued operation's project mutation claim.",
-        },
-        deployment_id: {
-          type: "string",
-          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
-          description:
-            "The deployment this operation created (deploy, promotion or rollback), in every state. After a failure, read its diagnostics with deployment logs.",
-        },
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-        state: { type: "string", enum: ["queued", "running", "succeeded", "failed", "cancelled"] },
+        state: { type: "string", enum: ["queued"] },
         created_at: { type: "string", format: "date-time" },
         updated_at: { type: "string", format: "date-time" },
-        result: { type: "object", additionalProperties: true },
-        error: {
-          type: "object",
-          additionalProperties: false,
-          required: ["code", "message", "retryable", "suggested_action"],
-          properties: {
-            migration: {
-              type: "object",
-              additionalProperties: false,
-              required: ["reason", "file"],
-              description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
-              properties: {
-                reason: {
-                  type: "string",
-                  enum: ["catalog_changed", "execution_failed", "ledger_conflict", "not_admitted"],
-                },
-                file: { oneOf: [{ type: "string", maxLength: 512 }, { type: "null" }] },
-                statement_index: { type: "integer", minimum: 1, maximum: 9007199254740991 },
-                sqlstate: { type: "string", pattern: "^[0-9A-Z]{5}$" },
-              },
-            },
-            code: {
-              type: "string",
-              enum: [
-                "operation_failed",
-                "operation_abandoned",
-                "authorization_changed",
-                "source_commit_conflict",
-                "source_snapshot_invalid",
-                "source_upload_expired",
-                "recovery_dispatch_failed",
-                "recovery_job_failed",
-                "recovery_input_expired",
-                "recovery_database_unavailable",
-                "recovery_checksum_mismatch",
-                "recovery_scope_unavailable",
-                "recovery_archive_too_large",
-                "build_not_started",
-                "build_failed",
-                "database_write_rejected",
-                "database_write_unavailable",
-                "database_write_outcome_unknown",
-                "database_compute_failed",
-                "database_compute_plan_changed",
-                "database_compute_rejected",
-                "database_migration_failed",
-                "insufficient_organization_credits",
-                "project_budget_exceeded",
-                "paid_plan_required",
-                "runtime_candidate_failed",
-                "runtime_candidate_rejected",
-                "storage_jurisdiction_conflict",
-                "provider_state_absent",
-                "auto_deploy_plan_rejected",
-                "promotion_source_stale",
-                "promotion_target_stale",
-                "project_handle_taken",
-                "managed_source_dispatch_failed",
-              ],
-            },
-            message: { type: "string", minLength: 1, maxLength: 512 },
-            retryable: {
-              type: "boolean",
-              const: false,
-              description:
-                "A terminal operation cannot be retried in place; follow suggested_action.",
-            },
-            suggested_action: { type: "string", minLength: 1, maxLength: 500 },
-            detail: {
-              type: "string",
-              minLength: 1,
-              maxLength: 2000,
-              description:
-                "Present only on auto_deploy_plan_rejected when planning the pushed commit returned a typed refusal. It is the same fixed catalog sentence that the planning 409 problem returns as detail, naming the file, the rule and the required change.",
-            },
-          },
-        },
-        progress: {
-          type: "object",
-          additionalProperties: false,
-          description:
-            "Current deployment dependency observation, separate from immutable operation history. Poll the same operation; mail readiness does not mean application activation.",
-          required: [
-            "phase",
-            "project_id",
-            "deployment_id",
-            "observed_at",
-            "next_poll_after_seconds",
-            "suggested_action",
-          ],
-          properties: {
-            mail: {
-              type: "object",
-              additionalProperties: false,
-              required: ["domain", "status", "configured_at", "dns_records"],
-              description:
-                "Current mail verification details, present only while waiting_for_mail. Follow these records without rebuilding the deployment.",
-              properties: {
-                domain: { type: "string", minLength: 1, maxLength: 253 },
-                status: {
-                  type: "string",
-                  enum: [
-                    "configured",
-                    "delegation_required",
-                    "ready",
-                    "verification_pending",
-                    "verification_failed",
-                  ],
-                },
-                configured_at: { type: "string", format: "date-time" },
-                observed_at: { type: "string", format: "date-time" },
-                verification_issue: {
-                  oneOf: [
-                    {
-                      type: "string",
-                      enum: [
-                        "identity_missing",
-                        "identity_verification_failed",
-                        "dkim_verification_failed",
-                        "dkim_records_changed",
-                        "tenant_association_missing",
-                      ],
-                    },
-                    { type: "null" },
-                  ],
-                },
-                next_check_after_seconds: {
-                  oneOf: [{ type: "integer", enum: [60, 3600] }, { type: "null" }],
-                },
-                sending: { type: "string", enum: ["disabled", "pending", "ready", "failed"] },
-                receiving: { type: "string", enum: ["disabled", "pending", "ready", "failed"] },
-                dns_records: {
-                  type: "array",
-                  maxItems: 64,
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    required: ["type", "name", "value", "status"],
-                    properties: {
-                      type: { type: "string", enum: ["MX", "TXT", "CNAME"] },
-                      name: { type: "string", minLength: 1, maxLength: 253 },
-                      value: { type: "string", minLength: 1, maxLength: 4096 },
-                      status: { type: "string", minLength: 1, maxLength: 64 },
-                      priority: { type: "integer", minimum: 0, maximum: 65535 },
-                    },
-                  },
-                },
-              },
-            },
-            build_completed_at: {
-              type: "string",
-              format: "date-time",
-              description:
-                "Actual successful build completion time when this operation ran a build; omitted for reused artifacts without a current build.",
-            },
-            phase: {
-              type: "string",
-              enum: [
-                "queued",
-                "building",
-                "publishing",
-                "waiting_for_mail",
-                "mail_status_unavailable",
-              ],
-            },
-            project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-            deployment_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-            observed_at: { type: "string", format: "date-time" },
-            next_poll_after_seconds: { type: "integer", const: 60 },
-            suggested_action: { type: "string", minLength: 1, maxLength: 500 },
-          },
-        },
-        reconciliation: {
-          type: "object",
-          additionalProperties: false,
-          required: ["state", "attempt_id", "observed_at", "suggested_action"],
-          properties: {
-            state: { type: "string", enum: ["required", "pending"] },
-            attempt_id: {
-              oneOf: [{ type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" }, { type: "null" }],
-              description:
-                "Active attempt for pending reconciliation; null when a new confirmed reconciliation is required.",
-            },
-            observed_at: { type: "string", format: "date-time" },
-            suggested_action: { type: "string", minLength: 1, maxLength: 500 },
-          },
-        },
+        project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
       },
     },
   },
@@ -7942,6 +7808,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -8361,6 +8228,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -8861,6 +8729,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                         "storage_jurisdiction_conflict",
                         "provider_state_absent",
                         "auto_deploy_plan_rejected",
+                        "auto_deploy_repository_renamed",
                         "promotion_source_stale",
                         "promotion_target_stale",
                         "project_handle_taken",
@@ -9856,6 +9725,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -10288,6 +10158,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -10919,6 +10790,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -11216,6 +11088,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -11523,6 +11396,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -12062,6 +11936,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -12402,6 +12277,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -13049,6 +12925,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -13314,6 +13191,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -13569,7 +13447,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/paid-domain",
     summary: "Apply one Paid customer-owned hostname",
     description:
-      "Requires Paid access (a Stripe period or a grant) or, for a Free workspace, a project that currently shows the powered-by flag, and no expired credit-exhaustion grace. Returns paid_plan_required otherwise, or insufficient_organization_credits after seven days with no available credits, without provider mutation. Top-ups lift a credit-exhaustion block but never start or extend Paid access. Without an active Prod deployment, apply declares the hostname as awaiting_deployment, enabling Cloudflare consent without provider resources, DNS changes or domain charges. After a successful Prod deployment, replay the same hostname and idempotency key to activate it. A changed request under a used key returns idempotency_key_reused (409).",
+      "Requires Paid access (a Stripe period or a grant) or, for a Free workspace, a project that currently shows the powered-by flag, and no expired credit-exhaustion grace. Returns paid_plan_required otherwise, or insufficient_organization_credits after seven days with no available credits, without provider mutation. Top-ups lift a credit-exhaustion block but never start or extend Paid access. Without an active Prod deployment, apply declares the hostname as awaiting_deployment, enabling Cloudflare consent without provider resources, DNS changes or domain charges. After a successful Prod deployment, replay the same hostname and idempotency key to activate it. A key already used for this connection returns idempotency_key_reused (409) when its request changed or its connection has since ended. The same member's fresh key for this hostname's live connection is answered with that connection as it stands and provisions nothing; only the original key activates an awaiting_deployment connection. A fresh key for another hostname, or for a connection another member configured, answers domain_already_configured (409); the project's one connection must be deleted first to replace it. A connection still being deleted answers domain_deleting (409) until its deletion finishes.",
     disposition: "named",
     toolNames: ["domain_paid_apply"],
     requestBody: {
@@ -13810,7 +13688,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     method: "DELETE",
     path: "/v1/projects/{project_id}/paid-domain",
     summary: "Delete one exact Paid customer-owned hostname",
-    description: "Delete one exact Paid customer-owned hostname",
+    description:
+      "A changed request under a used key returns idempotency_key_reused (409). A repeated delete of an already deleted connection answers the deleted state (200), under its own key or a fresh one, and records no further deletion. The project's connection of another hostname answers domain_already_configured (409), and a deletion already running under another key answers domain_deleting (409).",
     disposition: "named",
     toolNames: ["domain_paid_delete"],
     requestBody: {
@@ -14244,6 +14123,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -14727,6 +14607,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
           description: "Deployment identifier.",
         },
+        cursor: { type: "string", maxLength: 2048 },
+        limit: { type: "integer", minimum: 1, maximum: 100, default: 100 },
       },
       required: ["project_id", "deployment_id"],
       additionalProperties: false,
@@ -14761,6 +14643,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         description: "Deployment identifier.",
         required: true,
         schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      { name: "cursor", in: "query", schema: { type: "string", maxLength: 2048 } },
+      {
+        name: "limit",
+        in: "query",
+        schema: { type: "integer", minimum: 1, maximum: 100, default: 100 },
       },
     ],
   },
@@ -14964,6 +14852,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -15196,37 +15085,6 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 region: { type: "string", enum: ["us", "eu"] },
               },
             },
-            {
-              type: "object",
-              additionalProperties: false,
-              required: [
-                "min_cu",
-                "max_cu",
-                "min_memory_gb",
-                "max_memory_gb",
-                "suspend_timeout_seconds",
-                "state",
-                "pending_state",
-                "disabled",
-                "region",
-              ],
-              properties: {
-                min_cu: { type: "number", minimum: 0.25 },
-                max_cu: { type: "number", minimum: 0.25 },
-                min_memory_gb: { type: "number", minimum: 1 },
-                max_memory_gb: { type: "number", minimum: 1 },
-                suspend_timeout_seconds: {
-                  type: "integer",
-                  minimum: -1,
-                  maximum: 604800,
-                  description: "Configured timeout: 0 is provider default; -1 disables suspension.",
-                },
-                state: { type: "string", enum: ["init", "active", "idle"] },
-                pending_state: { type: ["string", "null"], enum: ["init", "active", "idle", null] },
-                disabled: { type: "boolean" },
-                region: { type: "string", pattern: "^aws-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]+$" },
-              },
-            },
           ],
         },
       },
@@ -15404,6 +15262,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                     "storage_jurisdiction_conflict",
                     "provider_state_absent",
                     "auto_deploy_plan_rejected",
+                    "auto_deploy_repository_renamed",
                     "promotion_source_stale",
                     "promotion_target_stale",
                     "project_handle_taken",
@@ -19093,6 +18952,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -19538,6 +19398,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -19905,7 +19766,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         secret_name: {
           type: "string",
           pattern: "^[A-Z][A-Z0-9_]{0,127}$",
-          description: "Uppercase environment-variable name.",
+          description:
+            'Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.',
         },
         value: {
           type: "string",
@@ -19981,7 +19843,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "secret_name",
         in: "path",
-        description: "Uppercase environment-variable name.",
+        description:
+          'Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.',
         required: true,
         schema: { type: "string", pattern: "^[A-Z][A-Z0-9_]{0,127}$" },
       },
@@ -20042,7 +19905,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         name: {
           type: "string",
           pattern: "^[A-Z][A-Z0-9_]{0,127}$",
-          description: "Uppercase environment-variable name.",
+          description:
+            'Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.',
         },
       },
       required: ["idempotency_key", "project_id", "environment_id", "name"],
@@ -20087,7 +19951,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "secret_name",
         in: "path",
-        description: "Uppercase environment-variable name.",
+        description:
+          'Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.',
         required: true,
         schema: { type: "string", pattern: "^[A-Z][A-Z0-9_]{0,127}$" },
       },
@@ -20140,7 +20005,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         secret_name: {
           type: "string",
           pattern: "^[A-Z][A-Z0-9_]{0,127}$",
-          description: "Uppercase environment-variable name.",
+          description:
+            'Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.',
         },
       },
       required: ["idempotency_key", "project_id", "environment_id", "secret_name"],
@@ -20188,7 +20054,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       {
         name: "secret_name",
         in: "path",
-        description: "Uppercase environment-variable name.",
+        description:
+          'Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.',
         required: true,
         schema: { type: "string", pattern: "^[A-Z][A-Z0-9_]{0,127}$" },
       },
@@ -20339,6 +20206,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -20727,7 +20595,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
         environment_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
         domain: { type: "string", minLength: 4, maxLength: 253 },
-        sending: { type: "boolean" },
+        sending: { type: "boolean", const: true },
         receiving: { type: "boolean" },
       },
     },
@@ -20749,7 +20617,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             required: ["domain", "sending", "receiving"],
             properties: {
               domain: { type: "string", minLength: 4, maxLength: 253 },
-              sending: { type: "boolean" },
+              sending: { type: "boolean", const: true },
               receiving: { type: "boolean" },
             },
           },
@@ -22052,6 +21920,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -22530,7 +22399,9 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
           allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
         },
         organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -22574,7 +22445,9 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                   type: "string",
                   minLength: 1,
                   maxLength: 128,
-                  description: "Identifies one mutation and its canonical request payload.",
+                  pattern: "^[A-Za-z0-9._:-]+$",
+                  description:
+                    "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
                   allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
                 },
                 organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -22624,7 +22497,9 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                   type: "string",
                   minLength: 1,
                   maxLength: 128,
-                  description: "Identifies one mutation and its canonical request payload.",
+                  pattern: "^[A-Za-z0-9._:-]+$",
+                  description:
+                    "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
                   allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
                 },
                 organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -22670,7 +22545,9 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                   type: "string",
                   minLength: 1,
                   maxLength: 128,
-                  description: "Identifies one mutation and its canonical request payload.",
+                  pattern: "^[A-Za-z0-9._:-]+$",
+                  description:
+                    "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
                   allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
                 },
                 organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -22720,7 +22597,9 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                   type: "string",
                   minLength: 1,
                   maxLength: 128,
-                  description: "Identifies one mutation and its canonical request payload.",
+                  pattern: "^[A-Za-z0-9._:-]+$",
+                  description:
+                    "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
                   allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
                 },
                 organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -22887,7 +22766,9 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
           allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
         },
         organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -23182,7 +23063,9 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
           type: "string",
           minLength: 1,
           maxLength: 128,
-          description: "Identifies one mutation and its canonical request payload.",
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
           allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
         },
         organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -23562,6 +23445,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                     "storage_jurisdiction_conflict",
                     "provider_state_absent",
                     "auto_deploy_plan_rejected",
+                    "auto_deploy_repository_renamed",
                     "promotion_source_stale",
                     "promotion_target_stale",
                     "project_handle_taken",
@@ -23925,6 +23809,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -24851,6 +24736,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -25096,6 +24982,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -25739,6 +25626,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",
@@ -25953,37 +25841,6 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 region: { type: "string", enum: ["us", "eu"] },
               },
             },
-            {
-              type: "object",
-              additionalProperties: false,
-              required: [
-                "min_cu",
-                "max_cu",
-                "min_memory_gb",
-                "max_memory_gb",
-                "suspend_timeout_seconds",
-                "state",
-                "pending_state",
-                "disabled",
-                "region",
-              ],
-              properties: {
-                min_cu: { type: "number", minimum: 0.25 },
-                max_cu: { type: "number", minimum: 0.25 },
-                min_memory_gb: { type: "number", minimum: 1 },
-                max_memory_gb: { type: "number", minimum: 1 },
-                suspend_timeout_seconds: {
-                  type: "integer",
-                  minimum: -1,
-                  maximum: 604800,
-                  description: "Configured timeout: 0 is provider default; -1 disables suspension.",
-                },
-                state: { type: "string", enum: ["init", "active", "idle"] },
-                pending_state: { type: ["string", "null"], enum: ["init", "active", "idle", null] },
-                disabled: { type: "boolean" },
-                region: { type: "string", pattern: "^aws-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]+$" },
-              },
-            },
           ],
         },
       },
@@ -26113,6 +25970,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                     "storage_jurisdiction_conflict",
                     "provider_state_absent",
                     "auto_deploy_plan_rejected",
+                    "auto_deploy_repository_renamed",
                     "promotion_source_stale",
                     "promotion_target_stale",
                     "project_handle_taken",
@@ -27607,7 +27465,8 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
         name: {
           type: "string",
           pattern: "^[A-Z][A-Z0-9_]{0,127}$",
-          description: "Uppercase environment-variable name.",
+          description:
+            'Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.',
         },
       },
       required: ["idempotency_key", "project_id", "environment_id", "name"],
@@ -27759,7 +27618,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
         project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
         environment_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
         domain: { type: "string", minLength: 4, maxLength: 253 },
-        sending: { type: "boolean" },
+        sending: { type: "boolean", const: true },
         receiving: { type: "boolean" },
       },
     },
@@ -28543,6 +28402,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "storage_jurisdiction_conflict",
                 "provider_state_absent",
                 "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
                 "promotion_source_stale",
                 "promotion_target_stale",
                 "project_handle_taken",

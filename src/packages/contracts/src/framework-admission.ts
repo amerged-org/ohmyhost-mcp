@@ -106,6 +106,9 @@ const ALL_LOCKFILES: readonly string[] = Object.freeze(
   Object.values(PACKAGE_MANAGER_CONTRACTS).flatMap(({ lockfiles }) => lockfiles),
 );
 const PACKAGE_MANIFEST = "package.json";
+// Yarn 2.0.0 introduced --immutable and Yarn 3.0.0 renamed --skip-builds to --mode=skip-build; the frozen,
+// script-free install needs both, so an earlier Yarn is refused rather than run unfrozen or failing late.
+const YARN_MINIMUM_MAJOR = 3;
 const PACKAGE_MANAGER_DECLARATION =
   /^(bun|npm|pnpm|yarn)@((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$/u;
 
@@ -132,6 +135,9 @@ export function resolvePackageManager(input: PackageManagerInput): PackageManage
     throw new FrameworkAdmissionError("package_manager_lockfile_mismatch", lockfile);
   }
   if (manager === "bun" && version !== PINNED_BUN_VERSION) {
+    throw new FrameworkAdmissionError("package_manager_version_unsupported", PACKAGE_MANIFEST);
+  }
+  if (manager === "yarn" && Number(version.split(".")[0]) < YARN_MINIMUM_MAJOR) {
     throw new FrameworkAdmissionError("package_manager_version_unsupported", PACKAGE_MANIFEST);
   }
   return Object.freeze({
@@ -502,7 +508,7 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
   },
   package_manager_version_unsupported: {
     paths: ["manifest"],
-    template: `"{{path}}" pins a Bun version other than ${PINNED_BUN_VERSION}, the only Bun ohmyho.st builds with. Set packageManager to bun@${PINNED_BUN_VERSION}, reinstall to update the lockfile, commit and push the change, then plan the new commit.`,
+    template: `"{{path}}" pins a version ohmyho.st cannot build with: Bun other than ${PINNED_BUN_VERSION}, the only Bun ohmyho.st builds with, or Yarn before 3.0.0, the first that runs the frozen install flags. Set packageManager to bun@${PINNED_BUN_VERSION} or to a Yarn version from 3.0.0 on, such as yarn@4.9.4, reinstall to update the lockfile, commit and push the change, then plan the new commit.`,
   },
   repository_configuration_invalid: {
     paths: ["repository_config"],

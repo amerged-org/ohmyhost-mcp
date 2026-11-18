@@ -513,6 +513,60 @@ export function workerModuleFindings(
   return Object.freeze(findings);
 }
 
+const REGEX_LITERAL_KEYWORDS = new Set([
+  "await",
+  "case",
+  "do",
+  "else",
+  "return",
+  "throw",
+  "typeof",
+  "void",
+  "yield",
+]);
+
+/**
+ * Whether a slash after the code character at `lastCode` opens a regex literal, judged from the code before it: at the
+ * start, after punctuation that cannot end an operand, or after a keyword that takes an operand. A slash after an
+ * identifier, a number or a closing bracket divides. `lastCode` is the source index of the last character written that
+ * is not white space; the test reads that character and the identifier run ending at it, so a long source stays linear.
+ */
+function startsRegexLiteral(source: string, lastCode: number): boolean {
+  if (lastCode === -1) return true;
+  if (/[(,=:[!&|?{};+\-*%~^]/u.test(source.charAt(lastCode))) return true;
+  let start = lastCode + 1;
+  while (start > 0 && /[\p{L}\p{N}_$]/u.test(source.charAt(start - 1))) start -= 1;
+  return REGEX_LITERAL_KEYWORDS.has(source.slice(start, lastCode + 1));
+}
+
+/**
+ * The index of the slash that closes a regex literal opened at `start` on its line, or -1 when it does not close.
+ * `unclosed` marks each (index, inside a class) state that an earlier scan has passed. Such a state ends the scan at
+ * once: a failing scan has passed only states that fail, and a closing scan passes only states that no later scan
+ * reaches, because sourceWithoutComments resumes after its slash. Every scan therefore reads each state once.
+ */
+function regexLiteralEnd(source: string, start: number, unclosed: Uint8Array): number {
+  let inClass = false;
+  for (let index = start + 1; index < source.length; index += 1) {
+    const state = index * 2 + (inClass ? 1 : 0);
+    if (unclosed[state] === 1) return -1;
+    unclosed[state] = 1;
+    const character = source[index];
+    if (character === "\n" || character === "\r") return -1;
+    if (character === "\\") {
+      index += 1;
+      if (source[index] === "\n" || source[index] === "\r") return -1;
+    } else if (inClass) {
+      if (character === "]") inClass = false;
+    } else if (character === "[") {
+      inClass = true;
+    } else if (character === "/") {
+      return index;
+    }
+  }
+  return -1;
+}
+
 /**
  * Source text with every comment blanked and every string kept, so a URL keeps its "//". A quoted
  * string also ends at a line break, so an apostrophe in JSX text never hides the comments after it,
@@ -521,20 +575,27 @@ export function workerModuleFindings(
 export function sourceWithoutComments(source: string): string {
   let result = "";
   let quote: "'" | '"' | "`" | null = null;
+  // Source index of the last character written that is not white space, which decides whether a slash opens a regex.
+  // The output keeps every source index, so this index also locates that character in the output.
+  let lastCode = -1;
+  let unclosed: Uint8Array | null = null;
   for (let index = 0; index < source.length; index += 1) {
     const character = source[index] as string;
     const next = source[index + 1];
     if (quote !== null) {
       result += character;
+      if (!/\s/u.test(character)) lastCode = index;
       if (character === "\\") {
         index += 1;
         result += source[index] ?? "";
+        if (index < source.length && !/\s/u.test(source[index] as string)) lastCode = index;
       } else if (character === quote || (character === "\n" && quote !== "`")) quote = null;
       continue;
     }
     if (character === "'" || character === '"' || character === "`") {
       quote = character;
       result += character;
+      lastCode = index;
       continue;
     }
     if (character === "/" && next === "/" && source[index - 1] !== "\\") {
@@ -544,6 +605,17 @@ export function sourceWithoutComments(source: string): string {
       }
       result += "\n";
       continue;
+    }
+    if (character === "/" && next !== "/" && next !== "*" && startsRegexLiteral(source, lastCode)) {
+      // A regex literal is copied whole: a backtick or quote inside it opens no template or string.
+      unclosed ??= new Uint8Array(source.length * 2);
+      const end = regexLiteralEnd(source, index, unclosed);
+      if (end !== -1) {
+        result += source.slice(index, end + 1);
+        lastCode = end;
+        index = end;
+        continue;
+      }
     }
     if (character === "/" && next === "*" && source[index - 1] !== "\\") {
       result += "  ";
@@ -558,6 +630,7 @@ export function sourceWithoutComments(source: string): string {
       continue;
     }
     result += character;
+    if (!/\s/u.test(character)) lastCode = index;
   }
   return result;
 }
@@ -1237,6 +1310,63 @@ function hasModuleImport(tokens: readonly ConfigToken[], moduleName: string): bo
   );
 }
 
+/** The number of braces open before each token, so the depth of a key shows the object that holds it. */
+function openBraceDepths(tokens: readonly ConfigToken[]): readonly number[] {
+  let depth = 0;
+  return tokens.map((token) => {
+    const current = depth;
+    if (token.value === "{") depth += 1;
+    else if (token.value === "}") depth -= 1;
+    return current;
+  });
+}
+
+const BUILD_OUTPUT_OPTIONS = ["assetsPrefix", "client", "serverEntry", "server"] as const;
+
+/**
+ * Whether the top-level `build` option of an Astro config can set a build output option, which changes what the build
+ * writes. A literal `build` object counts by its direct properties and its direct spreads: a `server` key elsewhere is
+ * the dev server, and Vite's own options nest under `vite`. Any other use of `build` (a value, a shorthand or a spread
+ * of it) hides its keys from the tokens, so it counts as a possible output option.
+ */
+function hasBuildOutputOption(tokens: readonly ConfigToken[]): boolean {
+  const closing = closingBraces(tokens);
+  const depths = openBraceDepths(tokens);
+  return tokens.some((token, index) => {
+    if (token.value !== "build" || depths[index] !== 1 || tokens[index - 1]?.value === ":")
+      return false;
+    if (tokens[index + 1]?.value !== ":" || tokens[index + 2]?.value !== "{") return true;
+    const start = index + 2;
+    const end = closing[start] ?? -1;
+    if (end === -1) return true;
+    return (
+      BUILD_OUTPUT_OPTIONS.some(
+        (name) => directProperty(tokens, closing, start, end, name) !== null,
+      ) || hasDirectSpread(tokens, depths, start, end)
+    );
+  });
+}
+
+/** Whether the object between `start` and `end` spreads another object at its own level, which may carry any key. */
+function hasDirectSpread(
+  tokens: readonly ConfigToken[],
+  depths: readonly number[],
+  start: number,
+  end: number,
+): boolean {
+  const level = (depths[start] ?? 0) + 1;
+  for (let index = start + 1; index < end; index += 1) {
+    if (
+      depths[index] === level &&
+      tokens[index]?.value === "." &&
+      tokens[index + 1]?.value === "." &&
+      tokens[index + 2]?.value === "."
+    )
+      return true;
+  }
+  return false;
+}
+
 /** Astro's build validates executable config; admission rejects known incompatible contracts. */
 function astroConfigFindings(
   text: string,
@@ -1250,9 +1380,8 @@ function astroConfigFindings(
     items.some((token, index) => token.value === name && items[index + 1]?.value === ":");
   const invalid =
     hasNonRootProperty(tokens, ["base"], ["", "/"]) ||
-    ["srcDir", "outDir", "serverEntry", "client", "server", "assetsPrefix"].some((name) =>
-      hasPropertyKey(tokens, name),
-    ) ||
+    ["srcDir", "outDir"].some((name) => hasPropertyKey(tokens, name)) ||
+    hasBuildOutputOption(tokens) ||
     (mode === "edge"
       ? !text.includes("@astrojs/cloudflare") ||
         !hasProperty(tokens, "output", "server") ||

@@ -260,7 +260,7 @@ export type ApplicationDomainIdentity = {
 
 export type ManagedMailDomainRequest = {
   domain: string;
-  sending: boolean;
+  sending: true;
   receiving: boolean;
 };
 
@@ -1929,6 +1929,14 @@ export type ProblemDetails = {
     | "shared_data_requires_promotion"
     | "development_environment_exists"
     | "development_environment_missing"
+    | "source_generation_conflict"
+    | "source_commit_conflict"
+    | "source_upload_conflict"
+    | "source_upload_expired"
+    | "source_scope_unavailable"
+    | "source_snapshot_invalid"
+    | "source_snapshot_too_large"
+    | "preview_version_conflict"
     | "production_deployment_required"
     | "framework_conversion_required"
     | "repository_configuration_missing"
@@ -1968,6 +1976,7 @@ export type ProblemDetails = {
     | "billing_purchase_conflict"
     | "billing_recharge_conflict"
     | "github_connection_required"
+    | "connection_revoked"
     | "github_connection_revoked"
     | "repository_not_installed"
     | "cloudflare_zone_not_bound"
@@ -1985,6 +1994,8 @@ export type ProblemDetails = {
     | "domain_hostname_taken"
     | "domain_ownership_required"
     | "domain_dns_conflict"
+    | "domain_already_configured"
+    | "domain_deleting"
     | "data_change_blocked"
     | "data_change_in_progress"
     | "data_change_not_applicable"
@@ -1994,6 +2005,11 @@ export type ProblemDetails = {
     | "native_auth_launch_unavailable"
     | "native_auth_provider_unavailable"
     | "native_auth_epoch_exhausted"
+    | "native_auth_revision_conflict"
+    | "native_auth_provider_incomplete"
+    | "auto_deploy_source_unavailable"
+    | "cutover_pending"
+    | "project_operation_in_progress"
     | "native_user_conflict"
     | "project_domains_conflict";
   request_id: string;
@@ -2003,6 +2019,17 @@ export type ProblemDetails = {
    */
   retry_after_seconds?: number;
   suggested_action: string;
+};
+
+/**
+ * Durable record of an accepted project creation. project_id identifies the new project; it is returned unchanged by an identical idempotent replay.
+ */
+export type ProjectCreateOperation = {
+  id: Ulid;
+  state: "queued";
+  created_at: string;
+  updated_at: string;
+  project_id: Ulid;
 };
 
 /**
@@ -2135,23 +2162,7 @@ export type DatabaseCompute = {
   environment: "dev" | "prod";
   data_mode: "shared" | "isolated";
   observed_at: string;
-  database:
-    | null
-    | FixedDatabaseCompute
-    | {
-        min_cu: number;
-        max_cu: number;
-        min_memory_gb: number;
-        max_memory_gb: number;
-        /**
-         * Configured timeout: 0 is provider default; -1 disables suspension.
-         */
-        suspend_timeout_seconds: number;
-        state: "init" | "active" | "idle";
-        pending_state: "init" | "active" | "idle" | null;
-        disabled: boolean;
-        region: string;
-      };
+  database: null | FixedDatabaseCompute;
 };
 
 /**
@@ -2255,6 +2266,7 @@ export type OperationFailure = {
     | "storage_jurisdiction_conflict"
     | "provider_state_absent"
     | "auto_deploy_plan_rejected"
+    | "auto_deploy_repository_renamed"
     | "promotion_source_stale"
     | "promotion_target_stale"
     | "project_handle_taken"
@@ -2399,6 +2411,11 @@ export type AuditLimit = number;
 export type IdempotencyKey = string;
 
 /**
+ * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
+ */
+export type IdempotencyKeyToken = string;
+
+/**
  * Use resource_etag from a fresh rollback, promotion, deletion or data-change plan. For a project address change, use etag from project status; an ETag from another representation is not accepted.
  */
 export type IfMatch = string;
@@ -2484,7 +2501,7 @@ export type ProjectLimit = number;
 export type EnvironmentId = Ulid;
 
 /**
- * Uppercase environment-variable name.
+ * Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.
  */
 export type SecretName = string;
 
@@ -4129,7 +4146,7 @@ export type CreateWorkspaceMailDomainData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -4196,7 +4213,7 @@ export type RetireWorkspaceMailDomainData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -4328,7 +4345,7 @@ export type RevokeWorkspaceMailDomainDnsAuthorizationData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -4460,7 +4477,7 @@ export type AuthorizeWorkspaceMailDomainDnsData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -4528,7 +4545,7 @@ export type DetachProjectMailDomainBindingData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -4660,7 +4677,7 @@ export type PutProjectMailDomainBindingData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -4728,7 +4745,7 @@ export type RevokeApplicationDomainIdentityData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -4858,7 +4875,7 @@ export type DeclareApplicationDomainIdentityData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -4925,7 +4942,7 @@ export type VerifyApplicationDomainIdentityData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -4992,7 +5009,7 @@ export type RevokeApplicationDomainIdentityDnsAuthorizationData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -5122,7 +5139,7 @@ export type AuthorizeApplicationDomainIdentityDnsData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -5622,6 +5639,12 @@ export type GetOrganizationReferralResponse =
 
 export type GetOrganizationAccountData = {
   body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
   path: {
     organization_id: Ulid;
   };
@@ -5926,7 +5949,7 @@ export type CreateUserApiKeyData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -6045,7 +6068,7 @@ export type SubmitFeedbackData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -6294,7 +6317,7 @@ export type RevokeCurrentSessionData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -6415,7 +6438,7 @@ export type CreateBillingCheckoutData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -6658,7 +6681,7 @@ export type ConfigureBillingRechargeData = {
      */
     "X-Request-Id"?: string;
     /**
-     * Identifies one mutation and its canonical request payload.
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
      */
     "Idempotency-Key": string;
   };
@@ -7092,9 +7115,9 @@ export type SetProjectCreditBudgetErrors = {
    */
   404: ProblemDetails;
   /**
-   * The idempotency key was already used with a different canonical request.
+   * The request failed.
    */
-  409: IdempotencyConflictProblem;
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -7209,9 +7232,9 @@ export type CreateProjectErrors = {
    */
   403: ProblemDetails;
   /**
-   * The idempotency key was already used with a different canonical request.
+   * The request failed.
    */
-  409: IdempotencyConflictProblem;
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -7230,9 +7253,9 @@ export type CreateProjectError = CreateProjectErrors[keyof CreateProjectErrors];
 
 export type CreateProjectResponses = {
   /**
-   * The mutation was accepted for asynchronous processing.
+   * The project creation was accepted for asynchronous provisioning.
    */
-  202: Operation;
+  202: ProjectCreateOperation;
 };
 
 export type CreateProjectResponse = CreateProjectResponses[keyof CreateProjectResponses];
@@ -8150,9 +8173,9 @@ export type LinkProjectSourceErrors = {
    */
   404: ProblemDetails;
   /**
-   * The idempotency key was already used with a different canonical request.
+   * The request failed.
    */
-  409: IdempotencyConflictProblem;
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -9261,9 +9284,9 @@ export type ChangeProjectHandleErrors = {
    */
   404: ProblemDetails;
   /**
-   * The idempotency key was already used with a different canonical request.
+   * The request failed.
    */
-  409: IdempotencyConflictProblem;
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -9326,9 +9349,9 @@ export type ConfigureProjectDomainsErrors = {
    */
   404: ProblemDetails;
   /**
-   * The idempotency key was already used with a different canonical request.
+   * The request failed.
    */
-  409: IdempotencyConflictProblem;
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -9454,9 +9477,9 @@ export type DeletePaidProjectDomainErrors = {
    */
   404: ProblemDetails;
   /**
-   * The idempotency key was already used with a different canonical request.
+   * The request failed.
    */
-  409: IdempotencyConflictProblem;
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -9781,9 +9804,9 @@ export type CreateDeploymentErrors = {
    */
   404: ProblemDetails;
   /**
-   * The idempotency key was already used with a different canonical request.
+   * The request failed.
    */
-  409: IdempotencyConflictProblem;
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -9947,11 +9970,18 @@ export type StreamDeploymentLogsData = {
      */
     deployment_id: Ulid;
   };
-  query?: never;
+  query?: {
+    cursor?: string;
+    limit?: number;
+  };
   url: "/v1/projects/{project_id}/deployments/{deployment_id}/logs/events";
 };
 
 export type StreamDeploymentLogsErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
   /**
    * The request failed.
    */
@@ -9967,6 +9997,10 @@ export type StreamDeploymentLogsErrors = {
   /**
    * The request failed.
    */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
   503: ProblemDetails;
 };
 
@@ -9975,7 +10009,7 @@ export type StreamDeploymentLogsError =
 
 export type StreamDeploymentLogsResponses = {
   /**
-   * A bounded normalized diagnostic event stream.
+   * A bounded normalized diagnostic event stream of one page. Each diagnostic is a diagnostic event; when more follow, a final next event carries next_cursor for the next request's cursor.
    */
   200: DeploymentDiagnostic;
 };
@@ -12281,7 +12315,7 @@ export type DeleteEnvironmentSecretData = {
      */
     environment_id: Ulid;
     /**
-     * Uppercase environment-variable name.
+     * Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.
      */
     secret_name: string;
   };
@@ -12307,9 +12341,9 @@ export type DeleteEnvironmentSecretErrors = {
    */
   404: ProblemDetails;
   /**
-   * The idempotency key was already used with a different canonical request.
+   * The request failed.
    */
-  409: IdempotencyConflictProblem;
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -12355,7 +12389,7 @@ export type PutEnvironmentSecretData = {
      */
     environment_id: Ulid;
     /**
-     * Uppercase environment-variable name.
+     * Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.
      */
     secret_name: string;
   };
@@ -12381,9 +12415,9 @@ export type PutEnvironmentSecretErrors = {
    */
   404: ProblemDetails;
   /**
-   * The idempotency key was already used with a different canonical request.
+   * The request failed.
    */
-  409: IdempotencyConflictProblem;
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -12429,7 +12463,7 @@ export type RotateEnvironmentSecretData = {
      */
     environment_id: Ulid;
     /**
-     * Uppercase environment-variable name.
+     * Uppercase environment-variable name. Set refuses a name starting with OHMYHOST_ and the platform names BETTER_AUTH_SECRET, BETTER_AUTH_URL, DATABASE_URL, HYPERDRIVE, ASSETS, FILES, IMAGES and STORAGE with a 400 whose detail is "Secret name is reserved.". Delete refuses the installed platform keys OHMYHOST_AI_KEY, OHMYHOST_MAIL_KEY, OHMYHOST_STORAGE_KEY, OHMYHOST_BROWSER_KEY and BETTER_AUTH_SECRET with the same detail.
      */
     secret_name: string;
   };
@@ -12455,9 +12489,9 @@ export type RotateEnvironmentSecretErrors = {
    */
   404: ProblemDetails;
   /**
-   * The idempotency key was already used with a different canonical request.
+   * The request failed.
    */
-  409: IdempotencyConflictProblem;
+  409: ProblemDetails;
   /**
    * The request failed.
    */

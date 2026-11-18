@@ -116,6 +116,7 @@ import type {
   Operation,
   OperationEvent,
   Project,
+  ProjectCreateOperation,
   ProjectPage,
   ProjectSource,
   ProjectStatus,
@@ -313,7 +314,7 @@ export interface LocalMcpProductClient {
     feedbackId: string,
     cursor?: string,
   ): Promise<import("@ohmyhost/sdk-ts").FeedbackStatus>;
-  createProject(input: ProjectCreateInput): Promise<Operation>;
+  createProject(input: ProjectCreateInput): Promise<ProjectCreateOperation>;
   addProjectDevelopmentEnvironment(input: {
     projectId: string;
     idempotencyKey: string;
@@ -652,7 +653,11 @@ const profileName = z
   .describe(
     "Saved login to act as (profile_list shows them). Needed only when several logins could run this call; OHMYHOST_PROFILE of this server must match it.",
   );
-const idempotencyKey = z.string().min(1).max(128);
+const idempotencyKey = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9._:-]+$/u);
 const commitSha = z.string().regex(/^[a-f0-9]{40}$/u);
 const domainName = z
   .string()
@@ -1592,7 +1597,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_schedule_set",
-    "Create or replace a named database schedule that runs SQL statements repeatedly on a timer, as the application's own runtime role, so row-level security applies. Send exactly one of cron (five-field UTC expression) or every_seconds (60 to 2678400). Each run is cancelled after timeout_ms (1000 to 30000, default 10000). Statements run in order and must be safe to repeat: write idempotent statements. Destructive: requires confirmed: true. A project whose Stop budget is reached has its schedules disabled automatically, within about an hour of the billed usage reaching the budget: the credit service does this after its hourly pgcf pass, and Continue budgets are never touched. While the budget is reached, schedule set with enabled true and schedule run are refused with project_budget_exceeded (HTTP 402). Re-enabling is manual: raise the budget (or wait for the next UTC month) and run database schedule set --enabled true again with the schedule body (read it with schedule get).",
+    "Create or replace a named database schedule that runs SQL statements repeatedly on a timer, as the application's own runtime role, so row-level security applies. Send exactly one of cron (five-field UTC expression) or every_seconds (60 to 2678400). Each run is cancelled after timeout_ms (1000 to 30000, default 10000). Statements run in order and must be safe to repeat: write idempotent statements. Destructive: requires confirmed: true. A project whose Stop budget is reached has its schedules disabled automatically, within about an hour of the billed usage reaching the budget: the credit service does this after its hourly pgcf pass, and Continue budgets are never touched. While the budget is reached, database_schedule_set with enabled true and database_schedule_run_now are refused with project_budget_exceeded (HTTP 402). Re-enabling is manual: raise the budget (or wait for the next UTC month) and call database_schedule_set again with enabled true and the same schedule body (read that body with database_schedule_list).",
     z
       .object({
         project_id: identifier,
@@ -1942,7 +1947,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "project_create",
-    "Create an ohmyho.st project. Dev is included by default; set include_development_environment to false for Prod only, or add Dev later with project_development_add. When Dev is included, choose protected (default) or public access; public means anyone with the Dev URL can open it. data_mode defaults to shared; isolated separates database/Auth records and files. Later changes use project_data_plan and project_data_change; ohmyho.st never copies data and ordinary usage prices apply. region defaults to us; new databases, files and builds use the selected us or eu region. The customer API cannot change region later. ohmyhost.yaml storage.jurisdiction must match the recorded R2 jurisdiction; read project_context_get rather than guessing. Deploy to Dev then promote the reviewed artifact, or deploy directly to Prod when authorized.",
+    "Create an ohmyho.st project. Returns project_id and the queued operation id. An identical retry with the same idempotency key returns both original IDs. Dev is included by default; set include_development_environment to false for Prod only, or add Dev later with project_development_add. When Dev is included, choose protected (default) or public access; public means anyone with the Dev URL can open it. data_mode defaults to shared; isolated separates database/Auth records and files. Later changes use project_data_plan and project_data_change; ohmyho.st never copies data and ordinary usage prices apply. region defaults to us; new databases, files and builds use the selected us or eu region. The customer API cannot change region later. ohmyhost.yaml storage.jurisdiction must match the recorded R2 jurisdiction; read project_context_get rather than guessing. Deploy to Dev then promote the reviewed artifact, or deploy directly to Prod when authorized.",
     z.object({
       organization_id: identifier,
       name: z.string().min(1).max(128),
@@ -2409,6 +2414,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
         commitSha: input.commit_sha,
         ...(input.environment === undefined ? {} : { environment: input.environment }),
       }),
+    mutationAnnotations(),
   );
   registerProductTool(
     server,
@@ -2476,7 +2482,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "operation_get",
-    "Get durable operation status and current deployment progress/reconciliation guidance. Follow progress.phase and progress.suggested_action. waiting_for_mail requires mail_domain_status now for the current verification issue and DNS records; publishing means the build completed but runtime preparation/publication is unfinished. Poll this operation after progress.next_poll_after_seconds. A queued/running operation with reconciliation.state=required needs one confirmed operation_reconcile using the same operation; pending means poll this operation after 60 seconds. Never infer deployment success from a completed reconciliation attempt or start another build to recover it. A deploy, promotion or rollback names its deployment_id in every state; when state is failed, read that deployment with deployment_logs and follow error.suggested_action before changing source.",
+    "Get durable operation status and current deployment progress/reconciliation guidance. Follow progress.phase and progress.suggested_action. waiting_for_mail requires the mail domain status now for the current verification issue and DNS records (use mail_domain_status in either MCP transport or GET /v1/projects/{project_id}/environments/{environment_id}/mail-domain over REST); publishing means the build completed but runtime preparation/publication is unfinished. Poll this operation after progress.next_poll_after_seconds. A queued/running operation with reconciliation.state=required needs one confirmed operation_reconcile using the same operation; pending means poll this operation after 60 seconds. Never infer deployment success from a completed reconciliation attempt or start another build to recover it. A deploy, promotion or rollback names its deployment_id in every state; when state is failed, read that deployment with deployment_logs and follow error.suggested_action before changing source.",
     z.object({ operation_id: identifier }),
     (client, input) => client.getOperation(input.operation_id),
   );
@@ -2902,7 +2908,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
       project_id: identifier,
       environment_id: identifier,
       domain: z.string(),
-      sending: z.boolean(),
+      sending: z.literal(true),
       receiving: z.boolean(),
       idempotency_key: idempotencyKey,
     }),
@@ -3068,7 +3074,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
       project_id: identifier,
       environment_id: identifier,
       domain: domainName,
-      sending: z.boolean(),
+      sending: z.literal(true),
       receiving: z.boolean(),
       idempotency_key: idempotencyKey,
     }),
@@ -3504,6 +3510,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     z.object({ project_id: identifier, deployment_id: identifier }),
     (client, input) =>
       client.planRollback({ projectId: input.project_id, deploymentId: input.deployment_id }),
+    mutationAnnotations(),
   );
   registerProductTool(
     server,
@@ -3534,6 +3541,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     "Plan complete project deletion",
     z.object({ project_id: identifier }),
     (client, input) => client.planDelete(input.project_id),
+    mutationAnnotations(),
   );
   registerProductTool(
     server,

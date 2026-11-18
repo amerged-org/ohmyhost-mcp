@@ -11,6 +11,12 @@ export interface MigrationSqlStatement {
   readonly tokens: readonly MigrationSqlToken[];
 }
 
+// PostgreSQL's scanner reads every non-ASCII code point as an identifier or dollar-tag byte (scan.l: ident_start,
+// ident_cont, dolq_start, dolq_cont), so the lexer uses the same classes instead of Unicode letters.
+const IDENTIFIER_START = /[A-Za-z_]|\P{ASCII}/u;
+const IDENTIFIER_PART = /[A-Za-z0-9_$]|\P{ASCII}/u;
+const DOLLAR_TAG = /^\$(?:(?:[A-Za-z_]|\P{ASCII})(?:[A-Za-z0-9_]|\P{ASCII})*)?\$/u;
+
 /** SQL-aware boundaries only; PostgreSQL remains the expression parser. */
 export function readMigrationSql(sql: string): readonly MigrationSqlStatement[] {
   const statements: MigrationSqlStatement[] = [];
@@ -20,7 +26,8 @@ export function readMigrationSql(sql: string): readonly MigrationSqlStatement[] 
   while (index < sql.length) {
     const character = sql[index] ?? "";
     const next = sql[index + 1];
-    if (/\s/u.test(character)) {
+    // PostgreSQL's scanner whitespace is ASCII only: a no-break space is an identifier byte to it.
+    if (/[ \t\n\r\f\v]/u.test(character)) {
       index += 1;
       continue;
     }
@@ -55,18 +62,26 @@ export function readMigrationSql(sql: string): readonly MigrationSqlStatement[] 
       index = skipQuoted(sql, quoteStart + 1, quote, escaped);
       kind = quote === '"' ? "identifier" : "string";
       value = sql.slice(quoteStart + 1, index - 1).replace(/""/gu, '"');
-    } else if (character === "$" && /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/u.test(sql.slice(index))) {
-      const delimiter = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/u.exec(sql.slice(index))?.[0] ?? "";
+      // PostgreSQL silently truncates a longer identifier to 63 bytes, so an over-long one cannot be admitted as written.
+      if (kind === "identifier" && new TextEncoder().encode(value).byteLength > 63) {
+        throw new DatabaseMigrationAdmissionError("invalid");
+      }
+    } else if (character === "$" && DOLLAR_TAG.test(sql.slice(index))) {
+      const delimiter = DOLLAR_TAG.exec(sql.slice(index))?.[0] ?? "";
       const end = sql.indexOf(delimiter, index + delimiter.length);
       if (end < 0) throw new DatabaseMigrationAdmissionError("invalid");
       index = end + delimiter.length;
       kind = "string";
       value = sql.slice(tokenStart, index);
-    } else if (/[\p{L}_]/u.test(character)) {
+    } else if (IDENTIFIER_START.test(character)) {
       index += 1;
-      while (index < sql.length && /[\p{L}\p{N}_$]/u.test(sql[index] ?? "")) index += 1;
+      while (index < sql.length && IDENTIFIER_PART.test(sql[index] ?? "")) index += 1;
       kind = "word";
       value = sql.slice(tokenStart, index).toLowerCase();
+      // PostgreSQL truncates an unquoted name to 63 bytes as well, so an over-long word cannot be admitted as written.
+      if (new TextEncoder().encode(sql.slice(tokenStart, index)).byteLength > 63) {
+        throw new DatabaseMigrationAdmissionError("invalid");
+      }
     } else {
       index += 1;
     }

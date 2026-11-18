@@ -791,8 +791,8 @@ export const runProductionCli = async (
   const transport = new FetchWorkosPublicTransport(signal, REQUEST_TIMEOUT_MS);
   const now = (): Date => new Date();
   const refresher = new PublicWorkosTokenRefresher(environment);
-  const boundedFetch = (): typeof globalThis.fetch =>
-    createBoundedFetch(fetch, signal, REQUEST_TIMEOUT_MS, MAX_PUBLIC_RESPONSE_BYTES);
+  const boundedFetch = (parentSignal: AbortSignal = signal): typeof globalThis.fetch =>
+    createBoundedFetch(fetch, parentSignal, REQUEST_TIMEOUT_MS, MAX_PUBLIC_RESPONSE_BYTES);
   let profile: LocalProfile | undefined;
   try {
     if (apiToken !== undefined) {
@@ -928,8 +928,8 @@ export const runProductionCli = async (
       { now },
     ),
     deviceAuthorizationPresenter: new StderrDeviceAuthorizationPresenter(io),
-    productApi: (accessToken) =>
-      new GeneratedSdkProductApi(productApiOrigin, accessToken, boundedFetch()),
+    productApi: (accessToken, parentSignal) =>
+      new GeneratedSdkProductApi(productApiOrigin, accessToken, boundedFetch(parentSignal)),
     // Login receives read-only identity, workspace and GitHub queries instead of the product surface.
     accountProfile: async (accessToken) =>
       await new GeneratedSdkProductApi(

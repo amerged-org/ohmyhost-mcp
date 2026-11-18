@@ -68,6 +68,12 @@ export const PROBLEM_POLICY = {
       "This workspace has no GitHub connection yet. Run 'ohmyhost github connect --organization ULID --idempotency-key KEY --json' for it, complete its browser link, then repeat the original source link. If the project belongs to another account, use that account's login instead; error.acting_as in the CLI and MCP names the login this ran as.",
     title: "GitHub connection required",
   },
+  connection_revoked: {
+    status: 403,
+    retryable: false,
+    action: "Remove the ohmyho.st connector from your agent and add it again to reconnect.",
+    title: "Connection revoked",
+  },
   github_connection_revoked: {
     status: 409,
     retryable: false,
@@ -375,10 +381,10 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "The confirmation token does not match this action or the project's current state. A deletion is also refused while a SQL export of the project is being captured, for up to about ten minutes ('ohmyhost export get'). Then create a new plan and confirm with its confirmation_token and resource_etag before the token expires.",
+      "The confirmation token does not match this action or the project's current state. Then create a new plan and confirm with its confirmation_token and resource_etag before the token expires.",
     title: "Confirmation invalid",
     restAction:
-      "The confirmation token does not match this action or the project's current state. A deletion is also refused while a SQL export of the project is being captured, for up to about ten minutes ('ohmyhost export get'). Then create a new plan and confirm with its confirmation_token and resource_etag before the token expires.",
+      "The confirmation token does not match this action or the project's current state. Then create a new plan and confirm with its confirmation_token and resource_etag before the token expires.",
   },
   etag_mismatch: {
     status: 409,
@@ -651,6 +657,20 @@ export const PROBLEM_POLICY = {
       "Review DNS for the requested hostname and resolve the conflicting delegation or another project's managed records. Preserve mailbox MX, TXT and CAA records. Then repeat the original domain paid apply or delete with the same hostname and idempotency key; do not create another deployment or repeatedly resubmit unchanged conflicts.",
     title: "Domain DNS records conflict",
   },
+  domain_already_configured: {
+    status: 409,
+    retryable: false,
+    action:
+      "This project already has one Paid domain connection, for another hostname or one a different member configured. Read it with 'ohmyhost domain paid status --project ULID --json'. Delete it with 'ohmyhost domain paid delete --project ULID --hostname CURRENT_HOST --yes --json' only to replace it, then repeat this request with a new idempotency key. Repeating it unchanged cannot work.",
+    title: "Project already has a domain connection",
+  },
+  domain_deleting: {
+    status: 409,
+    retryable: false,
+    action:
+      "The Paid domain connection of this project is still being deleted. Wait until 'ohmyhost domain paid status --project ULID --json' shows it deleted, then repeat this request with a new idempotency key. Repeating it before the deletion finishes cannot work.",
+    title: "Domain connection is being deleted",
+  },
   data_change_blocked: {
     status: 409,
     retryable: true,
@@ -721,6 +741,41 @@ export const PROBLEM_POLICY = {
     title: "Native Auth policy changes exhausted",
     action:
       "This project's Native Auth policy has reached its revision limit, so no further policy change is accepted. Do not retry. Contact support with the request_id of this response.",
+  },
+  native_auth_revision_conflict: {
+    status: 409,
+    retryable: false,
+    title: "Native Auth state changed",
+    action:
+      "The configuration or provider changed after your configurationRevision. Read it with 'ohmyhost auth config get --project ULID --environment ULID --json' or 'ohmyhost auth provider get --project ULID --environment ULID --provider google|github --json', then repeat the change with its current revision and a new idempotency key.",
+  },
+  cutover_pending: {
+    status: 409,
+    retryable: true,
+    title: "Database provider cutover is pending",
+    action:
+      "A database provider cutover of this project has not finished. Read the project with 'ohmyhost project status --project ULID --json', wait until it reports no pending cutover, then repeat the request with a new idempotency key.",
+  },
+  project_operation_in_progress: {
+    status: 409,
+    retryable: true,
+    title: "Project change is still running",
+    action:
+      "Another change to this project, such as a database write, a compute change or a data change, has not finished. Read the project with 'ohmyhost project status --project ULID --json', wait until it completes, then repeat the request with a new idempotency key. A deletion is also refused while a SQL export of the project is being captured, for up to about ten minutes ('ohmyhost export get').",
+  },
+  auto_deploy_source_unavailable: {
+    status: 409,
+    retryable: false,
+    title: "No ready GitHub source for auto-deploy",
+    action:
+      "Auto-deploy follows a linked GitHub repository. If this workspace has no GitHub connection, run 'ohmyhost github connect --organization ULID --idempotency-key KEY --json' and complete its browser link; then link the repository with 'ohmyhost link --project ULID --repository-owner OWNER --repository-name REPOSITORY --idempotency-key KEY --json'. Then enable auto-deploy again with a new idempotency key. A platform-hosted source has no GitHub push to follow.",
+  },
+  native_auth_provider_incomplete: {
+    status: 409,
+    retryable: false,
+    title: "Native Auth provider is incomplete",
+    action:
+      "A sign-in provider can be enabled only with its client ID and client secret. Store them with 'ohmyhost auth provider set --project ULID --environment ULID --provider google|github --client-id ID --stdin --idempotency-key KEY --json' (the secret on stdin), then enable it with the current revision and a new idempotency key. Repeating unchanged does not help.",
   },
   project_domains_conflict: {
     status: 409,

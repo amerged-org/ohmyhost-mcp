@@ -179,11 +179,76 @@ function pinsSearchPath(tokens: readonly MigrationSqlToken[]): boolean {
   return found;
 }
 
+/**
+ * Joins the tokens with single spaces, except around a `.` symbol, so `public . t` reads `public.t`. Work stays linear
+ * in the token count: a regex over the joined text would backtrack quadratically through a quoted identifier's spaces.
+ */
+function normalizeTokens(tokens: readonly MigrationSqlToken[]): string {
+  let normalized = "";
+  let afterDot = true;
+  for (const token of tokens) {
+    const isDot = token.kind === "symbol" && token.value === ".";
+    if (!isDot && !afterDot) normalized += " ";
+    normalized += token.kind === "string" ? "'literal'" : token.text.toLowerCase();
+    afterDot = isDot;
+  }
+  return normalized;
+}
+
+/**
+ * Recognises `ALTER TABLE [IF EXISTS] [ONLY] name ADD [COLUMN|CONSTRAINT] [IF NOT EXISTS] name ...` from the tokens, so a
+ * quoted, punctuated or non-ASCII name is read as CREATE TABLE reads it. Only a top-level comma that starts another
+ * action can change the statement, so every comma outside parentheses and brackets must be followed by ADD; a comma
+ * inside them, such as the elements of ARRAY[...], belongs to an expression. Parentheses and brackets must nest, so a
+ * stray, mismatched or unclosed one refuses the statement. The rest of the column definition is left to PostgreSQL,
+ * as before.
+ */
+function readAdditiveAlterTable(tokens: readonly MigrationSqlToken[]): boolean {
+  let index = 0;
+  const take = (keyword: string): boolean => {
+    if (!isSqlKeyword(tokens[index], keyword)) return false;
+    index += 1;
+    return true;
+  };
+  const takeName = (): boolean => {
+    const token = tokens[index];
+    if (token?.kind !== "word" && token?.kind !== "identifier") return false;
+    index += 1;
+    return true;
+  };
+  if (!take("alter") || !take("table")) return false;
+  if (take("if") && !take("exists")) return false;
+  take("only");
+  if (!takeName()) return false;
+  while (tokens[index]?.kind === "symbol" && tokens[index]?.value === ".") {
+    index += 1;
+    if (!takeName()) return false;
+  }
+  if (!take("add")) return false;
+  if (!take("column")) take("constraint");
+  if (take("if") && (!take("not") || !take("exists"))) return false;
+  if (!takeName()) return false;
+  const expectedClosers: string[] = [];
+  for (; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token?.kind !== "symbol") continue;
+    if (token.value === "(") expectedClosers.push(")");
+    else if (token.value === "[") expectedClosers.push("]");
+    else if (token.value === ")" || token.value === "]") {
+      if (expectedClosers.pop() !== token.value) return false;
+    } else if (
+      token.value === "," &&
+      expectedClosers.length === 0 &&
+      !isSqlKeyword(tokens[index + 1], "add")
+    ) {
+      return false;
+    }
+  }
+  return expectedClosers.length === 0;
+}
+
 function admitStatement(tokens: readonly MigrationSqlToken[], sql: string): void {
-  const normalized = tokens
-    .map((token) => (token.kind === "string" ? "'literal'" : token.text.toLowerCase()))
-    .join(" ")
-    .replace(/\s*\.\s*/gu, ".");
+  const normalized = normalizeTokens(tokens);
   if (normalized === "set check_function_bodies = false") return;
   if (/^create\s+function\b/u.test(normalized)) {
     rejectFunctionBodyReferences(sql);
@@ -207,9 +272,7 @@ function admitStatement(tokens: readonly MigrationSqlToken[], sql: string): void
       normalized,
     ) ||
     /^create\s+(?:unique\s+)?index\b/u.test(normalized) ||
-    /^alter\s+table\s+(?:only\s+)?[a-z0-9_."]+\s+add\s+(?:(?:column|constraint)\s+)?(?:if\s+not\s+exists\s+)?[a-z0-9_"]+/u.test(
-      normalized,
-    ) ||
+    readAdditiveAlterTable(tokens) ||
     /^comment\s+on\b/u.test(normalized)
   ) {
     if (/^create\s+or\s+replace\b/u.test(normalized)) {

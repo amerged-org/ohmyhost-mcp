@@ -102,6 +102,8 @@ function browserOrigin(value: unknown, allowWebSocket: boolean): value is string
     return (
       (url.protocol === "https:" || (allowWebSocket && url.protocol === "wss:")) &&
       url.origin === value &&
+      // Port 0 serializes unchanged, but the 0336 browser-policy triggers require a first digit of 1 to 9.
+      (url.port === "" || /^[1-9][0-9]{0,4}$/u.test(url.port)) &&
       url.username === "" &&
       url.password === "" &&
       url.pathname === "/" &&

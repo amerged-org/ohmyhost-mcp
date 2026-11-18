@@ -229,6 +229,21 @@ export function isManagedSourcePath(value: unknown): value is string {
   );
 }
 
+/**
+ * Whether a path is a file and also a folder of another path. Git cannot store both, so a snapshot
+ * with such a pair fails at the Git write; this matches its check segment by segment, not by prefix.
+ */
+export function managedSourcePathConflict(paths: readonly string[]): boolean {
+  const names = new Set(paths);
+  return paths.some((candidate) => {
+    const segments = candidate.split("/");
+    for (let index = 1; index < segments.length; index++) {
+      if (names.has(segments.slice(0, index).join("/"))) return true;
+    }
+    return false;
+  });
+}
+
 /** Matches the existing strict USTAR build inspector, including its source/ archive root. */
 function managedSourceTarPath(value: string): boolean {
   const path = `source/${value}`;
@@ -521,7 +536,7 @@ function manifest(value: unknown): void {
     seen.add(String(entry["path"]));
     total += Number(entry["byte_length"]);
   }
-  if (total > MANAGED_SOURCE_LIMITS.treeBytes) invalid();
+  if (total > MANAGED_SOURCE_LIMITS.treeBytes || managedSourcePathConflict([...seen])) invalid();
 }
 
 function base64(value: unknown): number {

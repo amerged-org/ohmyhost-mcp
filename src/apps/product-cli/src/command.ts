@@ -774,7 +774,20 @@ export type ProductCliCommand =
       readonly kind: "deployment-logs";
       readonly projectId: string;
       readonly deploymentId: string;
-      readonly follow: true;
+      readonly cursor?: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "deployment-list";
+      readonly projectId: string;
+      readonly cursor?: string;
+      readonly limit?: number;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "deployment-get";
+      readonly projectId: string;
+      readonly deploymentId: string;
       readonly credentialStore: "native";
     }
   | {
@@ -1112,7 +1125,7 @@ function parseSourceCommand(values: string[], wait: boolean): SourceCliCommand {
       (operationId === undefined || !/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(operationId)))
   )
     throw new InvalidCommandError();
-  const limit = options["--limit"] === undefined ? undefined : Number(options["--limit"]);
+  const limit = options["--limit"] === undefined ? undefined : decimalLimit(options["--limit"]);
   if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1 || limit > 100))
     throw new InvalidCommandError();
   return {
@@ -1250,6 +1263,8 @@ export type RecognizedCommandLabel =
   | "deploy"
   | "logs"
   | "deployment logs"
+  | "deployment list"
+  | "deployment get"
   | "rollback plan"
   | "rollback"
   | "deployment promote plan"
@@ -1483,6 +1498,8 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     if (value === "deployment" && values[0] === "promote")
       return values[1] === "plan" ? "deployment promote plan" : "deployment promote";
     if (value === "deployment" && values[0] === "logs") return "deployment logs";
+    if (value === "deployment" && values[0] === "list") return "deployment list";
+    if (value === "deployment" && values[0] === "get") return "deployment get";
     if (value === "delete") return values[0] === "plan" ? "delete plan" : "delete";
     if (value === "secret") {
       if (values[0] === "list") return "secret list";
@@ -1718,7 +1735,7 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
         ...(options["--client-id"] ? { clientId: options["--client-id"] } : {}),
       };
     else if (actionKey === "users_list") {
-      const limit = options["--limit"] === undefined ? undefined : Number(options["--limit"]);
+      const limit = options["--limit"] === undefined ? undefined : decimalLimit(options["--limit"]);
       if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 100))
         throw new InvalidCommandError();
       request = {
@@ -1865,7 +1882,7 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
         name.length > 64 ||
         /\p{Cc}/u.test(name) ||
         !idempotencyKey ||
-        !/^[A-Za-z0-9._:-]{1,128}$/u.test(idempotencyKey) ||
+        !IDEMPOTENCY_KEY.test(idempotencyKey) ||
         !outputPath
       )
         throw new InvalidCommandError();
@@ -2108,7 +2125,7 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
     if (!/^(0|[1-9][0-9]{0,12})(\.[0-9]{1,6})?$/u.test(value)) throw new InvalidCommandError();
     const [whole, fraction = ""] = value.split(".");
     const amount = BigInt(whole ?? "0") * 1_000_000n + BigInt(fraction.padEnd(6, "0"));
-    if (amount > 9223372036854775807n) throw new InvalidCommandError();
+    if (amount > 9007199254740991n) throw new InvalidCommandError();
     return {
       kind: "budget-set",
       projectId,
@@ -2535,7 +2552,7 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
     if (subcommand === "list") {
       if (yes || wait || follow || stdin) throw new InvalidCommandError();
       const options = parseOptionalOptions(values, ["--cursor", "--limit"]);
-      const limit = options["--limit"] === undefined ? 50 : Number(options["--limit"]);
+      const limit = options["--limit"] === undefined ? 50 : decimalLimit(options["--limit"]);
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
         throw new InvalidCommandError();
       }
@@ -3527,13 +3544,63 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
   }
   if (first === "deployment" && values[0] === "logs") {
     values.shift();
-    if (!follow || yes || wait || stdin) throw new InvalidCommandError();
-    const options = parseOptions(values, ["--project", "--deployment"]);
+    // The command reads one page of diagnostics; it never streams, so --follow is refused.
+    if (follow || yes || wait || stdin) throw new InvalidCommandError();
+    const options = parseOptionalOptions(values, ["--project", "--deployment", "--cursor"]);
+    const projectId = options["--project"];
+    const deploymentId = options["--deployment"];
+    const cursor = options["--cursor"];
+    if (
+      projectId === undefined ||
+      deploymentId === undefined ||
+      !ORGANIZATION_ULID.test(projectId) ||
+      !ORGANIZATION_ULID.test(deploymentId) ||
+      (cursor !== undefined && !/^[A-Za-z0-9_-]+$/u.test(cursor))
+    )
+      throw new InvalidCommandError();
     return {
       kind: "deployment-logs",
+      projectId,
+      deploymentId,
+      ...(cursor === undefined ? {} : { cursor }),
+      credentialStore,
+    };
+  }
+  if (first === "deployment" && values[0] === "list") {
+    values.shift();
+    if (yes || wait || follow || stdin) throw new InvalidCommandError();
+    const options = parseOptionalOptions(values, ["--project", "--cursor", "--limit"]);
+    const projectId = options["--project"];
+    const cursor = options["--cursor"];
+    const limit = options["--limit"] === undefined ? undefined : decimalLimit(options["--limit"]);
+    if (
+      projectId === undefined ||
+      !ORGANIZATION_ULID.test(projectId) ||
+      (cursor !== undefined && !/^[A-Za-z0-9_-]+$/u.test(cursor)) ||
+      (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1 || limit > 100))
+    )
+      throw new InvalidCommandError();
+    return {
+      kind: "deployment-list",
+      projectId,
+      ...(cursor === undefined ? {} : { cursor }),
+      ...(limit === undefined ? {} : { limit }),
+      credentialStore,
+    };
+  }
+  if (first === "deployment" && values[0] === "get") {
+    values.shift();
+    if (yes || wait || follow || stdin) throw new InvalidCommandError();
+    const options = parseOptions(values, ["--project", "--deployment"]);
+    if (
+      !ORGANIZATION_ULID.test(options["--project"]) ||
+      !ORGANIZATION_ULID.test(options["--deployment"])
+    )
+      throw new InvalidCommandError();
+    return {
+      kind: "deployment-get",
       projectId: options["--project"],
       deploymentId: options["--deployment"],
-      follow: true,
       credentialStore,
     };
   }
@@ -3864,15 +3931,16 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
     let request: ManagedMailCommand,
       label: Extract<ProductCliCommand, { kind: "managed-mail" }>["label"];
     if (area === "setup" || (area === "domain" && sub === "set")) {
+      // The managed domain always sends: the API accepts only sending true, so any other value is a usage error.
       const sending = required("--sending"),
         receiving = required("--receiving");
-      if (!["true", "false"].includes(sending) || !["true", "false"].includes(receiving))
+      if (sending !== "true" || !["true", "false"].includes(receiving))
         throw new InvalidCommandError();
       request = {
         ...scope,
         action: "configure",
         domain: required("--domain"),
-        sending: sending === "true",
+        sending: true,
         receiving: receiving === "true",
         idempotencyKey: required("--idempotency-key"),
       };
@@ -3952,7 +4020,8 @@ const parseOptions = <T extends string>(
     if (option === undefined || !allowed.includes(option as T) || !isValue(value)) {
       throw new InvalidCommandError();
     }
-    if (option === "--idempotency-key" && value.length > 128) throw new InvalidCommandError();
+    if (option === "--idempotency-key" && !IDEMPOTENCY_KEY.test(value))
+      throw new InvalidCommandError();
     if (option in result) throw new InvalidCommandError();
     result[option as T] = value;
   }
@@ -3977,7 +4046,8 @@ const parseOptionalOptions = <T extends string>(
     if (option === undefined || !allowed.includes(option as T) || !isValue(value)) {
       throw new InvalidCommandError();
     }
-    if (option === "--idempotency-key" && value.length > 128) throw new InvalidCommandError();
+    if (option === "--idempotency-key" && !IDEMPOTENCY_KEY.test(value))
+      throw new InvalidCommandError();
     if (option in result) throw new InvalidCommandError();
     result[option as T] = value;
   }
@@ -3998,6 +4068,11 @@ const accessTtlSeconds = (value: string | undefined): number => {
 
 /** A platform organization identifier as the API returns it. */
 const ORGANIZATION_ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u;
+/** The Idempotency-Key set that IdempotencyKeyToken documents (letters, digits and . _ : -, 1 to 128 characters); the CLI refuses any other key before a request is sent. */
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{1,128}$/u;
+/** A --limit written as a decimal integer: no sign, prefix, exponent or leading zero. Anything else is NaN, which fails the range check. */
+const decimalLimit = (value: string): number =>
+  /^(?:0|[1-9][0-9]*)$/u.test(value) ? Number(value) : Number.NaN;
 
 /** The account a command handed to a terminal must run as; never a credential. */
 export interface HandedAccount {

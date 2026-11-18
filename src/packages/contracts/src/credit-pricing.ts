@@ -8,7 +8,7 @@ export interface OrganizationCreditUsage {
   from: string;
   /** What each project has used so far in `period`. */
   projects: { project_id: string; used_micros: string }[];
-  /** The credit-log lines of the last up to 14 UTC days, grouped by day, project and meter, oldest day first. */
+  /** The credit-log charges of the last up to 14 UTC days, grouped by day, project and meter, oldest day first; refunds are not netted. */
   days: {
     day: string;
     projects: {

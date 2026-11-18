@@ -172,6 +172,7 @@ import {
   getAccountProfile,
   getCurrentIdentity,
   getDeployment,
+  listDeployments,
   getProjectSourceAutoDeploy,
   getProjectStatus,
   getPaidProjectDomain,
@@ -224,6 +225,7 @@ import {
   type GuardedActionPlan,
   type Operation,
   type OperationEvent,
+  type ProjectCreateOperation,
   type EnvironmentSecret,
   type EnvironmentSecretPage,
   type FunctionRunPage,
@@ -239,6 +241,7 @@ import {
   type PaidDomainPlan,
   type ProjectDatabaseQueryResult,
   type DeploymentDiagnosticPage,
+  type DeploymentPage,
   type Deployment,
   type SourceAutoDeploy,
 } from "@ohmyhost/sdk-ts";
@@ -606,7 +609,7 @@ export interface ProductApi {
     feedbackId: string,
     cursor?: string,
   ): Promise<import("@ohmyhost/sdk-ts").FeedbackStatus>;
-  createProject(input: ProjectCreateInput): Promise<Operation>;
+  createProject(input: ProjectCreateInput): Promise<ProjectCreateOperation>;
   addProjectDevelopmentEnvironment(input: {
     readonly projectId: string;
     readonly idempotencyKey: string;
@@ -664,6 +667,11 @@ export interface ProductApi {
     readonly projectId: string;
     readonly deploymentId: string;
   }): Promise<Deployment>;
+  listDeployments(input: {
+    readonly projectId: string;
+    readonly cursor?: string;
+    readonly limit?: number;
+  }): Promise<DeploymentPage>;
   /**
    * One connection to the operation's events, resumed after `lastEventId` when given. It ends,
    * without retrying, when the server closes it or refuses it; the caller decides what follows.
@@ -1761,7 +1769,7 @@ export class GeneratedSdkProductApi implements ProductApi {
       ),
     );
   }
-  public async createProject(input: ProjectCreateInput): Promise<Operation> {
+  public async createProject(input: ProjectCreateInput): Promise<ProjectCreateOperation> {
     return createProject(
       {
         "Idempotency-Key": input.idempotencyKey,
@@ -1991,6 +1999,21 @@ export class GeneratedSdkProductApi implements ProductApi {
       )
     ).stream;
   }
+  public async listDeployments(input: {
+    readonly projectId: string;
+    readonly cursor?: string;
+    readonly limit?: number;
+  }): Promise<DeploymentPage> {
+    return listDeployments(
+      {
+        project_id: input.projectId,
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      },
+      { client: this.#client },
+    );
+  }
+
   public async getDeploymentLogs(input: {
     readonly projectId: string;
     readonly deploymentId: string;

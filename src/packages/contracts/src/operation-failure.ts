@@ -23,7 +23,7 @@ const failures = {
   ],
   operation_abandoned: [
     "ohmyho.st stopped this operation before it finished and ended it.",
-    "Repeating this operation cannot resume it. Read project status for what is live; if this operation names a deployment_id, read 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' or MCP deployment_logs. Then submit the request once more with a new idempotency key: a deployment, promotion, rollback or deletion from a fresh plan, a rename with the ETag from project status. If it ends the same way, report both operation IDs through feedback.",
+    "Repeating this operation cannot resume it. Read project status for what is live; if this operation names a deployment_id, read 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --json' or MCP deployment_logs. Then submit the request once more with a new idempotency key: a deployment, promotion, rollback, deletion or data change from a fresh plan, a rename with the ETag from project status. If it ends the same way, report both operation IDs through feedback.",
   ],
   database_write_rejected: [
     "The database rejected this write; it was not committed.",
@@ -80,7 +80,7 @@ const failures = {
   ],
   operation_failed: [
     "The operation failed.",
-    "Read project status and, if this operation names a deployment_id, its diagnostics with 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json'. Without one (a source link or project creation), check project status or project list, then repeat that command once with a new idempotency key. If it fails again, report the operation ID through feedback.",
+    "Read project status and, if this operation names a deployment_id, its diagnostics with 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --json' (next page: --cursor <next_cursor>). Without one (a source link or project creation), check project status or project list, then repeat that command once with a new idempotency key. If it fails again, report the operation ID through feedback.",
   ],
   build_not_started: [
     "The deployment ended without starting a build.",
@@ -88,7 +88,7 @@ const failures = {
   ],
   build_failed: [
     "The build did not produce a verified deployable artifact.",
-    "Read the BUILD_FAILED item of its deployment_id with 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' or MCP deployment_logs. Its excerpt shows install and build output: fix that error, save or push the corrected version and plan its commit. Without an excerpt the build printed nothing, passed the 8-minute limit or failed inside ohmyho.st: plan the same commit once more, and report the operation ID through feedback if it fails again.",
+    "Read the BUILD_FAILED item of its deployment_id with 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --json' or MCP deployment_logs. Its excerpt shows install and build output: fix that error, save or push the corrected version and plan its commit. Without an excerpt the build printed nothing, passed the 8-minute limit or failed inside ohmyho.st: plan the same commit once more, and report the operation ID through feedback if it fails again.",
   ],
   insufficient_organization_credits: [
     "The organization does not have sufficient available credits for this operation.",
@@ -104,11 +104,11 @@ const failures = {
   ],
   database_migration_failed: [
     "The database migrations were not applied; none of this deployment's new migration files took effect.",
-    "Read the DATABASE_MIGRATION_FAILED item in 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' and fix what it names; run 'ohmyhost init --dry-run --json' for migration_sql_not_admitted. Keep applied files unchanged, give new files later timestamps, and add to existing tables only nullable columns without default and non-unique indexes. Save or push the corrected version and plan its commit; never reset the database.",
+    "Read the DATABASE_MIGRATION_FAILED item in 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --json' (next page: --cursor <next_cursor>) and fix what it names; run 'ohmyhost init --dry-run --json' for migration_sql_not_admitted. Keep applied files unchanged, give new files later timestamps, and add to existing tables only nullable columns without default and non-unique indexes. Save or push the corrected version and plan its commit; never reset the database.",
   ],
   runtime_candidate_failed: [
     "The deployed candidate failed its runtime checks.",
-    "Read the HEALTH_CHECK_FAILED item with 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --follow --json' or MCP deployment_logs. ohmyhost.yaml runtime.healthcheck (default /) must answer 2xx to a cookieless GET without redirect; status_code and, for owners, excerpt show the answer. After promotion or rollback, fix the environment's secrets and plan again; otherwise fix the app, save or push the corrected version and plan its commit. No item: plan once, then report.",
+    "Read the HEALTH_CHECK_FAILED item with 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --json' or MCP deployment_logs. ohmyhost.yaml runtime.healthcheck (default /) must answer 2xx to a cookieless GET without redirect; status_code and, for owners, excerpt show the answer. After promotion or rollback, fix the environment's secrets and plan again; otherwise fix the app, save or push the corrected version and plan its commit. No item: plan once, then report.",
   ],
   runtime_candidate_rejected: [
     "The runtime refused to load the built Worker.",
@@ -125,6 +125,10 @@ const failures = {
   auto_deploy_plan_rejected: [
     "The GitHub push could not be planned for deployment.",
     "Read error.detail: it names the file, the rule and the required change. Make that change, commit and push it; the next push is planned again. Without error.detail, plan the pushed commit explicitly with 'ohmyhost plan --project ULID --commit SHA --json' or MCP deployment_plan to read the reason. Replaying this failed operation cannot start a build.",
+  ],
+  auto_deploy_repository_renamed: [
+    "The GitHub repository was renamed after this project linked it, so the pushed commit was not deployed.",
+    "Re-link the repository under its current name: run 'ohmyhost link --project PROJECT_ULID --repository-owner OWNER --repository-name NAME --idempotency-key KEY1 --json', then enable auto-deploy again with 'ohmyhost source auto-deploy set --project PROJECT_ULID --branch BRANCH --enabled true --idempotency-key KEY2 --json' and push again. Use a new idempotency key for each. Replaying this failed operation cannot deploy the commit.",
   ],
   promotion_source_stale: [
     "The Dev deployment changed before promotion could start.",
@@ -246,7 +250,7 @@ export function publicOperationReconciliation(
     observed_at: observation.observed_at,
     suggested_action:
       observation.state === "required"
-        ? "Confirm reconciliation of this same operation; preserve its existing build and resources. Do not submit another deployment."
+        ? "Confirm reconciliation of this same operation with POST /v1/operations/{operation_id}:reconcile; preserve its existing build, data and resources. Do not submit another deployment or data change."
         : "Reconciliation is running. Poll this same operation after 60 seconds; do not start another reconciliation or deployment.",
   });
 }

@@ -1219,6 +1219,51 @@ function validDelivery(input: Readonly<Record<string, unknown>>): boolean {
   );
 }
 
+/** One page of a project's deployments, newest first; each record is checked where it is read. */
+export interface DeploymentListPage {
+  readonly items: readonly Readonly<Record<string, unknown>>[];
+  readonly next_cursor: string | null;
+}
+
+export const parseDeploymentPage = (value: unknown): DeploymentListPage => {
+  const input = exactRecord(value, ["items", "next_cursor"]);
+  const items = input["items"];
+  const cursor = input["next_cursor"];
+  if (
+    !Array.isArray(items) ||
+    (cursor !== undefined &&
+      cursor !== null &&
+      (typeof cursor !== "string" || !/^[A-Za-z0-9_-]+$/u.test(cursor)))
+  )
+    throw new ResponseContractError();
+  return {
+    items: items.map((item) => parseDeploymentRecord(item)),
+    next_cursor: typeof cursor === "string" ? cursor : null,
+  };
+};
+
+/** The keys of the Deployment schema, which admits no other field. */
+const DEPLOYMENT_RECORD_KEYS = [
+  "id",
+  "project_id",
+  "operation_id",
+  "commit_sha",
+  "source_digest",
+  "build_plan_digest",
+  "artifact_digest",
+  "status",
+  "url",
+  "created_at",
+  "updated_at",
+];
+
+export const parseDeploymentRecord = (value: unknown): Readonly<Record<string, unknown>> => {
+  const record = exactRecord(value, DEPLOYMENT_RECORD_KEYS);
+  if (!isUlid(record["id"]) || typeof record["status"] !== "string")
+    throw new ResponseContractError();
+  return record;
+};
+
 export const parseDeploymentPlan = (value: unknown): Readonly<Record<string, unknown>> => {
   const input = exactRecord(value, [
     "id",
@@ -1433,6 +1478,26 @@ export const parseSafeProblem = (value: unknown): SafeProblem => {
       (retryAfter === undefined ? "" : ` Retry after ${String(retryAfter)} seconds.`),
     ...(retryAfter === undefined ? {} : { retryAfterSeconds: retryAfter as number }),
   };
+};
+
+/** The accepted project creation: its operation and the identifier of the new project. */
+export interface AcceptedProjectCreation {
+  readonly operation: PublicOperation;
+  readonly project_id: string;
+}
+
+export const parseProjectCreateAccepted = (value: unknown): AcceptedProjectCreation => {
+  const fields = ["created_at", "id", "project_id", "state", "updated_at"];
+  const input = exactRecord(value, fields);
+  const { project_id: projectId, ...operation } = input;
+  if (
+    Object.keys(input).length !== fields.length ||
+    operation["state"] !== "queued" ||
+    !isUlid(projectId)
+  ) {
+    throw new ResponseContractError();
+  }
+  return { operation: parseOperation(operation), project_id: projectId };
 };
 
 export const parseOperation = (value: unknown): PublicOperation => {
