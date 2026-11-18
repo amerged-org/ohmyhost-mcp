@@ -1,6 +1,6 @@
 {
   "name": "@amerged/ohmyhost-mcp",
-  "version": "0.1.66",
+  "version": "0.1.67",
   "type": "module",
   "engines": {
     "node": ">=22"
