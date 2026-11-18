@@ -1,6 +1,6 @@
 {
   "name": "@ohmyhost/product-cli",
-  "version": "0.1.66",
+  "version": "0.1.67",
   "private": true,
   "ohmyhost": {
     "deployment": "production",

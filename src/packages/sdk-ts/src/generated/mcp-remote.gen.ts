@@ -72,9 +72,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "048aebe1bf5cf6a90904447a535656954b0a14aa0dfd055246191f0674c58403";
+  "169544a84c5bf8e63c5261d2aa895adccfd1a34807db4e57d7e94fdd8817ba09";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.66";
+export const remoteMcpReleaseVersion = "0.1.67";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -1328,7 +1328,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/environments/{environment_id}/auth/providers/{provider}",
     summary: "Read a Native Auth provider",
     description:
-      "Requires the current project Owner for this environment. Source capability and owner pause are independent.",
+      "Requires the current project Owner. Returns the exact OAuth callback for the selected environment once its canonical origin is configured.",
     disposition: "named",
     toolNames: ["native_auth_provider_get"],
     parameters: [
@@ -1441,7 +1441,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/environments/{environment_id}/auth/providers/{provider}",
     summary: "Update a Native Auth provider",
     description:
-      "Requires the current project Owner for this environment. Source capability and owner pause are independent.",
+      "Requires the current project Owner. Google and GitHub can be enabled for projects on the Native Auth launch allowlist using the customer's OAuth client ID and secret for this environment. Use the callback returned by the read operation. Source capability and owner pause are independent.\n",
     disposition: "protected-handoff",
     toolNames: ["native_auth_provider_set", "native_auth_provider_secret_input_request"],
     reason:

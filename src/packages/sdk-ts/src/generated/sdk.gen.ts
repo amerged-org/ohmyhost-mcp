@@ -991,7 +991,7 @@ export const updateNativeAuthConfiguration = <ThrowOnError extends boolean = tru
 /**
  * Read a Native Auth provider
  *
- * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ * Requires the current project Owner. Returns the exact OAuth callback for the selected environment once its canonical origin is configured.
  */
 export const getNativeAuthProvider = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -1037,7 +1037,8 @@ export const getNativeAuthProvider = <ThrowOnError extends boolean = true>(
 /**
  * Update a Native Auth provider
  *
- * Requires the current project Owner for this environment. Source capability and owner pause are independent.
+ * Requires the current project Owner. Google and GitHub can be enabled for projects on the Native Auth launch allowlist using the customer's OAuth client ID and secret for this environment. Use the callback returned by the read operation. Source capability and owner pause are independent.
+ *
  */
 export const updateNativeAuthProvider = <ThrowOnError extends boolean = true>(
   parameters: {
