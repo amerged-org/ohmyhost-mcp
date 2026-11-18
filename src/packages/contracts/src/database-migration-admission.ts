@@ -38,6 +38,26 @@ export interface DatabaseMigrationAdmission {
 export function admitExpandOnlyMigrations(
   migrations: readonly DatabaseMigrationInput[],
 ): DatabaseMigrationAdmission {
+  return admitMigrationsAfterAppliedPrefix(migrations, 0);
+}
+
+/**
+ * Admits a bundle whose first `appliedCount` files are already proven applied by the immutable ledger. Every file keeps
+ * the structural rules (count, ordered unique paths, sizes); only the pending files are parsed against the current SQL
+ * policy. The caller must derive `appliedCount` from a ledger it has read under the migrations lock and matched
+ * path-by-path and digest-by-digest against these files; the count itself proves nothing.
+ */
+export function admitMigrationsAfterAppliedPrefix(
+  migrations: readonly DatabaseMigrationInput[],
+  appliedCount: number,
+): DatabaseMigrationAdmission {
+  if (
+    !Number.isSafeInteger(appliedCount) ||
+    appliedCount < 0 ||
+    (Array.isArray(migrations) && appliedCount > migrations.length)
+  ) {
+    throw new DatabaseMigrationAdmissionError("invalid");
+  }
   if (
     !Array.isArray(migrations) ||
     migrations.length === 0 ||
@@ -48,7 +68,7 @@ export function admitExpandOnlyMigrations(
   let previousPath = "";
   let totalBytes = 0;
   let statementCount = 0;
-  const files = migrations.map((migration) => {
+  const files = migrations.map((migration, index) => {
     if (
       typeof migration !== "object" ||
       migration === null ||
@@ -65,6 +85,8 @@ export function admitExpandOnlyMigrations(
     if (totalBytes > MAX_MIGRATION_TOTAL_BYTES || migration.body.includes(0)) {
       throw new DatabaseMigrationAdmissionError("invalid");
     }
+    // Its bytes are the ones the ledger digest proved applied; today's SQL policy never ran against them again.
+    if (index < appliedCount) return Object.freeze({ path: migration.path, statementCount: 0 });
     let sql: string;
     try {
       sql = new TextDecoder("utf-8", { fatal: true }).decode(migration.body);
