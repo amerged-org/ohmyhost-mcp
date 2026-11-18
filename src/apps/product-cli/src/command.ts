@@ -134,8 +134,8 @@ export type ProductCliCommand =
   | {
       readonly kind: "connection-begin";
       readonly organizationId: string;
-      readonly projectId: string;
-      readonly environmentId: string;
+      readonly projectId?: string;
+      readonly environmentId?: string;
       readonly idempotencyKey: string;
       readonly credentialStore: "native";
     }
@@ -153,11 +153,23 @@ export type ProductCliCommand =
   | {
       readonly kind: "connection-discover";
       readonly organizationId: string;
-      readonly projectId: string;
-      readonly environmentId: string;
+      readonly projectId?: string;
+      readonly environmentId?: string;
       readonly grantId: string;
       readonly providerOrganizationId?: number;
       readonly teamId?: number;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "connection-import";
+      readonly organizationId: string;
+      readonly projectId: string;
+      readonly environmentId: string;
+      readonly grantId: string;
+      readonly providerOrganizationId: number;
+      readonly teamId: number;
+      readonly connectionId: number;
+      readonly idempotencyKey: string;
       readonly credentialStore: "native";
     }
   | {
@@ -1176,6 +1188,7 @@ export type RecognizedCommandLabel =
   | "connection list"
   | "connection status"
   | "connection discover"
+  | "connection import"
   | "connection disconnect"
   | "github connect"
   | "github status"
@@ -1313,7 +1326,7 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     if (value === "profile" && values[0] === "list") return "profile list";
     if (
       value === "connection" &&
-      ["begin", "list", "status", "discover", "disconnect"].includes(values[0] ?? "")
+      ["begin", "list", "status", "discover", "import", "disconnect"].includes(values[0] ?? "")
     )
       return `connection ${values[0]}` as RecognizedCommandLabel;
     if (value === "github" && values[0] === "connect") return "github connect";
@@ -2166,6 +2179,7 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       "--idempotency-key",
       "--provider-organization",
       "--team",
+      "--connection",
     ] as const);
     const org = options["--organization"];
     if (!org || !ORGANIZATION_ULID.test(org)) throw new InvalidCommandError();
@@ -2181,14 +2195,15 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       return { kind: "connection-list", organizationId: org, credentialStore };
     if (
       operation === "begin" &&
-      scoped() &&
-      exact(["--organization", "--project", "--environment", "--idempotency-key"])
+      (exact(["--organization", "--idempotency-key"]) ||
+        (scoped() && exact(["--organization", "--project", "--environment", "--idempotency-key"])))
     )
       return {
         kind: "connection-begin",
         organizationId: org,
-        projectId: options["--project"] ?? "",
-        environmentId: options["--environment"] ?? "",
+        ...(options["--project"]
+          ? { projectId: options["--project"], environmentId: options["--environment"] }
+          : {}),
         idempotencyKey: options["--idempotency-key"] ?? "",
         credentialStore,
       };
@@ -2217,8 +2232,53 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
         credentialStore,
       };
     if (
-      operation === "discover" &&
+      operation === "import" &&
       scoped() &&
+      ORGANIZATION_ULID.test(options["--grant"] ?? "") &&
+      exact([
+        "--organization",
+        "--project",
+        "--environment",
+        "--grant",
+        "--provider-organization",
+        "--team",
+        "--connection",
+        "--idempotency-key",
+      ])
+    ) {
+      const projectId = options["--project"],
+        environmentId = options["--environment"],
+        grantId = options["--grant"],
+        idempotencyKey = options["--idempotency-key"];
+      const providerOrganizationId = Number(options["--provider-organization"]),
+        teamId = Number(options["--team"]),
+        connectionId = Number(options["--connection"]);
+      if (
+        !projectId ||
+        !environmentId ||
+        !grantId ||
+        !idempotencyKey ||
+        [providerOrganizationId, teamId, connectionId].some(
+          (n) => !Number.isSafeInteger(n) || n < 1,
+        )
+      )
+        throw new InvalidCommandError();
+      return {
+        kind: "connection-import",
+        organizationId: org,
+        projectId,
+        environmentId,
+        grantId,
+        providerOrganizationId,
+        teamId,
+        connectionId,
+        idempotencyKey,
+        credentialStore,
+      };
+    }
+    if (
+      operation === "discover" &&
+      ((!options["--project"] && !options["--environment"]) || scoped()) &&
       ORGANIZATION_ULID.test(options["--grant"] ?? "") &&
       Object.keys(options).every((k) =>
         [
@@ -2245,8 +2305,9 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       return {
         kind: "connection-discover",
         organizationId: org,
-        projectId: options["--project"] ?? "",
-        environmentId: options["--environment"] ?? "",
+        ...(options["--project"]
+          ? { projectId: options["--project"], environmentId: options["--environment"] }
+          : {}),
         grantId: options["--grant"] ?? "",
         ...(providerOrganizationId ? { providerOrganizationId } : {}),
         ...(teamId ? { teamId } : {}),

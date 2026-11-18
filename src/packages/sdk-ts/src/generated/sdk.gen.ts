@@ -50,6 +50,7 @@ import type {
   ConnectGithubOrganizationRequest,
   ConnectGithubOrganizationResponses,
   ConnectionBegin,
+  ConnectionImportRequest,
   CreateBillingCheckoutErrors,
   CreateBillingCheckoutResponses,
   CreateBillingPortalErrors,
@@ -220,6 +221,8 @@ import type {
   GetWorkspaceMailDomainDnsAuthorizationResponses,
   GetWorkspaceMailDomainErrors,
   GetWorkspaceMailDomainResponses,
+  ImportConnectionErrors,
+  ImportConnectionResponses,
   InitializeManagedSourceErrors,
   InitializeManagedSourceResponses,
   LinkProjectSourceErrors,
@@ -597,6 +600,7 @@ export const listConnections = <ThrowOnError extends boolean = true>(
   parameters: {
     "X-Request-Id"?: string;
     organization_id: Ulid;
+    scope?: "workspace";
   },
   options?: Options<never, ThrowOnError>,
 ): RequestResult<ListConnectionsResponses, ListConnectionsErrors, ThrowOnError, "data"> => {
@@ -607,6 +611,7 @@ export const listConnections = <ThrowOnError extends boolean = true>(
         args: [
           { in: "headers", key: "X-Request-Id" },
           { in: "path", key: "organization_id" },
+          { in: "query", key: "scope" },
         ],
       },
     ],
@@ -759,8 +764,8 @@ export const discoverConnection = <ThrowOnError extends boolean = true>(
     "X-Request-Id"?: string;
     organization_id: Ulid;
     grant_id: string;
-    project_id: Ulid;
-    environment_id: Ulid;
+    project_id?: Ulid;
+    environment_id?: Ulid;
     provider_organization_id?: number;
     team_id?: number;
   },
@@ -793,6 +798,52 @@ export const discoverConnection = <ThrowOnError extends boolean = true>(
     url: "/v1/organizations/{organization_id}/connections/{grant_id}/catalog",
     ...options,
     ...params,
+  });
+};
+
+/**
+ * Import a Make connection into a project environment
+ */
+export const importConnection = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    organization_id: Ulid;
+    grant_id: string;
+    connectionImportRequest: ConnectionImportRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<ImportConnectionResponses, ImportConnectionErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "organization_id" },
+          { in: "path", key: "grant_id" },
+          { key: "connectionImportRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    ImportConnectionResponses,
+    ImportConnectionErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/v1/organizations/{organization_id}/connections/{grant_id}/imports",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
   });
 };
 

@@ -2149,22 +2149,24 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "integration_connection_begin",
-    "Create a protected Make consent link for the workspace Owner.",
+    "Create a protected Make consent link for the selected workspace and signed-in user.",
     z
       .object({
         organization_id: identifier,
-        project_id: identifier,
-        environment_id: identifier,
+        project_id: identifier.optional(),
+        environment_id: identifier.optional(),
         idempotency_key: idempotencyKey,
       })
-      .strict(),
+      .strict()
+      .refine((i) => (i.project_id === undefined) === (i.environment_id === undefined)),
     (client, input) => {
       if (!client.connection) throw new Error("connection_provider_unavailable");
       return client.connection({
         kind: "connection-begin",
         organizationId: input.organization_id,
-        projectId: input.project_id,
-        environmentId: input.environment_id,
+        ...(input.project_id
+          ? { projectId: input.project_id, environmentId: input.environment_id }
+          : {}),
         idempotencyKey: input.idempotency_key,
         credentialStore: "native",
       });
@@ -2175,7 +2177,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "integration_connection_list",
-    "List the caller's connection grants.",
+    "List the caller's workspace connection grants.",
     z.object({ organization_id: identifier }).strict(),
     (client, input) => {
       if (!client.connection) throw new Error("connection_provider_unavailable");
@@ -2212,21 +2214,26 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     z
       .object({
         organization_id: identifier,
-        project_id: identifier,
-        environment_id: identifier,
+        project_id: identifier.optional(),
+        environment_id: identifier.optional(),
         grant_id: identifier,
         provider_organization_id: z.number().int().positive().safe().optional(),
         team_id: z.number().int().positive().safe().optional(),
       })
       .strict()
-      .refine((i) => i.team_id === undefined || i.provider_organization_id !== undefined),
+      .refine(
+        (i) =>
+          (i.project_id === undefined) === (i.environment_id === undefined) &&
+          (i.team_id === undefined || i.provider_organization_id !== undefined),
+      ),
     (client, input) => {
       if (!client.connection) throw new Error("connection_provider_unavailable");
       return client.connection({
         kind: "connection-discover",
         organizationId: input.organization_id,
-        projectId: input.project_id,
-        environmentId: input.environment_id,
+        ...(input.project_id
+          ? { projectId: input.project_id, environmentId: input.environment_id }
+          : {}),
         grantId: input.grant_id,
         ...(input.provider_organization_id === undefined
           ? {}
@@ -2235,6 +2242,40 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
         credentialStore: "native",
       });
     },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "integration_connection_import",
+    "Import a selected Make connection into an explicit project and environment.",
+    z
+      .object({
+        organization_id: identifier,
+        grant_id: identifier,
+        project_id: identifier,
+        environment_id: identifier,
+        provider_organization_id: z.number().int().positive().safe(),
+        team_id: z.number().int().positive().safe(),
+        connection_id: z.number().int().positive().safe(),
+        idempotency_key: idempotencyKey,
+      })
+      .strict(),
+    (client, input) => {
+      if (!client.connection) throw new Error("connection_provider_unavailable");
+      return client.connection({
+        kind: "connection-import",
+        organizationId: input.organization_id,
+        grantId: input.grant_id,
+        projectId: input.project_id,
+        environmentId: input.environment_id,
+        providerOrganizationId: input.provider_organization_id,
+        teamId: input.team_id,
+        connectionId: input.connection_id,
+        idempotencyKey: input.idempotency_key,
+        credentialStore: "native",
+      });
+    },
+    mutationAnnotations(),
   );
   registerProductTool(
     server,

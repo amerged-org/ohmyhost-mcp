@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.62; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.63; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.62 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.63 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -96,10 +96,11 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `github_disconnect`: Owner only: disconnect this workspace's GitHub connection.
 - `github_status`: Read this workspace's GitHub connection.
 - `identity_get`: Get the ohmyho.st customer/agent identity this call acts as: user and account email, scoped organization IDs and names and, in context, the saved login or OHMYHOST_TOKEN that supplied it.
-- `integration_connection_begin`: Create a protected Make consent link for the workspace Owner.
+- `integration_connection_begin`: Create a protected Make consent link for the selected workspace and signed-in user.
 - `integration_connection_disconnect`: Disconnect a connection grant and revoke its provider credential.
 - `integration_connection_discover`: Read accessible Make organizations, teams and connection metadata.
-- `integration_connection_list`: List the caller's connection grants.
+- `integration_connection_import`: Import a selected Make connection into an explicit project and environment.
+- `integration_connection_list`: List the caller's workspace connection grants.
 - `integration_connection_status`: Read a consent request status.
 - `mail_binding_detach`: Detach only this project send binding with current revision and explicit confirmation.
 - `mail_binding_get`: Read the Prod sender binding and per-project From addresses, default From and default Reply-To.
@@ -212,7 +213,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.62 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.63 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 
