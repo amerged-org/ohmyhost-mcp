@@ -290,6 +290,9 @@ function admitStatement(tokens: readonly MigrationSqlToken[], sql: string): void
     /^create\s+extension\s+if\s+not\s+exists\s+(?:pgcrypto|btree_gist|unaccent)(?:\s+with\s+schema\s+extensions)?$/u.test(
       normalized,
     ) ||
+    /^create\s+extension\s+if\s+not\s+exists\s+(?:pg_trgm|citext|ltree)\s+with\s+schema\s+extensions$/u.test(
+      normalized,
+    ) ||
     /^create\s+(?:table|type|domain|sequence|view|materialized\s+view|(?:constraint\s+)?trigger)\b/u.test(
       normalized,
     ) ||
