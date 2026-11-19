@@ -72,9 +72,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "169544a84c5bf8e63c5261d2aa895adccfd1a34807db4e57d7e94fdd8817ba09";
+  "16c2ec672b854abcb397067464e93b6e38c85e00d0b6ba806dc0037d60499d3a";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.68";
+export const remoteMcpReleaseVersion = "0.1.69";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -805,6 +805,226 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           },
         },
       },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "organization_id",
+        "idempotency_key",
+        "project_id",
+        "environment_id",
+        "import_id",
+        "action",
+      ],
+      properties: {
+        organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        idempotency_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
+        },
+        project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        environment_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        import_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        action: {
+          oneOf: [
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["kind", "app_name", "app_version", "endpoint_name"],
+              properties: {
+                kind: { const: "endpoint" },
+                app_name: { type: "string", pattern: "^[A-Za-z0-9_-]{1,128}$" },
+                app_version: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                endpoint_name: { type: "string", pattern: "^[A-Za-z0-9_-]{1,128}$" },
+              },
+            },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["kind", "scenario_id", "method", "path_prefix"],
+              properties: {
+                kind: { const: "scenario" },
+                scenario_id: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                method: { type: "string", enum: ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+                path_prefix: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 2048,
+                  description:
+                    "Origin-relative path prefix the owner permits on the bound Make API Shell.",
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+    operationId: "createMakeActionBinding",
+    method: "POST",
+    path: "/v1/organizations/{organization_id}/connections/action-bindings",
+    summary: "Bind one Make action to an imported connection",
+    description:
+      "Requires an authenticated human with permission to manage integrations. Give the returned execution key to the owner or agent through a secure setup flow. It grants access to this one action and must be kept secret; it is not a Make token or a generic process capability.",
+    disposition: "excluded",
+    toolNames: [],
+    reason:
+      "The response contains an action capability secret and must not be exposed through MCP.",
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["project_id", "environment_id", "import_id", "action"],
+            properties: {
+              project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+              environment_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+              import_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+              action: {
+                oneOf: [
+                  {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "app_name", "app_version", "endpoint_name"],
+                    properties: {
+                      kind: { const: "endpoint" },
+                      app_name: { type: "string", pattern: "^[A-Za-z0-9_-]{1,128}$" },
+                      app_version: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                      endpoint_name: { type: "string", pattern: "^[A-Za-z0-9_-]{1,128}$" },
+                    },
+                  },
+                  {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["kind", "scenario_id", "method", "path_prefix"],
+                    properties: {
+                      kind: { const: "scenario" },
+                      scenario_id: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                      method: { type: "string", enum: ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+                      path_prefix: {
+                        type: "string",
+                        minLength: 1,
+                        maxLength: 2048,
+                        description:
+                          "Origin-relative path prefix the owner permits on the bound Make API Shell.",
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+    parameters: [
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "organization_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "Idempotency-Key",
+        in: "header",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
+        required: true,
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["binding_id", "execution_key"],
+      properties: {
+        binding_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        execution_key: { type: "string", description: "Secret capability for this action." },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["idempotency_key", "input"],
+      properties: {
+        idempotency_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
+        },
+        input: { type: "object", additionalProperties: true },
+      },
+    },
+    operationId: "runMakeAction",
+    method: "POST",
+    path: "/v1/make/actions/run",
+    summary: "Run a bound Make action",
+    description:
+      "Uses the action execution key as its bearer credential. Supply a stable idempotency key for each logical invocation. An uncertain result may mean that the action was dispatched; do not create a new invocation solely to retry it.",
+    disposition: "excluded",
+    toolNames: [],
+    reason: "The operation uses an action capability secret that must not be exposed through MCP.",
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["input"],
+            properties: { input: { type: "object", additionalProperties: true } },
+          },
+        },
+      },
+    },
+    parameters: [
+      {
+        name: "Idempotency-Key",
+        in: "header",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
+        required: true,
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
+      },
+    ],
+    outputSchema: {
+      oneOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["state", "output"],
+          properties: {
+            state: { const: "completed" },
+            output: { description: "Bounded JSON response envelope returned by Make." },
+          },
+        },
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["state"],
+          properties: { state: { const: "already_completed" } },
+        },
+      ],
     },
   },
   {
@@ -6868,7 +7088,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     operationId: "getProjectExport",
     method: "GET",
     path: "/v1/projects/{project_id}/exports/{export_id}",
-    summary: "Read export progress and its verified 24-hour download capability",
+    summary: "Read encrypted database export status",
     description:
       "Owner-only, including at zero credits. Poll queued/running jobs after next_poll_after_seconds. A verified SQL ZIP is retained seven days. This read never signs a download URL, so download_url and download_expires_at are always null here. Request a link with POST download-links. Neither the password nor any permanent storage credential can be retrieved. Generic operation reads never contain a download capability.",
     disposition: "named",
@@ -23341,7 +23561,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
   },
   {
     name: "project_export_get",
-    title: "Read export progress and its verified 24-hour download capability",
+    title: "Read encrypted database export status",
     description:
       "Owner-only: read the original encrypted SQL ZIP export's progress and error, never its password or a download URL. While queued or running, follow next_poll_after_seconds and poll this same project_id and export_id; do not create another export to poll. Once succeeded, obtaining a private download link requires the authorized direct CLI/REST export workflow outside this remote catalog. Available at zero credits.",
     annotations: {
@@ -24150,12 +24370,12 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "project_dev_access_mode_set",
     title: "Select public or protected Dev access",
     description:
-      "Owner only: choose public Dev (no platform token) or protected Dev (share link required). A switch takes effect on the next request; switching back creates a new link.",
+      "Owner only: anyone with the URL can reach public Dev without platform authentication. Switching Dev back to protected issues a fresh share link and invalidates earlier sessions. The change takes effect on the next request.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: true,
-      openWorldHint: false,
+      openWorldHint: true,
     },
     operationId: "setProjectDevAccessMode",
     inputSchema: {
@@ -24621,7 +24841,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: true,
-      openWorldHint: false,
+      openWorldHint: true,
     },
     operationId: "changeProjectHandle",
     inputSchema: {

@@ -1,20 +1,20 @@
 {
-  "version": "0.1.68",
-  "sourceCommit": "da7af465d6c5032dac7b774c49da83db1d399405",
+  "version": "0.1.69",
+  "sourceCommit": "a288fb1be640d4d8ebe6a3a8c08fbfb547bb6278",
   "npm": {
     "name": "@amerged/ohmyhost-mcp",
-    "version": "0.1.68",
-    "integrity": "sha512-u61qppJAhuVgdGY8yhQiJFgxaLVI1syifzwccHpp9Q/kPD6CJLkNthJj0ao7qlGGSDVre853V67aNGTNNSuCuA==",
-    "sha256": "7c20aad1fd008292719c6820aa746bcc417dfc79504a04d4f0ec47da9fa564ce",
-    "tarball": "https://registry.npmjs.org/@amerged/ohmyhost-mcp/-/ohmyhost-mcp-0.1.68.tgz"
+    "version": "0.1.69",
+    "integrity": "sha512-y4rDrSaSsy0+Xg0jqmv3WJRI4X/1NwZQUCQSIM6DhNKWHJychKsVbLHOYvy0XqwjWE0nmM3WFEMMbjRJ0MDl5Q==",
+    "sha256": "b7516624af98b049343d43f0e075f8edae8beeadd9cd4fbbf66a6a6f5d84fd5c",
+    "tarball": "https://registry.npmjs.org/@amerged/ohmyhost-mcp/-/ohmyhost-mcp-0.1.69.tgz"
   },
   "omitted": {
-    "README.md": "35e6c3df2b0ac33f7eb6b93a6988601af7c639615addb3eb010b24101414bba2",
-    "dist/chunk-75WIXZVU.js": "380dc56ed38b197324e782b8ac572f5c4aa828a187930e4fe8bfc5822b3b340e",
-    "dist/index.js": "075b3c8b10dc295ba8dd73a44f367a7b4d75f298dc82707528befec898f2d95d",
+    "README.md": "50103df4899de93584416802a1cb070131d24bb815cbe9df79a5ca2162fe7cb6",
+    "dist/chunk-F6LBG5K6.js": "982b738415bcdd73b90af9365c86d80ceda3216d7f350f0e649e7c3f96386759",
+    "dist/index.js": "00280db66ac3c23f5d9900d19bc05d14819787c29792f79f078fa589e3ee9824",
     "dist/licenses/pgcf-bridge-LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "dist/licenses/pgcf-bridge-NOTICE": "f7427d4a6d88f62ef8743e1fc5a2400199346ff5cbb0c6b7c3adfa2187251960",
-    "dist/stdio-main.js": "24c821426990cc698f0dd09566ad16ddeb0487389d6cd45b0af322c63e1e0a97"
+    "dist/stdio-main.js": "8d788917cff69b23e07dfa85c97523d5b0f8553a396aba8cf5fdfc43da6ce36d"
   },
-  "generatedAt": "2026-11-18T23:51:26.535Z"
+  "generatedAt": "2026-11-19T10:40:05.405Z"
 }
