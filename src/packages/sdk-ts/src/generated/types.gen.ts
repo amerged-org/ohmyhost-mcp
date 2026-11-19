@@ -25,6 +25,78 @@ export type ConnectionBegin = {
   environment_id?: Ulid;
 };
 
+export type MakeActionBindingRequest = {
+  project_id: Ulid;
+  environment_id: Ulid;
+  import_id: Ulid;
+  action:
+    | {
+        kind: "endpoint";
+        app_name: string;
+        app_version: number;
+        endpoint_name: string;
+      }
+    | {
+        kind: "scenario";
+        scenario_id: number;
+        method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+        /**
+         * Origin-relative path prefix the owner permits on the bound Make API Shell.
+         */
+        path_prefix: string;
+      };
+};
+
+export type MakeActionBinding = {
+  binding_id: Ulid;
+  /**
+   * Secret capability for this action.
+   */
+  execution_key: string;
+};
+
+export type MakeActionRunRequest = {
+  input: {
+    [key: string]: unknown;
+  };
+};
+
+export type MakeActionRunSuccess =
+  | {
+      state: "completed";
+      /**
+       * Bounded JSON response envelope returned by Make.
+       */
+      output: unknown;
+    }
+  | {
+      state: "already_completed";
+    };
+
+export type MakeActionInvalidRequest = {
+  state: "invalid_request";
+};
+
+export type MakeActionDenied = {
+  state: "denied" | "reconnect_required";
+};
+
+export type MakeActionConflict = {
+  state: "conflict" | "running";
+};
+
+export type MakeActionRateLimited = {
+  state: "rate_limited";
+};
+
+export type MakeActionUncertain = {
+  state: "uncertain";
+};
+
+export type MakeActionUnavailable = {
+  state: "unavailable";
+};
+
 export type ConnectionImportRequest = {
   project_id: Ulid;
   environment_id: Ulid;
@@ -3074,6 +3146,116 @@ export type DiscoverConnectionResponses = {
 
 export type DiscoverConnectionResponse =
   DiscoverConnectionResponses[keyof DiscoverConnectionResponses];
+
+export type CreateMakeActionBindingData = {
+  body: MakeActionBindingRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    organization_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/connections/action-bindings";
+};
+
+export type CreateMakeActionBindingErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateMakeActionBindingError =
+  CreateMakeActionBindingErrors[keyof CreateMakeActionBindingErrors];
+
+export type CreateMakeActionBindingResponses = {
+  /**
+   * Created action binding and its secret execution key.
+   */
+  201: MakeActionBinding;
+};
+
+export type CreateMakeActionBindingResponse =
+  CreateMakeActionBindingResponses[keyof CreateMakeActionBindingResponses];
+
+export type RunMakeActionData = {
+  body: MakeActionRunRequest;
+  headers: {
+    /**
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
+     */
+    "Idempotency-Key": string;
+  };
+  path?: never;
+  query?: never;
+  url: "/v1/make/actions/run";
+};
+
+export type RunMakeActionErrors = {
+  /**
+   * Invalid request.
+   */
+  400: MakeActionInvalidRequest;
+  /**
+   * Execution denied or reconnection required.
+   */
+  403: MakeActionDenied;
+  /**
+   * Idempotency conflict or execution still running.
+   */
+  409: MakeActionConflict;
+  /**
+   * Rate limited.
+   */
+  429: MakeActionRateLimited;
+  /**
+   * Dispatch outcome is uncertain.
+   */
+  502: MakeActionUncertain;
+  /**
+   * Execution service unavailable.
+   */
+  503: MakeActionUnavailable;
+};
+
+export type RunMakeActionError = RunMakeActionErrors[keyof RunMakeActionErrors];
+
+export type RunMakeActionResponses = {
+  /**
+   * The action completed, or the invocation had already completed.
+   */
+  200: MakeActionRunSuccess;
+};
+
+export type RunMakeActionResponse = RunMakeActionResponses[keyof RunMakeActionResponses];
 
 export type ImportConnectionData = {
   body: ConnectionImportRequest;
@@ -6954,7 +7136,7 @@ export type GetProjectExportError = GetProjectExportErrors[keyof GetProjectExpor
 
 export type GetProjectExportResponses = {
   /**
-   * Current export state and optional verified SQL ZIP download.
+   * Current export status and archive metadata. Download fields are always null.
    */
   200: ProjectExport;
 };

@@ -61,6 +61,8 @@ import type {
   CreateDeploymentErrors,
   CreateDeploymentRequest,
   CreateDeploymentResponses,
+  CreateMakeActionBindingErrors,
+  CreateMakeActionBindingResponses,
   CreateManagedSourceUploadErrors,
   CreateManagedSourceUploadResponses,
   CreateNativeAuthUserErrors,
@@ -269,6 +271,8 @@ import type {
   ListWorkspaceMailDomainsErrors,
   ListWorkspaceMailDomainsResponses,
   MailRevisionRequest,
+  MakeActionBindingRequest,
+  MakeActionRunRequest,
   ManagedMailDomainRequest,
   ManagedMailWebhookRequest,
   ManagedSourceBlobRequest,
@@ -362,6 +366,8 @@ import type {
   RotateProjectDevShareLinkResponses,
   RotateProjectPreviewTokenErrors,
   RotateProjectPreviewTokenResponses,
+  RunMakeActionErrors,
+  RunMakeActionResponses,
   RunProjectDatabaseScheduleErrors,
   RunProjectDatabaseScheduleResponses,
   SetDevAccessModeRequest,
@@ -462,7 +468,13 @@ export const stopProjectPreview = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/preview",
     ...options,
     ...params,
@@ -501,7 +513,13 @@ export const getProjectPreview = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/preview",
     ...options,
     ...params,
@@ -540,7 +558,13 @@ export const openProjectPreview = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/preview",
     ...options,
     ...params,
@@ -586,7 +610,13 @@ export const rotateProjectPreviewToken = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/preview/token",
     ...options,
     ...params,
@@ -623,7 +653,13 @@ export const listConnections = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/connections",
     ...options,
     ...params,
@@ -663,7 +699,13 @@ export const listConnectionProviders = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/connections/providers",
     ...options,
     ...params,
@@ -702,7 +744,13 @@ export const beginConnection = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/connections/begin",
     ...options,
     ...params,
@@ -749,7 +797,13 @@ export const getConnectionRequest = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/connections/requests/{request_id}",
     ...options,
     ...params,
@@ -794,10 +848,121 @@ export const discoverConnection = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/connections/{grant_id}/catalog",
     ...options,
     ...params,
+  });
+};
+
+/**
+ * Bind one Make action to an imported connection
+ *
+ * Requires an authenticated human with permission to manage integrations. Give the returned execution key to the owner or agent through a secure setup flow. It grants access to this one action and must be kept secret; it is not a Make token or a generic process capability.
+ */
+export const createMakeActionBinding = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    organization_id: Ulid;
+    makeActionBindingRequest: MakeActionBindingRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateMakeActionBindingResponses,
+  CreateMakeActionBindingErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "organization_id" },
+          { key: "makeActionBindingRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateMakeActionBindingResponses,
+    CreateMakeActionBindingErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/organizations/{organization_id}/connections/action-bindings",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Run a bound Make action
+ *
+ * Uses the action execution key as its bearer credential. Supply a stable idempotency key for each logical invocation. An uncertain result may mean that the action was dispatched; do not create a new invocation solely to retry it.
+ */
+export const runMakeAction = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "Idempotency-Key": string;
+    makeActionRunRequest: MakeActionRunRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<RunMakeActionResponses, RunMakeActionErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "Idempotency-Key" },
+          { key: "makeActionRunRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    RunMakeActionResponses,
+    RunMakeActionErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "MakeActionBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/make/actions/run",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
   });
 };
 
@@ -835,7 +1000,13 @@ export const importConnection = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/connections/{grant_id}/imports",
     ...options,
     ...params,
@@ -884,7 +1055,13 @@ export const disconnectConnection = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/connections/{grant_id}",
     ...options,
     ...params,
@@ -928,7 +1105,13 @@ export const getNativeAuthConfiguration = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth",
     ...options,
     ...params,
@@ -976,7 +1159,13 @@ export const updateNativeAuthConfiguration = <ThrowOnError extends boolean = tru
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth",
     ...options,
     ...params,
@@ -1027,7 +1216,13 @@ export const getNativeAuthProvider = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth/providers/{provider}",
     ...options,
     ...params,
@@ -1078,7 +1273,13 @@ export const updateNativeAuthProvider = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth/providers/{provider}",
     ...options,
     ...params,
@@ -1128,7 +1329,13 @@ export const listNativeAuthUsers = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users",
     ...options,
     ...params,
@@ -1176,7 +1383,13 @@ export const createNativeAuthUser = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users",
     ...options,
     ...params,
@@ -1229,7 +1442,13 @@ export const deleteNativeAuthUser = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}",
     ...options,
     ...params,
@@ -1270,7 +1489,13 @@ export const getNativeAuthUser = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}",
     ...options,
     ...params,
@@ -1318,7 +1543,13 @@ export const resendNativeAuthInvitation = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/invite",
     ...options,
     ...params,
@@ -1366,7 +1597,13 @@ export const suspendNativeAuthUser = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/suspend",
     ...options,
     ...params,
@@ -1414,7 +1651,13 @@ export const reactivateNativeAuthUser = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/reactivate",
     ...options,
     ...params,
@@ -1462,7 +1705,13 @@ export const revokeNativeAuthUserSessions = <ThrowOnError extends boolean = true
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/auth/users/{user_id}/revoke-sessions",
     ...options,
     ...params,
@@ -1504,7 +1753,13 @@ export const listWorkspaceMailDomains = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/mail-domains",
     ...options,
     ...params,
@@ -1550,7 +1805,13 @@ export const createWorkspaceMailDomain = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/mail-domains",
     ...options,
     ...params,
@@ -1603,7 +1864,13 @@ export const retireWorkspaceMailDomain = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}",
     ...options,
     ...params,
@@ -1652,7 +1919,13 @@ export const getWorkspaceMailDomain = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}",
     ...options,
     ...params,
@@ -1700,7 +1973,13 @@ export const revokeWorkspaceMailDomainDnsAuthorization = <ThrowOnError extends b
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}/dns-authorization",
     ...options,
     ...params,
@@ -1749,7 +2028,13 @@ export const getWorkspaceMailDomainDnsAuthorization = <ThrowOnError extends bool
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}/dns-authorization",
     ...options,
     ...params,
@@ -1797,7 +2082,13 @@ export const authorizeWorkspaceMailDomainDns = <ThrowOnError extends boolean = t
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/mail-domains/{mail_domain_id}/dns-authorization",
     ...options,
     ...params,
@@ -1850,7 +2141,13 @@ export const detachProjectMailDomainBinding = <ThrowOnError extends boolean = tr
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain-binding",
     ...options,
     ...params,
@@ -1899,7 +2196,13 @@ export const getProjectMailDomainBinding = <ThrowOnError extends boolean = true>
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain-binding",
     ...options,
     ...params,
@@ -1947,7 +2250,13 @@ export const putProjectMailDomainBinding = <ThrowOnError extends boolean = true>
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain-binding",
     ...options,
     ...params,
@@ -1998,7 +2307,13 @@ export const revokeApplicationDomainIdentity = <ThrowOnError extends boolean = t
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/application-domain-identity",
     ...options,
     ...params,
@@ -2045,7 +2360,13 @@ export const getApplicationDomainIdentity = <ThrowOnError extends boolean = true
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/application-domain-identity",
     ...options,
     ...params,
@@ -2091,7 +2412,13 @@ export const declareApplicationDomainIdentity = <ThrowOnError extends boolean = 
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/application-domain-identity",
     ...options,
     ...params,
@@ -2142,7 +2469,13 @@ export const verifyApplicationDomainIdentity = <ThrowOnError extends boolean = t
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/application-domain-identity/verify",
     ...options,
     ...params,
@@ -2195,7 +2528,13 @@ export const revokeApplicationDomainIdentityDnsAuthorization = <
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/application-domain-identity/dns-authorization",
     ...options,
     ...params,
@@ -2242,7 +2581,13 @@ export const getApplicationDomainIdentityDnsAuthorization = <ThrowOnError extend
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/application-domain-identity/dns-authorization",
     ...options,
     ...params,
@@ -2288,7 +2633,13 @@ export const authorizeApplicationDomainIdentityDns = <ThrowOnError extends boole
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/application-domain-identity/dns-authorization",
     ...options,
     ...params,
@@ -2313,7 +2664,13 @@ export const getAccountProfile = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/me/profile",
     ...options,
   });
@@ -2350,7 +2707,13 @@ export const recordSignupSource = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/me/signup-source",
     ...options,
     ...params,
@@ -2401,7 +2764,13 @@ export const connectGithubOrganization = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/github:connect",
     ...options,
     ...params,
@@ -2448,7 +2817,13 @@ export const disconnectGithubOrganization = <ThrowOnError extends boolean = true
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/github",
     ...options,
     ...params,
@@ -2488,7 +2863,13 @@ export const getGithubOrganizationConnection = <ThrowOnError extends boolean = t
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/github",
     ...options,
     ...params,
@@ -2530,7 +2911,13 @@ export const listOrganizationMcpConnections = <ThrowOnError extends boolean = tr
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/mcp-connections",
     ...options,
     ...params,
@@ -2574,7 +2961,13 @@ export const revokeOrganizationMcpConnection = <ThrowOnError extends boolean = t
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/mcp-connections/{connection_id}",
     ...options,
     ...params,
@@ -2616,7 +3009,13 @@ export const getOrganizationReferral = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/referral",
     ...options,
     ...params,
@@ -2656,7 +3055,13 @@ export const getOrganizationAccount = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/account",
     ...options,
     ...params,
@@ -2847,7 +3252,13 @@ export const listUserApiKeys = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/user-api-keys",
     ...options,
     ...params,
@@ -2888,7 +3299,13 @@ export const createUserApiKey = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/user-api-keys",
     ...options,
     ...params,
@@ -2932,7 +3349,13 @@ export const revokeUserApiKey = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/user-api-keys/{key_id}",
     ...options,
     ...params,
@@ -2971,7 +3394,13 @@ export const submitFeedback = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/feedback",
     ...options,
     ...params,
@@ -3015,7 +3444,13 @@ export const getFeedback = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/feedback/{feedback_id}",
     ...options,
     ...params,
@@ -3137,7 +3572,13 @@ export const getCurrentIdentity = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/me",
     ...options,
     ...params,
@@ -3179,7 +3620,13 @@ export const revokeCurrentSession = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/session:revoke",
     ...options,
     ...params,
@@ -3218,7 +3665,13 @@ export const createOrganization = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations",
     ...options,
     ...params,
@@ -3271,7 +3724,13 @@ export const createBillingCheckout = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/billing/checkouts",
     ...options,
     ...params,
@@ -3315,7 +3774,13 @@ export const getBillingCheckout = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/billing/checkouts/{checkout_id}",
     ...options,
     ...params,
@@ -3356,7 +3821,13 @@ export const createBillingPortal = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/billing/portal",
     ...options,
     ...params,
@@ -3398,7 +3869,13 @@ export const getBillingRecharge = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/billing/recharge",
     ...options,
     ...params,
@@ -3450,7 +3927,13 @@ export const configureBillingRecharge = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/billing/recharge",
     ...options,
     ...params,
@@ -3497,7 +3980,13 @@ export const getOrganizationCredits = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/credits",
     ...options,
     ...params,
@@ -3539,7 +4028,13 @@ export const getOrganizationCreditUsage = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/organizations/{organization_id}/credit-usage",
     ...options,
     ...params,
@@ -3580,7 +4075,13 @@ export const createProjectExport = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/exports",
     ...options,
     ...params,
@@ -3593,7 +4094,7 @@ export const createProjectExport = <ThrowOnError extends boolean = true>(
 };
 
 /**
- * Read export progress and its verified 24-hour download capability
+ * Read encrypted database export status
  *
  * Owner-only, including at zero credits. Poll queued/running jobs after next_poll_after_seconds. A verified SQL ZIP is retained seven days. This read never signs a download URL, so download_url and download_expires_at are always null here. Request a link with POST download-links. Neither the password nor any permanent storage credential can be retrieved. Generic operation reads never contain a download capability.
  */
@@ -3624,7 +4125,13 @@ export const getProjectExport = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/exports/{export_id}",
     ...options,
     ...params,
@@ -3668,7 +4175,13 @@ export const createProjectExportDownloadLink = <ThrowOnError extends boolean = t
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/exports/{export_id}/download-links",
     ...options,
     ...params,
@@ -3710,7 +4223,13 @@ export const getProjectCreditBudget = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/credit-budget",
     ...options,
     ...params,
@@ -3756,7 +4275,13 @@ export const setProjectCreditBudget = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/credit-budget",
     ...options,
     ...params,
@@ -3800,7 +4325,13 @@ export const listProjects = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects",
     ...options,
     ...params,
@@ -3839,7 +4370,13 @@ export const createProject = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects",
     ...options,
     ...params,
@@ -3887,7 +4424,13 @@ export const deleteProject = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}",
     ...options,
     ...params,
@@ -3922,7 +4465,13 @@ export const getProject = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}",
     ...options,
     ...params,
@@ -3959,7 +4508,13 @@ export const getProjectContext = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/context",
     ...options,
     ...params,
@@ -4002,7 +4557,13 @@ export const setProjectNotes = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/context/notes",
     ...options,
     ...params,
@@ -4055,7 +4616,13 @@ export const addProjectDevelopmentEnvironment = <ThrowOnError extends boolean = 
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/dev",
     ...options,
     ...params,
@@ -4097,7 +4664,13 @@ export const getProjectStatus = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/status",
     ...options,
     ...params,
@@ -4139,7 +4712,13 @@ export const getProjectHandleAvailability = <ThrowOnError extends boolean = true
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/project-handles/{handle}",
     ...options,
     ...params,
@@ -4181,7 +4760,13 @@ export const revokeProjectDevShareLink = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/dev-share-link",
     ...options,
     ...params,
@@ -4223,7 +4808,13 @@ export const ensureProjectDevShareLink = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/dev-share-link",
     ...options,
     ...params,
@@ -4267,7 +4858,13 @@ export const rotateProjectDevShareLink = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/dev-share-link:rotate",
     ...options,
     ...params,
@@ -4313,7 +4910,13 @@ export const setProjectDevAccessMode = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/dev-access-mode",
     ...options,
     ...params,
@@ -4360,7 +4963,13 @@ export const getProjectPoweredByFlag = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/powered-by-flag",
     ...options,
     ...params,
@@ -4406,7 +5015,13 @@ export const setProjectPoweredByFlag = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/powered-by-flag",
     ...options,
     ...params,
@@ -4455,7 +5070,13 @@ export const createProjectDevAccessTicket = <ThrowOnError extends boolean = true
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/dev-access-tickets",
     ...options,
     ...params,
@@ -4492,7 +5113,13 @@ export const planProjectDeletion = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}:delete-plan",
     ...options,
     ...params,
@@ -4533,7 +5160,13 @@ export const linkProjectSource = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source:link",
     ...options,
     ...params,
@@ -4577,7 +5210,13 @@ export const getProjectSource = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source",
     ...options,
     ...params,
@@ -4621,7 +5260,13 @@ export const initializeManagedSource = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source:initialize",
     ...options,
     ...params,
@@ -4670,7 +5315,13 @@ export const listManagedSourceFiles = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source/files",
     ...options,
     ...params,
@@ -4714,7 +5365,13 @@ export const listManagedSourceVersions = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source/versions",
     ...options,
     ...params,
@@ -4753,7 +5410,13 @@ export const diffManagedSource = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source/diff",
     ...options,
     ...params,
@@ -4792,7 +5455,13 @@ export const changeManagedSource = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source/changes",
     ...options,
     ...params,
@@ -4841,7 +5510,13 @@ export const restoreManagedSource = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source:restore",
     ...options,
     ...params,
@@ -4890,7 +5565,13 @@ export const createManagedSourceUpload = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source/uploads",
     ...options,
     ...params,
@@ -4937,7 +5618,13 @@ export const getManagedSourceUpload = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source/uploads/{operation_id}",
     ...options,
     ...params,
@@ -4983,7 +5670,13 @@ export const putManagedSourceBlob = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source/uploads/{operation_id}/files",
     ...options,
     ...params,
@@ -5034,7 +5727,13 @@ export const commitManagedSourceUpload = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source/uploads/{operation_id}:commit",
     ...options,
     ...params,
@@ -5078,7 +5777,13 @@ export const switchManagedSource = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source:switch",
     ...options,
     ...params,
@@ -5123,7 +5828,13 @@ export const getProjectSourceAutoDeploy = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source/auto-deploy",
     ...options,
     ...params,
@@ -5169,7 +5880,13 @@ export const configureProjectSourceAutoDeploy = <ThrowOnError extends boolean = 
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/source/auto-deploy",
     ...options,
     ...params,
@@ -5220,7 +5937,13 @@ export const createCloudflareDnsAuthorization = <ThrowOnError extends boolean = 
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/cloudflare-dns/authorization",
     ...options,
     ...params,
@@ -5267,7 +5990,13 @@ export const getCloudflareDnsAuthorizationStatus = <ThrowOnError extends boolean
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/cloudflare-dns",
     ...options,
     ...params,
@@ -5310,7 +6039,13 @@ export const changeProjectHandle = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/handle",
     ...options,
     ...params,
@@ -5359,7 +6094,13 @@ export const configureProjectDomains = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/domains",
     ...options,
     ...params,
@@ -5403,7 +6144,13 @@ export const planPaidProjectDomain = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/paid-domain:plan",
     ...options,
     ...params,
@@ -5454,7 +6201,13 @@ export const deletePaidProjectDomain = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/paid-domain",
     ...options,
     ...params,
@@ -5499,7 +6252,13 @@ export const getPaidProjectDomain = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/paid-domain",
     ...options,
     ...params,
@@ -5545,7 +6304,13 @@ export const applyPaidProjectDomain = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/paid-domain",
     ...options,
     ...params,
@@ -5589,7 +6354,13 @@ export const planDeployment = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/deployments:plan",
     ...options,
     ...params,
@@ -5633,7 +6404,13 @@ export const listDeployments = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/deployments",
     ...options,
     ...params,
@@ -5674,7 +6451,13 @@ export const createDeployment = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/deployments",
     ...options,
     ...params,
@@ -5716,7 +6499,13 @@ export const getDeployment = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/deployments/{deployment_id}",
     ...options,
     ...params,
@@ -5757,7 +6546,13 @@ export const getDeploymentLogs = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/deployments/{deployment_id}/logs",
     ...options,
     ...params,
@@ -5798,7 +6593,13 @@ export const streamDeploymentLogs = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/deployments/{deployment_id}/logs/events",
     ...options,
     ...params,
@@ -5837,7 +6638,13 @@ export const getDatabaseCompute = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/compute",
     ...options,
     ...params,
@@ -5888,7 +6695,13 @@ export const changeDatabaseCompute = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/compute",
     ...options,
     ...params,
@@ -5939,7 +6752,13 @@ export const writeProjectDatabase = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/write",
     ...options,
     ...params,
@@ -5988,7 +6807,13 @@ export const queryProjectDatabase = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/query",
     ...options,
     ...params,
@@ -6037,7 +6862,13 @@ export const listProjectDatabaseAccess = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/access",
     ...options,
     ...params,
@@ -6083,7 +6914,13 @@ export const createProjectDatabaseAccess = <ThrowOnError extends boolean = true>
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/access",
     ...options,
     ...params,
@@ -6132,7 +6969,13 @@ export const revokeProjectDatabaseAccess = <ThrowOnError extends boolean = true>
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/access/{access_id}",
     ...options,
     ...params,
@@ -6178,7 +7021,13 @@ export const createProjectDatabaseTable = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/tables",
     ...options,
     ...params,
@@ -6227,7 +7076,13 @@ export const listProjectDatabaseWatches = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/watches",
     ...options,
     ...params,
@@ -6273,7 +7128,13 @@ export const createProjectDatabaseWatch = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/watches",
     ...options,
     ...params,
@@ -6326,7 +7187,13 @@ export const deleteProjectDatabaseWatch = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/watches/{watch_id}",
     ...options,
     ...params,
@@ -6372,7 +7239,13 @@ export const getDatabaseWebhookSubscription = <ThrowOnError extends boolean = tr
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/webhook-subscriptions/{subscription_id}",
     ...options,
     ...params,
@@ -6422,7 +7295,13 @@ export const deactivateDatabaseWebhookSubscription = <ThrowOnError extends boole
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/webhook-subscriptions/{subscription_id}/activations/{generation}",
     ...options,
     ...params,
@@ -6474,7 +7353,13 @@ export const activateDatabaseWebhookSubscription = <ThrowOnError extends boolean
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/webhook-subscriptions/{subscription_id}/activations/{generation}",
     ...options,
     ...params,
@@ -6523,7 +7408,13 @@ export const listProjectDatabaseWebhooks = <ThrowOnError extends boolean = true>
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/webhooks",
     ...options,
     ...params,
@@ -6571,7 +7462,13 @@ export const createProjectDatabaseWebhook = <ThrowOnError extends boolean = true
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/webhooks",
     ...options,
     ...params,
@@ -6624,7 +7521,13 @@ export const deleteProjectDatabaseWebhook = <ThrowOnError extends boolean = true
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/webhooks/{webhook_id}",
     ...options,
     ...params,
@@ -6670,7 +7573,13 @@ export const getProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/webhooks/{webhook_id}",
     ...options,
     ...params,
@@ -6718,7 +7627,13 @@ export const testProjectDatabaseWebhook = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/webhooks/{webhook_id}/test",
     ...options,
     ...params,
@@ -6768,7 +7683,13 @@ export const listProjectDatabaseWebhookDeliveries = <ThrowOnError extends boolea
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/webhook-deliveries",
     ...options,
     ...params,
@@ -6816,7 +7737,13 @@ export const replayProjectDatabaseWebhookDelivery = <ThrowOnError extends boolea
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/webhook-deliveries/{delivery_id}/replay",
     ...options,
     ...params,
@@ -6860,7 +7787,13 @@ export const listProjectDatabaseSchedules = <ThrowOnError extends boolean = true
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/schedules",
     ...options,
     ...params,
@@ -6906,7 +7839,13 @@ export const deleteProjectDatabaseSchedule = <ThrowOnError extends boolean = tru
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/schedules/{name}",
     ...options,
     ...params,
@@ -6950,7 +7889,13 @@ export const getProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/schedules/{name}",
     ...options,
     ...params,
@@ -6998,7 +7943,13 @@ export const setProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/schedules/{name}",
     ...options,
     ...params,
@@ -7051,7 +8002,13 @@ export const listProjectDatabaseScheduleRuns = <ThrowOnError extends boolean = t
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/schedules/{name}/runs",
     ...options,
     ...params,
@@ -7099,7 +8056,13 @@ export const runProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/schedules/{name}/run",
     ...options,
     ...params,
@@ -7153,7 +8116,13 @@ export const getProjectDatabaseExecutionUsage = <ThrowOnError extends boolean = 
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/database/execution-usage",
     ...options,
     ...params,
@@ -7197,7 +8166,13 @@ export const planDeploymentRollback = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/deployments/{target_deployment_id}:rollback-plan",
     ...options,
     ...params,
@@ -7242,7 +8217,13 @@ export const rollbackDeployment = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/deployments/{target_deployment_id}:rollback",
     ...options,
     ...params,
@@ -7286,7 +8267,13 @@ export const planDeploymentPromotion = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/deployments/{source_deployment_id}:promote-plan",
     ...options,
     ...params,
@@ -7331,7 +8318,13 @@ export const promoteDeployment = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/deployments/{source_deployment_id}:promote",
     ...options,
     ...params,
@@ -7375,7 +8368,13 @@ export const listEnvironmentSecrets = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/secrets",
     ...options,
     ...params,
@@ -7416,7 +8415,13 @@ export const listFunctionRuns = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/function-runs",
     ...options,
     ...params,
@@ -7462,7 +8467,13 @@ export const deleteEnvironmentSecret = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/secrets/{secret_name}",
     ...options,
     ...params,
@@ -7512,7 +8523,13 @@ export const putEnvironmentSecret = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/secrets/{secret_name}",
     ...options,
     ...params,
@@ -7565,7 +8582,13 @@ export const rotateEnvironmentSecret = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/secrets/{secret_name}/rotate",
     ...options,
     ...params,
@@ -7600,7 +8623,13 @@ export const getOperation = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/operations/{operation_id}",
     ...options,
     ...params,
@@ -7639,7 +8668,13 @@ export const reconcileOperation = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/operations/{operation_id}:reconcile",
     ...options,
     ...params,
@@ -7674,7 +8709,13 @@ export const streamOperationEvents = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/operations/{operation_id}/events",
     ...options,
     ...params,
@@ -7719,7 +8760,13 @@ export const listAuditEvents = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/audit-events",
     ...options,
     ...params,
@@ -7765,7 +8812,13 @@ export const deleteManagedMailDomain = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain",
     ...options,
     ...params,
@@ -7809,7 +8862,13 @@ export const getManagedMailDomain = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain",
     ...options,
     ...params,
@@ -7857,7 +8916,13 @@ export const configureManagedMailDomain = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain",
     ...options,
     ...params,
@@ -7908,7 +8973,13 @@ export const disableManagedMailReceiving = <ThrowOnError extends boolean = true>
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail-webhook",
     ...options,
     ...params,
@@ -7956,7 +9027,13 @@ export const prepareManagedMailWebhook = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail-webhook",
     ...options,
     ...params,
@@ -8007,7 +9084,13 @@ export const rotateManagedMailWebhookSecret = <ThrowOnError extends boolean = tr
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail-webhook:rotate",
     ...options,
     ...params,
@@ -8053,7 +9136,13 @@ export const verifyManagedMailWebhook = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail-webhook/verify",
     ...options,
     ...params,
@@ -8099,7 +9188,13 @@ export const listManagedMailMessages = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail/messages",
     ...options,
     ...params,
@@ -8145,7 +9240,13 @@ export const getManagedMailMessage = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail/messages/{message_id}",
     ...options,
     ...params,
@@ -8193,7 +9294,13 @@ export const retryManagedMailMessage = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail/messages/{message_id}/retry",
     ...options,
     ...params,
@@ -8241,7 +9348,13 @@ export const getManagedMailAttachment = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/mail/messages/{message_id}/attachments/{attachment_id}",
     ...options,
     ...params,
@@ -8285,7 +9398,13 @@ export const planProjectDataChange = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/data-changes:plan",
     ...options,
     ...params,
@@ -8340,7 +9459,13 @@ export const createProjectDataChange = <ThrowOnError extends boolean = true>(
     "data"
   >({
     responseStyle: "data",
-    security: [{ scheme: "bearer", type: "http" }],
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/v1/projects/{project_id}/data-changes",
     ...options,
     ...params,
