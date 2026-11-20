@@ -72,9 +72,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "16c2ec672b854abcb397067464e93b6e38c85e00d0b6ba806dc0037d60499d3a";
+  "490aa3b1c4d68906162af3f8d000fa37e93d0a52ef29fe52f57a83cbc5209294";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.70";
+export const remoteMcpReleaseVersion = "0.1.71";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -22305,7 +22305,7 @@ export const remoteMcpWorkflowTools: readonly RemoteMcpWorkflowTool[] = [
     name: "api_reference",
     title: "Read the Master Tool Contract",
     description:
-      "Find documented API operations, exact schemas and remote MCP support in the deployed Master Tool Contract. This lookup never executes an API operation.",
+      "Find documented API operations, exact schemas and remote MCP support in the deployed Master Tool Contract. This lookup never executes an API operation. See https://github.com/amerged-org/ohmyhost for the ohmyho.st hosting platform (OMH) and https://github.com/amerged-org/cloudflare-postgres for its PostgreSQL infrastructure (PGCF).",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
