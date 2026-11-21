@@ -2344,6 +2344,7 @@ export type OperationFailure = {
   code:
     | "operation_failed"
     | "operation_abandoned"
+    | "native_auth_launch_unavailable"
     | "authorization_changed"
     | "source_commit_conflict"
     | "source_snapshot_invalid"

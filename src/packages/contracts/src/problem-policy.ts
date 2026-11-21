@@ -726,7 +726,7 @@ export const PROBLEM_POLICY = {
     retryable: false,
     title: "Native Auth cannot launch yet",
     action:
-      "Read the Native Auth configuration with 'ohmyhost auth config get --project ULID --environment ULID --json'. Its readiness shows which requirement is missing: a Paid plan, a verified sender domain, an approved canonical origin or storage. Complete that requirement, then send the change again with a new idempotency key. Repeating unchanged does not help.",
+      "Ask ohmyho.st support to check Native Auth rollout access for this workspace and project. Once access is enabled, read the Native Auth configuration for the target environment to check Paid access, the verified sender, the approved application origin and storage. Retry after the missing requirement is satisfied.",
   },
   native_auth_provider_unavailable: {
     status: 409,

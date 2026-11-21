@@ -72,9 +72,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "99da3b404be30539e086a7972dca78e3d0270117abf06d1b83522d5b095d571d";
+  "1cb53afbb2abd3322167436062b0925bc9d931a34da1ab5d9bb33dff0abf8e3c";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.72";
+export const remoteMcpReleaseVersion = "0.1.73";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -7127,6 +7127,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -7389,6 +7390,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                   enum: [
                     "operation_failed",
                     "operation_abandoned",
+                    "native_auth_launch_unavailable",
                     "authorization_changed",
                     "source_commit_conflict",
                     "source_snapshot_invalid",
@@ -8221,6 +8223,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -8641,6 +8644,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -9142,6 +9146,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                       enum: [
                         "operation_failed",
                         "operation_abandoned",
+                        "native_auth_launch_unavailable",
                         "authorization_changed",
                         "source_commit_conflict",
                         "source_snapshot_invalid",
@@ -10138,6 +10143,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -10571,6 +10577,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -11203,6 +11210,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -11501,6 +11509,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -11809,6 +11818,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -12349,6 +12359,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -12690,6 +12701,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -13338,6 +13350,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -13604,6 +13617,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -14270,7 +14284,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/deployments:plan",
     summary: "Plan a deployment",
     description:
-      "Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. A commit the platform does not admit answers 409 with a nonretryable problem code; for framework_conversion_required, detail is a fixed catalog sentence that names the file, the rule and the required change whenever the refusal is typed.",
+      "Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. Native Auth requires rollout approval for this workspace and project; a missing approval returns 409 native_auth_launch_unavailable before a build is reserved. A commit the platform does not admit answers 409 with a nonretryable problem code; for framework_conversion_required, detail is a fixed catalog sentence that names the file, the rule and the required change whenever the refusal is typed.",
     disposition: "named",
     toolNames: ["deployment_plan"],
     requestBody: {
@@ -14447,7 +14461,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/deployments",
     summary: "Create a deployment",
     description:
-      "Reserves the quoted build credits from the shared organization pool and starts the exact reviewed plan as one durable operation. Insufficient available credits or an explicit project stop budget rejects before operation creation or provider work. Repeating the accepted request never reserves twice.",
+      "Reserves the quoted build credits from the shared organization pool and starts the exact reviewed plan as one durable operation. Insufficient available credits or an explicit project stop budget rejects before operation creation or provider work. Repeating the accepted request never reserves twice. Native Auth rollout access is checked again before accepting a new request. A pre-provider loss of access during initial Native setup ends the operation with native_auth_launch_unavailable.",
     disposition: "named",
     toolNames: ["deployment_create"],
     requestBody: {
@@ -14536,6 +14550,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -15265,6 +15280,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -15675,6 +15691,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                   enum: [
                     "operation_failed",
                     "operation_abandoned",
+                    "native_auth_launch_unavailable",
                     "authorization_changed",
                     "source_commit_conflict",
                     "source_snapshot_invalid",
@@ -19365,6 +19382,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -19811,6 +19829,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -20619,6 +20638,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -22333,6 +22353,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -23858,6 +23879,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                   enum: [
                     "operation_failed",
                     "operation_abandoned",
+                    "native_auth_launch_unavailable",
                     "authorization_changed",
                     "source_commit_conflict",
                     "source_snapshot_invalid",
@@ -24222,6 +24244,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -25149,6 +25172,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -25395,6 +25419,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -26039,6 +26064,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",
@@ -26383,6 +26409,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                   enum: [
                     "operation_failed",
                     "operation_abandoned",
+                    "native_auth_launch_unavailable",
                     "authorization_changed",
                     "source_commit_conflict",
                     "source_snapshot_invalid",
@@ -28815,6 +28842,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               enum: [
                 "operation_failed",
                 "operation_abandoned",
+                "native_auth_launch_unavailable",
                 "authorization_changed",
                 "source_commit_conflict",
                 "source_snapshot_invalid",

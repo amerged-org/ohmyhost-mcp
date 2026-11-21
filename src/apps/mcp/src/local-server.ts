@@ -2471,7 +2471,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "deployment_plan",
-    "Plan an immutable deployment. Preserve the customer's existing authentication integration, such as Better Auth or WorkOS. The explicitly selected managed Better Auth bridge requires the managed database; managed mail is optional. The unreleased omh-native capability is an explicit Paid choice with separate prerequisites. Never assume platform login proves application login. With no environment, the server chooses Dev if it exists, otherwise Prod. An explicit prod plan builds straight into Prod; shared data can affect Prod during migrations. Review the returned plan before deployment. The plan stays valid for 24 hours.",
+    "Plan an immutable deployment. Preserve the customer's existing authentication integration, such as Better Auth or WorkOS. The explicitly selected managed Better Auth bridge requires the managed database; managed mail is optional. Omh Native Auth requires project rollout approval. A missing approval returns native_auth_launch_unavailable before a build is reserved. Never assume platform login proves application login. With no environment, the server chooses Dev if it exists, otherwise Prod. An explicit prod plan builds straight into Prod; shared data can affect Prod during migrations. Review the returned plan before deployment. The plan stays valid for 24 hours.",
     z.object({
       project_id: identifier,
       commit_sha: commitSha,
@@ -2489,7 +2489,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "deployment_create",
-    "Start a reviewed deployment plan",
+    "Start a reviewed deployment plan. Native Auth rollout access is checked again before build reservation.",
     z.object({ project_id: identifier, plan_id: identifier, idempotency_key: idempotencyKey }),
     (client, input) =>
       client.createDeployment({

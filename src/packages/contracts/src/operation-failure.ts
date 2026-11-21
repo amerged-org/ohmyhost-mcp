@@ -114,6 +114,10 @@ const failures = {
     "The runtime refused to load the built Worker.",
     "The built Worker could not be loaded: top-level code throws or calls fetch, timers or random values outside a handler, an import cannot be resolved, a Worker module such as src/ohmyhost/companion.ts has no default export, or the bundle is too large. Fix that, save or push the corrected version and plan its commit; replaying this operation cannot pass. If none of this applies, report the operation ID through feedback.",
   ],
+  native_auth_launch_unavailable: [
+    "Native Auth rollout access is unavailable for this project.",
+    "Ask ohmyho.st support to check Native Auth rollout access for this workspace and project. Once access is enabled, plan the saved commit again. Then check the project’s Paid access, verified sender and approved application origin.",
+  ],
   storage_jurisdiction_conflict: [
     "storage.jurisdiction must match the project's recorded storage jurisdiction.",
     "Read 'Storage jurisdiction' in 'ohmyhost project context --project ULID --json' and set storage.jurisdiction in ohmyhost.yaml to that recorded value (us or eu). Existing R2 buckets and reservations keep their jurisdiction after a project-region migration; only new storage without a recorded bucket uses the project region. If context reports unavailable, report the request ID through feedback rather than guessing. Save or push the corrected version and plan its commit; for promotion, deploy it to Dev and promote again. Do not delete or recreate the project to move files.",

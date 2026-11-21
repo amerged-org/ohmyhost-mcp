@@ -6441,7 +6441,7 @@ export const applyPaidProjectDomain = <ThrowOnError extends boolean = true>(
 /**
  * Plan a deployment
  *
- * Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. A commit the platform does not admit answers 409 with a nonretryable problem code; for framework_conversion_required, detail is a fixed catalog sentence that names the file, the rule and the required change whenever the refusal is typed.
+ * Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. Native Auth requires rollout approval for this workspace and project; a missing approval returns 409 native_auth_launch_unavailable before a build is reserved. A commit the platform does not admit answers 409 with a nonretryable problem code; for framework_conversion_required, detail is a fixed catalog sentence that names the file, the rule and the required change whenever the refusal is typed.
  */
 export const planDeployment = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -6536,7 +6536,7 @@ export const listDeployments = <ThrowOnError extends boolean = true>(
 /**
  * Create a deployment
  *
- * Reserves the quoted build credits from the shared organization pool and starts the exact reviewed plan as one durable operation. Insufficient available credits or an explicit project stop budget rejects before operation creation or provider work. Repeating the accepted request never reserves twice.
+ * Reserves the quoted build credits from the shared organization pool and starts the exact reviewed plan as one durable operation. Insufficient available credits or an explicit project stop budget rejects before operation creation or provider work. Repeating the accepted request never reserves twice. Native Auth rollout access is checked again before accepting a new request. A pre-provider loss of access during initial Native setup ends the operation with native_auth_launch_unavailable.
  */
 export const createDeployment = <ThrowOnError extends boolean = true>(
   parameters: {
