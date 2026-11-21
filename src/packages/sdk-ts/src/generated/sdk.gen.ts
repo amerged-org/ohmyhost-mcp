@@ -63,6 +63,8 @@ import type {
   CreateDeploymentResponses,
   CreateMakeActionBindingErrors,
   CreateMakeActionBindingResponses,
+  CreateMakeCredentialRequestErrors,
+  CreateMakeCredentialRequestResponses,
   CreateManagedSourceUploadErrors,
   CreateManagedSourceUploadResponses,
   CreateNativeAuthUserErrors,
@@ -163,6 +165,8 @@ import type {
   GetFeedbackResponses,
   GetGithubOrganizationConnectionErrors,
   GetGithubOrganizationConnectionResponses,
+  GetMakeCredentialRequestErrors,
+  GetMakeCredentialRequestResponses,
   GetManagedMailAttachmentErrors,
   GetManagedMailAttachmentResponses,
   GetManagedMailDomainErrors,
@@ -273,6 +277,7 @@ import type {
   MailRevisionRequest,
   MakeActionBindingRequest,
   MakeActionRunRequest,
+  MakeCredentialRequestCreate,
   ManagedMailDomainRequest,
   ManagedMailWebhookRequest,
   ManagedSourceBlobRequest,
@@ -856,6 +861,117 @@ export const discoverConnection = <ThrowOnError extends boolean = true>(
       },
     ],
     url: "/v1/organizations/{organization_id}/connections/{grant_id}/catalog",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Create a native Make Credential Request
+ *
+ * Uses the workspace owner's Make grant to create a private Make authorization link for selected standard app modules or Endpoints. Retry the same logical request with the same idempotency key and selections. Treat an uncertain result as pending investigation.
+ */
+export const createMakeCredentialRequest = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    organization_id: Ulid;
+    grant_id: Ulid;
+    makeCredentialRequestCreate: MakeCredentialRequestCreate;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateMakeCredentialRequestResponses,
+  CreateMakeCredentialRequestErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "organization_id" },
+          { in: "path", key: "grant_id" },
+          { key: "makeCredentialRequestCreate", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateMakeCredentialRequestResponses,
+    CreateMakeCredentialRequestErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/organizations/{organization_id}/connections/{grant_id}/credential-requests",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read native Make Credential Request status
+ *
+ * Reads the current Make status for the owning workspace grant. The private authorization link is available in the create response.
+ */
+export const getMakeCredentialRequest = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    organization_id: Ulid;
+    grant_id: Ulid;
+    request_id: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetMakeCredentialRequestResponses,
+  GetMakeCredentialRequestErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "organization_id" },
+          { in: "path", key: "grant_id" },
+          { in: "path", key: "request_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetMakeCredentialRequestResponses,
+    GetMakeCredentialRequestErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/organizations/{organization_id}/connections/{grant_id}/credential-requests/{request_id}",
     ...options,
     ...params,
   });

@@ -1,4 +1,5 @@
 import { MCP_CONNECTION_ID_PATTERN } from "@ohmyhost/contracts/organization-mcp-connections";
+import { parseMakeCredentialSelections } from "@ohmyhost/contracts/connection-management";
 import { isUserSecretName, USER_SECRET_NAME_PATTERN } from "@ohmyhost/contracts/secret-names";
 import { isNativeAuthRedirectPath } from "@ohmyhost/contracts/native-auth";
 import type { DatabaseComputeSelection } from "@ohmyhost/contracts/database-sizes";
@@ -2311,6 +2312,74 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
   registerProductTool(
     server,
     dependencies,
+    "integration_credential_request_create",
+    "Create a native Make Credential Request for selected standard app modules or Endpoints. Give the private Make authorization link to the requesting owner. Use the same key to retry the same request.",
+    z.strictObject({
+      organization_id: identifier,
+      grant_id: identifier,
+      provider_organization_id: z.number().int().positive().safe(),
+      team_id: z.number().int().positive().safe(),
+      idempotency_key: idempotencyKey,
+      selections: z
+        .array(
+          z.strictObject({
+            app_name: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/u),
+            app_version: z.number().int().positive().safe(),
+            module_ids: z
+              .array(z.string().regex(/^[A-Za-z0-9_.:-]{1,128}$/u))
+              .min(1)
+              .max(64)
+              .optional(),
+            endpoint_names: z
+              .array(z.string().regex(/^[A-Za-z0-9_-]{1,128}$/u))
+              .min(1)
+              .max(64)
+              .optional(),
+          }),
+        )
+        .min(1)
+        .max(64),
+    }),
+    (client, input) => {
+      if (!client.connection) throw new Error("connection_provider_unavailable");
+      return client.connection({
+        kind: "connection-credential-request-create",
+        organizationId: input.organization_id,
+        grantId: input.grant_id,
+        providerOrganizationId: input.provider_organization_id,
+        teamId: input.team_id,
+        idempotencyKey: input.idempotency_key,
+        selections: parseMakeCredentialSelections(input.selections),
+        credentialStore: "native",
+      });
+    },
+    { ...mutationAnnotations(), openWorldHint: true },
+  );
+  registerProductTool(
+    server,
+    dependencies,
+    "integration_credential_request_status",
+    "Read the current Make status of a Credential Request owned by the selected workspace grant.",
+    z.strictObject({
+      organization_id: identifier,
+      grant_id: identifier,
+      request_id: z.string().regex(/^[a-f0-9]{64}$/u),
+    }),
+    (client, input) => {
+      if (!client.connection) throw new Error("connection_provider_unavailable");
+      return client.connection({
+        kind: "connection-credential-request-status",
+        organizationId: input.organization_id,
+        grantId: input.grant_id,
+        requestId: input.request_id,
+        credentialStore: "native",
+      });
+    },
+    { ...readAnnotations(), openWorldHint: true },
+  );
+  registerProductTool(
+    server,
+    dependencies,
     "github_connect",
     "Owner or Admin: connect GitHub once for this workspace. Give authorization_url to the customer and repeat identical arguments and key to observe completion. One connection covers subsequent source_link calls; no provider token is returned. Failed or expired attempts require a fresh key for this same workspace, never a new project.",
     z.object({ organization_id: identifier, idempotency_key: idempotencyKey }),
@@ -3843,7 +3912,7 @@ function registerProductTool<Schema extends z.ZodObject<z.ZodRawShape>, Result>(
     input: z.output<Schema>,
     signal: AbortSignal,
   ) => Promise<Result>,
-  annotations = readAnnotations(),
+  annotations: ReturnType<typeof readAnnotations> & { openWorldHint?: boolean } = readAnnotations(),
   selection: (
     input: z.output<Schema> & { readonly profile_name?: string | undefined },
   ) => ProfileRequestInput = (input) => {

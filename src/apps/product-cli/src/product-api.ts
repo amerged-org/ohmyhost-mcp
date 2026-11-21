@@ -6,6 +6,8 @@ import {
   getConnectionRequest,
   discoverConnection,
   disconnectConnection,
+  createMakeCredentialRequest,
+  getMakeCredentialRequest,
 } from "@ohmyhost/sdk-ts";
 import type { ProductCliCommand } from "./command.js";
 import { randomUUID } from "node:crypto";
@@ -312,6 +314,8 @@ export type ConnectionCommand = Extract<
       | "connection-status"
       | "connection-discover"
       | "connection-disconnect"
+      | "connection-credential-request-create"
+      | "connection-credential-request-status"
       | "connection-import";
   }
 >;
@@ -867,6 +871,27 @@ export async function executeConnectionCommand(
       result = await disconnectConnection(
         { organization_id, grant_id: command.grantId, "Idempotency-Key": command.idempotencyKey },
         { client: client },
+      );
+      break;
+    case "connection-credential-request-create":
+      result = await createMakeCredentialRequest(
+        {
+          organization_id,
+          grant_id: command.grantId,
+          "Idempotency-Key": command.idempotencyKey,
+          makeCredentialRequestCreate: {
+            provider_organization_id: command.providerOrganizationId,
+            team_id: command.teamId,
+            selections: command.selections,
+          },
+        },
+        { client },
+      );
+      break;
+    case "connection-credential-request-status":
+      result = await getMakeCredentialRequest(
+        { organization_id, grant_id: command.grantId, request_id: command.requestId },
+        { client },
       );
       break;
   }

@@ -1,4 +1,8 @@
 import { isUserSecretName } from "@ohmyhost/contracts/secret-names";
+import {
+  parseMakeCredentialSelections,
+  type MakeCredentialSelection,
+} from "@ohmyhost/contracts/connection-management";
 import { MCP_CONNECTION_ID_PATTERN } from "@ohmyhost/contracts/organization-mcp-connections";
 import {
   DATABASE_PAGE_MAX_ITEMS,
@@ -178,6 +182,23 @@ export type ProductCliCommand =
       readonly grantId: string;
       readonly idempotencyKey: string;
       readonly yes: true;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "connection-credential-request-create";
+      readonly organizationId: string;
+      readonly grantId: string;
+      readonly providerOrganizationId: number;
+      readonly teamId: number;
+      readonly selections: MakeCredentialSelection[];
+      readonly idempotencyKey: string;
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "connection-credential-request-status";
+      readonly organizationId: string;
+      readonly grantId: string;
+      readonly requestId: string;
       readonly credentialStore: "native";
     }
   | {
@@ -1203,6 +1224,8 @@ export type RecognizedCommandLabel =
   | "connection discover"
   | "connection import"
   | "connection disconnect"
+  | "connection credential-request-create"
+  | "connection credential-request-status"
   | "github connect"
   | "github status"
   | "github disconnect"
@@ -1341,7 +1364,16 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
     if (value === "profile" && values[0] === "list") return "profile list";
     if (
       value === "connection" &&
-      ["begin", "list", "status", "discover", "import", "disconnect"].includes(values[0] ?? "")
+      [
+        "begin",
+        "list",
+        "status",
+        "discover",
+        "import",
+        "disconnect",
+        "credential-request-create",
+        "credential-request-status",
+      ].includes(values[0] ?? "")
     )
       return `connection ${values[0]}` as RecognizedCommandLabel;
     if (value === "github" && values[0] === "connect") return "github connect";
@@ -2197,6 +2229,7 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       "--provider-organization",
       "--team",
       "--connection",
+      "--selections",
     ] as const);
     const org = options["--organization"];
     if (!org || !ORGANIZATION_ULID.test(org)) throw new InvalidCommandError();
@@ -2208,6 +2241,58 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       options["--environment"] &&
       ORGANIZATION_ULID.test(options["--project"]) &&
       ORGANIZATION_ULID.test(options["--environment"]);
+    if (
+      operation === "credential-request-create" &&
+      exact([
+        "--organization",
+        "--grant",
+        "--provider-organization",
+        "--team",
+        "--selections",
+        "--idempotency-key",
+      ])
+    ) {
+      const grantId = options["--grant"] ?? "";
+      const idempotencyKey = options["--idempotency-key"] ?? "";
+      const providerOrganization = options["--provider-organization"] ?? "";
+      const team = options["--team"] ?? "";
+      if (
+        !ORGANIZATION_ULID.test(grantId) ||
+        !/^[A-Za-z0-9._:-]{1,128}$/u.test(idempotencyKey) ||
+        [providerOrganization, team].some(
+          (id) => !/^[1-9][0-9]{0,15}$/u.test(id) || !Number.isSafeInteger(Number(id)),
+        )
+      )
+        throw new InvalidCommandError();
+      try {
+        const json = options["--selections"] ?? "";
+        return {
+          kind: "connection-credential-request-create",
+          organizationId: org,
+          grantId,
+          providerOrganizationId: Number(providerOrganization),
+          teamId: Number(team),
+          selections: parseMakeCredentialSelections(JSON.parse(json)),
+          idempotencyKey,
+          credentialStore,
+        };
+      } catch {
+        throw new InvalidCommandError();
+      }
+    }
+    if (
+      operation === "credential-request-status" &&
+      exact(["--organization", "--grant", "--request"]) &&
+      ORGANIZATION_ULID.test(options["--grant"] ?? "") &&
+      /^[a-f0-9]{64}$/u.test(options["--request"] ?? "")
+    )
+      return {
+        kind: "connection-credential-request-status",
+        organizationId: org,
+        grantId: options["--grant"] ?? "",
+        requestId: options["--request"] ?? "",
+        credentialStore,
+      };
     if (operation === "list" && exact(["--organization"]))
       return { kind: "connection-list", organizationId: org, credentialStore };
     if (

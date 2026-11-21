@@ -25,6 +25,40 @@ export type ConnectionBegin = {
   environment_id?: Ulid;
 };
 
+export type MakeCredentialRequestCreate = {
+  provider_organization_id: number;
+  team_id: number;
+  selections: Array<MakeCredentialSelection>;
+};
+
+export type MakeCredentialSelection = unknown & {
+  /**
+   * A Make standard app identifier.
+   */
+  app_name: string;
+  app_version: number;
+  module_ids?: Array<string>;
+  endpoint_names?: Array<string>;
+};
+
+export type MakeCredentialRequestResult = {
+  state: "created" | "running" | "uncertain" | "reconnect_required";
+  request_id?: string;
+  provider_status?: string;
+  /**
+   * Private Make link available only on create or replay.
+   */
+  authorization_url?: string;
+  expires_at?: string | null;
+};
+
+export type MakeCredentialRequestStatus = {
+  state: "created" | "running" | "uncertain" | "reconnect_required";
+  request_id?: string;
+  provider_status?: string;
+  expires_at?: string | null;
+};
+
 export type MakeActionBindingRequest = {
   project_id: Ulid;
   environment_id: Ulid;
@@ -3146,6 +3180,119 @@ export type DiscoverConnectionResponses = {
 
 export type DiscoverConnectionResponse =
   DiscoverConnectionResponses[keyof DiscoverConnectionResponses];
+
+export type CreateMakeCredentialRequestData = {
+  body: MakeCredentialRequestCreate;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    organization_id: Ulid;
+    grant_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/connections/{grant_id}/credential-requests";
+};
+
+export type CreateMakeCredentialRequestErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateMakeCredentialRequestError =
+  CreateMakeCredentialRequestErrors[keyof CreateMakeCredentialRequestErrors];
+
+export type CreateMakeCredentialRequestResponses = {
+  /**
+   * Credential Request result and its private Make link when available.
+   */
+  200: MakeCredentialRequestResult;
+};
+
+export type CreateMakeCredentialRequestResponse =
+  CreateMakeCredentialRequestResponses[keyof CreateMakeCredentialRequestResponses];
+
+export type GetMakeCredentialRequestData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    organization_id: Ulid;
+    grant_id: Ulid;
+    request_id: string;
+  };
+  query?: never;
+  url: "/v1/organizations/{organization_id}/connections/{grant_id}/credential-requests/{request_id}";
+};
+
+export type GetMakeCredentialRequestErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetMakeCredentialRequestError =
+  GetMakeCredentialRequestErrors[keyof GetMakeCredentialRequestErrors];
+
+export type GetMakeCredentialRequestResponses = {
+  /**
+   * Current Credential Request status.
+   */
+  200: MakeCredentialRequestStatus;
+};
+
+export type GetMakeCredentialRequestResponse =
+  GetMakeCredentialRequestResponses[keyof GetMakeCredentialRequestResponses];
 
 export type CreateMakeActionBindingData = {
   body: MakeActionBindingRequest;

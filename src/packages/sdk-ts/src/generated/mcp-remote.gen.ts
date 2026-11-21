@@ -72,9 +72,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "490aa3b1c4d68906162af3f8d000fa37e93d0a52ef29fe52f57a83cbc5209294";
+  "99da3b404be30539e086a7972dca78e3d0270117abf06d1b83522d5b095d571d";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.71";
+export const remoteMcpReleaseVersion = "0.1.72";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -804,6 +804,227 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
           },
         },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "organization_id",
+        "grant_id",
+        "idempotency_key",
+        "provider_organization_id",
+        "team_id",
+        "selections",
+      ],
+      properties: {
+        organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        grant_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        idempotency_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
+        },
+        provider_organization_id: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+        team_id: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+        selections: {
+          type: "array",
+          minItems: 1,
+          maxItems: 64,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["app_name", "app_version"],
+            anyOf: [{ required: ["module_ids"] }, { required: ["endpoint_names"] }],
+            properties: {
+              app_name: {
+                type: "string",
+                pattern: "^[A-Za-z0-9_-]{1,128}$",
+                description: "A Make standard app identifier.",
+              },
+              app_version: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+              module_ids: {
+                type: "array",
+                minItems: 1,
+                maxItems: 64,
+                uniqueItems: true,
+                items: { type: "string", pattern: "^[A-Za-z0-9_.:-]{1,128}$" },
+              },
+              endpoint_names: {
+                type: "array",
+                minItems: 1,
+                maxItems: 64,
+                uniqueItems: true,
+                items: { type: "string", pattern: "^[A-Za-z0-9_-]{1,128}$" },
+              },
+            },
+          },
+        },
+      },
+    },
+    operationId: "createMakeCredentialRequest",
+    method: "POST",
+    path: "/v1/organizations/{organization_id}/connections/{grant_id}/credential-requests",
+    summary: "Create a native Make Credential Request",
+    description:
+      "Uses the workspace owner's Make grant to create a private Make authorization link for selected standard app modules or Endpoints. Retry the same logical request with the same idempotency key and selections. Treat an uncertain result as pending investigation.",
+    disposition: "named",
+    toolNames: ["integration_credential_request_create"],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["provider_organization_id", "team_id", "selections"],
+            properties: {
+              provider_organization_id: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+              team_id: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+              selections: {
+                type: "array",
+                minItems: 1,
+                maxItems: 64,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["app_name", "app_version"],
+                  anyOf: [{ required: ["module_ids"] }, { required: ["endpoint_names"] }],
+                  properties: {
+                    app_name: {
+                      type: "string",
+                      pattern: "^[A-Za-z0-9_-]{1,128}$",
+                      description: "A Make standard app identifier.",
+                    },
+                    app_version: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                    module_ids: {
+                      type: "array",
+                      minItems: 1,
+                      maxItems: 64,
+                      uniqueItems: true,
+                      items: { type: "string", pattern: "^[A-Za-z0-9_.:-]{1,128}$" },
+                    },
+                    endpoint_names: {
+                      type: "array",
+                      minItems: 1,
+                      maxItems: 64,
+                      uniqueItems: true,
+                      items: { type: "string", pattern: "^[A-Za-z0-9_-]{1,128}$" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    parameters: [
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "organization_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "grant_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "Idempotency-Key",
+        in: "header",
+        description:
+          "Identifies one mutation and its canonical request payload; only letters, digits and the characters . _ : - are accepted.",
+        required: true,
+        schema: { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["state"],
+      properties: {
+        state: { enum: ["created", "running", "uncertain", "reconnect_required"] },
+        request_id: { type: "string", pattern: "^[a-f0-9]{64}$" },
+        provider_status: { type: "string", minLength: 1, maxLength: 64 },
+        authorization_url: {
+          type: "string",
+          format: "uri",
+          description: "Private Make link available only on create or replay.",
+        },
+        expires_at: { type: ["string", "null"], format: "date-time" },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      properties: {
+        organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        grant_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        request_id: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      },
+      required: ["organization_id", "grant_id", "request_id"],
+      additionalProperties: false,
+    },
+    operationId: "getMakeCredentialRequest",
+    method: "GET",
+    path: "/v1/organizations/{organization_id}/connections/{grant_id}/credential-requests/{request_id}",
+    summary: "Read native Make Credential Request status",
+    description:
+      "Reads the current Make status for the owning workspace grant. The private authorization link is available in the create response.",
+    disposition: "named",
+    toolNames: ["integration_credential_request_status"],
+    parameters: [
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "organization_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "grant_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "request_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["state"],
+      properties: {
+        state: { enum: ["created", "running", "uncertain", "reconnect_required"] },
+        request_id: { type: "string", pattern: "^[a-f0-9]{64}$" },
+        provider_status: { type: "string", minLength: 1, maxLength: 64 },
+        expires_at: { type: ["string", "null"], format: "date-time" },
       },
     },
   },

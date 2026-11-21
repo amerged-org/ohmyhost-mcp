@@ -375,6 +375,10 @@ const HELP_USAGE = Object.freeze({
     "ohmyhost connection import --organization ULID --grant ULID --project ULID --environment ULID --provider-organization ID --team ID --connection ID --idempotency-key KEY --json",
   "connection disconnect":
     "ohmyhost connection disconnect --organization ULID --grant ULID --idempotency-key KEY --yes --json",
+  "connection credential-request-create":
+    "ohmyhost connection credential-request-create --organization ULID --grant ULID --provider-organization ID --team ID --selections JSON --idempotency-key KEY --json",
+  "connection credential-request-status":
+    "ohmyhost connection credential-request-status --organization ULID --grant ULID --request HASH --json",
   "github connect":
     "ohmyhost github connect --organization ULID --idempotency-key KEY --json (connect once, then link covered repositories without another browser consent)",
   "github status": "ohmyhost github status --organization ULID --json",
@@ -949,7 +953,9 @@ export class ProductCli {
         command.kind === "connection-status" ||
         command.kind === "connection-discover" ||
         command.kind === "connection-import" ||
-        command.kind === "connection-disconnect"
+        command.kind === "connection-disconnect" ||
+        command.kind === "connection-credential-request-create" ||
+        command.kind === "connection-credential-request-status"
       ) {
         const api = await this.authenticatedApi(command.credentialStore, signal);
         if (!api.connection) throw new ResponseContractError();
@@ -4036,6 +4042,10 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "connection-discover") return "connection discover";
   if (command.kind === "connection-import") return "connection import";
   if (command.kind === "connection-disconnect") return "connection disconnect";
+  if (command.kind === "connection-credential-request-create")
+    return "connection credential-request-create";
+  if (command.kind === "connection-credential-request-status")
+    return "connection credential-request-status";
   if (command.kind === "organization-mcp-connections-list")
     return "organization mcp-connections list";
   if (command.kind === "organization-mcp-connection-revoke")
