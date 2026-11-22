@@ -13,10 +13,23 @@ export type Preview = {
    * Stable private capability URL without an expiration time.
    */
   url: string;
-  source: null | {
-    sequence: number;
-    commit_sha: string;
-  };
+  /**
+   * The saved version selected for this preview, or null if there is none.
+   */
+  source: PreviewSource;
+  /**
+   * The version applied to the preview, or null if no version has been applied.
+   */
+  applied_source: PreviewSource;
+  /**
+   * True when the preview is ready and its applied version has the same sequence as the saved version.
+   */
+  ready_to_show: boolean;
+};
+
+export type PreviewSource = null | {
+  sequence: number;
+  commit_sha: string;
 };
 
 export type ConnectionBegin = {

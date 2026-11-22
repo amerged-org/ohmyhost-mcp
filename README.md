@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.74; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.75; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.74 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.75 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -145,8 +145,8 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `organization_use`: Bind a saved login that has no organization yet to one workspace, so later calls act inside it.
 - `powered_by_flag_get`: Read whether the production site shows the opt-in "Powered by ohmyho.st" flag.
 - `powered_by_flag_set`: Owner only, ask the human first: show or hide a small "Powered by ohmyho.st" flag on the right edge of the production site.
-- `preview_get`: Read the private stable preview URL and source state for this project environment.
-- `preview_open`: Open or create a private stable preview URL.
+- `preview_get`: Read the stable private preview of this exact environment: its link, state, saved and applied version, and ready_to_show.
+- `preview_open`: Open or create the stable private preview of this exact environment and return its link, state and ready_to_show.
 - `preview_rotate`: Rotate the preview URL and close old connections.
 - `preview_stop`: Stop the preview and remove backups while preserving its URL.
 - `profile_list`: List the saved ohmyho.st logins on this computer: each has a name, a user and an organization, never a token.
@@ -215,7 +215,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.74 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.75 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

@@ -40,6 +40,12 @@ import {
   formatMcpSourceFileResponse,
   McpSourceChangesInputError,
 } from "@ohmyhost/contracts/mcp-source-codec";
+import {
+  CHAT_MAIN_PATH_INSTRUCTIONS,
+  PREVIEW_GET_DESCRIPTION,
+  PREVIEW_OPEN_DESCRIPTION,
+  withChatGuidance,
+} from "@ohmyhost/contracts/chat-guidance";
 import type { ManagedMailCommand, SharedMailCommand } from "@ohmyhost/sdk-ts";
 import {
   parseManagedSourceRequest,
@@ -677,6 +683,7 @@ const deletableSecretName = z
 
 const LOCAL_SERVER_INSTRUCTIONS =
   "Continue an existing app from its reachable workspace and saved project binding. Reuse a matching local CLI/MCP profile or private token source unless the user chooses remote; verify its identity and workspace. Remote tool availability alone never selects remote. If remote identity/workspace mismatches, stop the access-link loop. Unreachable local context is an access gap, not deleted credentials; never substitute an unrelated Review/demo account or change the saved source. " +
+  CHAT_MAIN_PATH_INSTRUCTIONS +
   "Operate the user's ohmyho.st hosting account: projects, managed or GitHub sources and deployments, databases, domains, mail, usage and budgets. " +
   "Use the existing project source binding first. A local or cloud workspace can contain Git without GitHub. If unbound current files have no relevant GitHub source, ask once whether to deploy directly with ohmyho.st saving versions or set up GitHub; do not require GitHub just because no connection exists. " +
   "Read the resource skill://ohmyhost/ohmyhost-get-started/SKILL.md and verify the chosen access with identity_get; read project_context_get before acting on a project. " +
@@ -2005,7 +2012,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "preview_get",
-    "Read the private stable preview URL and source state for this project environment.",
+    PREVIEW_GET_DESCRIPTION,
     z.object({ project_id: identifier, environment: z.enum(["dev", "prod"]) }),
     (client, input) => {
       if (!client.preview) throw new Error("Preview unavailable");
@@ -2016,7 +2023,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "preview_open",
-    "Open or create a private stable preview URL. Saved source updates it without deploying; the URL has no expiry until rotated.",
+    PREVIEW_OPEN_DESCRIPTION,
     z.object({ project_id: identifier, environment: z.enum(["dev", "prod"]) }),
     (client, input) => {
       if (!client.preview) throw new Error("Preview unavailable");
@@ -3934,9 +3941,9 @@ function registerProductTool<Schema extends z.ZodObject<z.ZodRawShape>, Result>(
     let client: LocalMcpProductClient | undefined;
     try {
       client = await dependencies.authenticatedClient(context.mcpReq.signal, selection(parsed));
-      const result = toolResult(
-        await execute(client, call as z.output<Schema>, context.mcpReq.signal),
-      );
+      const value = await execute(client, call as z.output<Schema>, context.mcpReq.signal);
+      // Local project creation does not request a managed starter.
+      const result = toolResult(withChatGuidance(name, value, { starterRequested: false }));
       const scope = parsed as Record<string, unknown>;
       if (
         typeof scope["project_id"] === "string" &&

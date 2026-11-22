@@ -30,6 +30,11 @@
       "types": "./dist/mcp-source-codec.d.ts",
       "import": "./dist/mcp-source-codec.js"
     },
+    "./chat-guidance": {
+      "source": "./src/chat-guidance.ts",
+      "types": "./dist/chat-guidance.d.ts",
+      "import": "./dist/chat-guidance.js"
+    },
     "./operation-failure": {
       "source": "./src/operation-failure.ts",
       "types": "./dist/operation-failure.d.ts",

@@ -72,9 +72,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "1cb53afbb2abd3322167436062b0925bc9d931a34da1ab5d9bb33dff0abf8e3c";
+  "61ed92a391a6fc6c187cab53c0e0307dcc45652563857384745d0d8aab25dde0";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.74";
+export const remoteMcpReleaseVersion = "0.1.75";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -159,7 +159,16 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     outputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["id", "project_id", "environment", "status", "url", "source"],
+      required: [
+        "id",
+        "project_id",
+        "environment",
+        "status",
+        "url",
+        "source",
+        "applied_source",
+        "ready_to_show",
+      ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
         project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -178,11 +187,33 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["sequence", "commit_sha"],
               properties: {
-                sequence: { type: "integer", minimum: 1 },
-                commit_sha: { type: "string", pattern: "^[0-9a-f]{40}$" },
+                sequence: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                commit_sha: { type: "string", pattern: "^(?!0{40}$)[0-9a-f]{40}$" },
               },
             },
           ],
+          description: "The saved version selected for this preview, or null if there is none.",
+        },
+        applied_source: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["sequence", "commit_sha"],
+              properties: {
+                sequence: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                commit_sha: { type: "string", pattern: "^(?!0{40}$)[0-9a-f]{40}$" },
+              },
+            },
+          ],
+          description:
+            "The version applied to the preview, or null if no version has been applied.",
+        },
+        ready_to_show: {
+          type: "boolean",
+          description:
+            "True when the preview is ready and its applied version has the same sequence as the saved version.",
         },
       },
     },
@@ -239,7 +270,16 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     outputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["id", "project_id", "environment", "status", "url", "source"],
+      required: [
+        "id",
+        "project_id",
+        "environment",
+        "status",
+        "url",
+        "source",
+        "applied_source",
+        "ready_to_show",
+      ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
         project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -258,11 +298,33 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["sequence", "commit_sha"],
               properties: {
-                sequence: { type: "integer", minimum: 1 },
-                commit_sha: { type: "string", pattern: "^[0-9a-f]{40}$" },
+                sequence: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                commit_sha: { type: "string", pattern: "^(?!0{40}$)[0-9a-f]{40}$" },
               },
             },
           ],
+          description: "The saved version selected for this preview, or null if there is none.",
+        },
+        applied_source: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["sequence", "commit_sha"],
+              properties: {
+                sequence: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                commit_sha: { type: "string", pattern: "^(?!0{40}$)[0-9a-f]{40}$" },
+              },
+            },
+          ],
+          description:
+            "The version applied to the preview, or null if no version has been applied.",
+        },
+        ready_to_show: {
+          type: "boolean",
+          description:
+            "True when the preview is ready and its applied version has the same sequence as the saved version.",
         },
       },
     },
@@ -332,7 +394,16 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     outputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["id", "project_id", "environment", "status", "url", "source"],
+      required: [
+        "id",
+        "project_id",
+        "environment",
+        "status",
+        "url",
+        "source",
+        "applied_source",
+        "ready_to_show",
+      ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
         project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -351,11 +422,33 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["sequence", "commit_sha"],
               properties: {
-                sequence: { type: "integer", minimum: 1 },
-                commit_sha: { type: "string", pattern: "^[0-9a-f]{40}$" },
+                sequence: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                commit_sha: { type: "string", pattern: "^(?!0{40}$)[0-9a-f]{40}$" },
               },
             },
           ],
+          description: "The saved version selected for this preview, or null if there is none.",
+        },
+        applied_source: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["sequence", "commit_sha"],
+              properties: {
+                sequence: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                commit_sha: { type: "string", pattern: "^(?!0{40}$)[0-9a-f]{40}$" },
+              },
+            },
+          ],
+          description:
+            "The version applied to the preview, or null if no version has been applied.",
+        },
+        ready_to_show: {
+          type: "boolean",
+          description:
+            "True when the preview is ready and its applied version has the same sequence as the saved version.",
         },
       },
     },
@@ -425,7 +518,16 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     outputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["id", "project_id", "environment", "status", "url", "source"],
+      required: [
+        "id",
+        "project_id",
+        "environment",
+        "status",
+        "url",
+        "source",
+        "applied_source",
+        "ready_to_show",
+      ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
         project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -444,11 +546,33 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["sequence", "commit_sha"],
               properties: {
-                sequence: { type: "integer", minimum: 1 },
-                commit_sha: { type: "string", pattern: "^[0-9a-f]{40}$" },
+                sequence: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                commit_sha: { type: "string", pattern: "^(?!0{40}$)[0-9a-f]{40}$" },
               },
             },
           ],
+          description: "The saved version selected for this preview, or null if there is none.",
+        },
+        applied_source: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["sequence", "commit_sha"],
+              properties: {
+                sequence: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                commit_sha: { type: "string", pattern: "^(?!0{40}$)[0-9a-f]{40}$" },
+              },
+            },
+          ],
+          description:
+            "The version applied to the preview, or null if no version has been applied.",
+        },
+        ready_to_show: {
+          type: "boolean",
+          description:
+            "True when the preview is ready and its applied version has the same sequence as the saved version.",
         },
       },
     },

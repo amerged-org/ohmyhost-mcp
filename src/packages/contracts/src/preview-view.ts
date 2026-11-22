@@ -6,6 +6,8 @@ export interface PreviewView {
   readonly status: "cold" | "starting" | "ready" | "sleeping";
   readonly url: string;
   readonly source: Readonly<{ sequence: number; commit_sha: string }> | null;
+  readonly applied_source: PreviewView["source"];
+  readonly ready_to_show: boolean;
 }
 
 export function parsePreviewView(
@@ -17,21 +19,23 @@ export function parsePreviewView(
   const row = value as Record<string, unknown>;
   const ulid = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u;
   if (
-    Object.keys(row).sort().join(",") !== "environment,id,project_id,source,status,url" ||
+    Object.keys(row).sort().join(",") !==
+      "applied_source,environment,id,project_id,ready_to_show,source,status,url" ||
     typeof row["id"] !== "string" ||
     !ulid.test(row["id"]) ||
     typeof row["project_id"] !== "string" ||
     !ulid.test(row["project_id"]) ||
     (row["environment"] !== "dev" && row["environment"] !== "prod") ||
     !["cold", "starting", "ready", "sleeping"].includes(String(row["status"])) ||
+    typeof row["ready_to_show"] !== "boolean" ||
     typeof row["url"] !== "string" ||
     !/^https:\/\/[a-z2-7]{51}[aq]\.preview(?:\.dev)?\.omh\.st$/u.test(row["url"]) ||
     (scope !== undefined &&
       (row["project_id"] !== scope.projectId || row["environment"] !== scope.environment))
   )
     throw new TypeError("Invalid preview response");
-  if (row["source"] !== null) {
-    const source = row["source"];
+  for (const source of [row["source"], row["applied_source"]]) {
+    if (source === null) continue;
     if (!source || typeof source !== "object" || Array.isArray(source))
       throw new TypeError("Invalid preview response");
     const item = source as Record<string, unknown>;
