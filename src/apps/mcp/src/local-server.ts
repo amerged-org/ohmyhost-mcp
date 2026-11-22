@@ -81,6 +81,7 @@ import {
 import {
   ACCOUNT_SENSITIVE_PROBLEMS,
   CredentialStoreUnavailableError,
+  describeFileStoreRefusal,
   isProfileUserId,
   parseCurrentIdentity,
   profileLimitAction,
@@ -685,7 +686,8 @@ const LOCAL_SERVER_INSTRUCTIONS =
   "Continue an existing app from its reachable workspace and saved project binding. Reuse a matching local CLI/MCP profile or private token source unless the user chooses remote; verify its identity and workspace. Remote tool availability alone never selects remote. If remote identity/workspace mismatches, stop the access-link loop. Unreachable local context is an access gap, not deleted credentials; never substitute an unrelated Review/demo account or change the saved source. " +
   CHAT_MAIN_PATH_INSTRUCTIONS +
   "Operate the user's ohmyho.st hosting account: projects, managed or GitHub sources and deployments, databases, domains, mail, usage and budgets. " +
-  "Use the existing project source binding first. A local or cloud workspace can contain Git without GitHub. If unbound current files have no relevant GitHub source, ask once whether to deploy directly with ohmyho.st saving versions or set up GitHub; do not require GitHub just because no connection exists. " +
+  "Use the existing project source binding first; an unbound local or cloud checkout is published as it is, with or without a GitHub remote, and GitHub is the later step for deployment on every push, so ask no routing question and do not require GitHub just because no connection exists. " +
+  "A local agent signs in with ohmyhost login --json (one link, one code, also in a container), a chat with the remote tools uses identity_get, and CI uses OHMYHOST_TOKEN; set a private value through the CLI's standard input, because the protected one-hour form exists only in the remote connection. " +
   "Read the resource skill://ohmyhost/ohmyhost-get-started/SKILL.md and verify the chosen access with identity_get; read project_context_get before acting on a project. " +
   "This server is also ohmyho.st support: report a bug, issue or feature request with feedback_submit, give the user the receipt ID and follow up with feedback_status (https://docs.ohmyho.st/support).";
 
@@ -4127,6 +4129,7 @@ function localFailure(error: Error, commandPrefix: string): SafeFailure | undefi
         (error as Error & { readonly code: ProductApiAuthenticationError["code"] }).code,
         error instanceof SavedLoginCredentialError ? error.profile : undefined,
         commandPrefix,
+        (error as Error & { readonly record?: string }).record,
       );
     case "ProductCliFailure":
       if (Reflect.get(error, "code") === "headers_file_invalid")
@@ -4167,12 +4170,22 @@ function localFailure(error: Error, commandPrefix: string): SafeFailure | undefi
         retryable: true,
         suggestedAction: `The signed-in account could not be verified; nothing was saved. Run ${commandPrefix} login --json again.`,
       };
+    case "LoginOwnershipTimeoutError":
+      return credentialFailure(
+        "token_refresh_failed",
+        undefined,
+        commandPrefix,
+        (error as Error & { readonly record?: string }).record,
+      );
+    case "FileCredentialStoreRefusedError":
     case "CredentialStoreUnavailableError":
       return {
         code: "credential_store_unavailable",
         retryable: false,
-        suggestedAction:
-          "This MCP server could not read this computer's credential store (for example macOS Keychain or Windows Credential Manager) or ~/.ohmyhost/profiles; saved logins were not changed. If the store is locked, ask the customer to unlock it and call again. Where no credential store exists (server, container, CI), put OHMYHOST_TOKEN with a token from the portal's API Tokens page in this server's env block and restart the server.",
+        suggestedAction: `${
+          describeFileStoreRefusal(error) ??
+          "This MCP server could not read this computer's credential store (the macOS Keychain, the Windows Credential Manager) or the saved-login files in ~/.ohmyhost/profiles."
+        } Saved logins were not changed. If the agent runs in a sandbox, start this server with access to them. If a desktop store is locked, ask the customer to unlock it. Then call again.`,
       };
     case "InteractiveSessionRequiredError":
       return {
@@ -4226,6 +4239,7 @@ function credentialFailure(
   code: ProductApiAuthenticationError["code"],
   profile: LocalProfile | undefined,
   commandPrefix: string,
+  record?: string,
 ): SafeFailure {
   const login =
     profile === undefined
@@ -4252,7 +4266,11 @@ function credentialFailure(
         retryable: true,
         suggestedAction: `The saved login${
           profile === undefined ? "" : ` ${profile.name}`
-        } could not be renewed at the sign-in service; it was kept. Repeat this call in a minute; if it keeps failing, run '${login}'.`,
+        } could not be renewed at the sign-in service; it was kept.${
+          record === undefined
+            ? ""
+            : ` Another process on this computer holds this login (record ${record}) and did not finish in time; nothing was sent to the sign-in service.`
+        } Repeat this call in a minute; if it keeps failing, run '${login}'.`,
       };
     case "invalid_environment_token":
       return {

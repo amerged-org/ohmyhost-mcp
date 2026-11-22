@@ -27,7 +27,7 @@ import {
   ProductCli,
   classifyCliFailure,
   cliMetadataResult,
-  CREDENTIAL_STORE_UNAVAILABLE_ACTION,
+  credentialStoreUnavailableAction,
   endedLoginAction,
   helpTopicKnown,
   internalErrorAction,
@@ -57,12 +57,14 @@ import {
   type CurrentCredential,
   type StoredCredential,
 } from "./credential-store.js";
+import { LoginGoneError, renewLogin } from "./credential-refresh.js";
+import { LoginOwnershipTimeoutError } from "./login-ownership.js";
 import { GeneratedSdkProductApi, type ProductApi } from "./product-api.js";
 import {
+  createProfileRegistry,
   defaultProfileName,
   describeProfile,
   isProfileName,
-  NativeKeyringProfileRegistry,
   ProfileLimitError,
   profileLimitAction,
   ProfileSelectionError,
@@ -71,6 +73,7 @@ import {
   selectProfile,
   selectProfileForOrganization,
   type LocalProfile,
+  type LoginRef,
   type ProfileRegistry,
   type ProfileRequest,
   type ProfileSelector,
@@ -108,8 +111,10 @@ export interface ProductCliIo {
 }
 
 export interface ProductCliCompositionOverrides {
-  /** Saved logins; the native credential store of the selected platform environment by default. */
+  /** Saved logins; the credential store of this platform and environment by default. */
   readonly profiles?: ProfileRegistry;
+  /** The operating system that picks the store: owner-only files on Linux, the native store else. */
+  readonly platform?: NodeJS.Platform;
   /** Directory whose project link supplies a missing --project; defaults to the process directory. */
   readonly workingDirectory?: string;
   readonly readSecretValue?: (signal: AbortSignal) => Promise<string>;
@@ -128,6 +133,8 @@ export interface ProfileRequestInput {
 export interface AuthenticatedProductApiOverrides {
   readonly environment?: ProductCliEnvironment;
   readonly profiles?: ProfileRegistry;
+  /** The operating system that picks the store; see the composition overrides. */
+  readonly platform?: NodeJS.Platform;
   readonly request?: ProfileRequestInput;
   /** How the caller names a login in its error guidance: a CLI flag or an MCP argument. */
   readonly selector?: ProfileSelector;
@@ -144,6 +151,8 @@ export class ProductApiAuthenticationError extends Error {
       | "token_refresh_failed"
       | "invalid_environment_token"
       | "invalid_profile_binding",
+    /** The record of the process that holds the login, when a renewal had to give up waiting. */
+    readonly record?: string,
   ) {
     super(code);
     this.name = "ProductApiAuthenticationError";
@@ -237,7 +246,7 @@ export const createAuthenticatedProductTransport = async (
     MAX_PUBLIC_RESPONSE_BYTES,
   );
   const registry =
-    overrides.profiles ?? new NativeKeyringProfileRegistry(undefined, platform.credentialService);
+    overrides.profiles ?? createProfileRegistry(platform.credentialService, overrides.platform);
   const binding = overrides.request?.bindOrganization === true;
   const request = profileRequest(overrides.request, bound);
   if (apiToken !== undefined) {
@@ -286,8 +295,15 @@ export const createAuthenticatedProductTransport = async (
   const store = registry.credential(profile);
   const stored = await store.read();
   if (stored === undefined) throw missingLogin(profile, platform.commandPrefix);
-  const credential = await currentCredential(stored, store, signal, now, refresher, () =>
-    registry.remove(profile),
+  const credential = await currentCredential(
+    stored,
+    store,
+    signal,
+    now,
+    refresher,
+    registry,
+    profile,
+    () => registry.remove(profile),
   );
   return {
     baseUrl,
@@ -311,7 +327,7 @@ export const listSavedProfiles = async (
   const apiToken = environmentToken(overrides.environment);
   const bound = environmentProfile(overrides.environment);
   const registry =
-    overrides.profiles ?? new NativeKeyringProfileRegistry(undefined, platform.credentialService);
+    overrides.profiles ?? createProfileRegistry(platform.credentialService, overrides.platform);
   const now = overrides.now ?? (() => new Date());
   const profiles =
     apiToken === undefined
@@ -353,37 +369,52 @@ const currentCredential = async (
   signal: AbortSignal,
   now: () => Date,
   tokenRefresher: TokenRefresher,
+  registry: ProfileRegistry,
+  login: LoginRef,
   forget: () => Promise<void>,
 ): Promise<CurrentCredential> => {
-  const expiresAt = stored.expiresAt === undefined ? NaN : Date.parse(stored.expiresAt);
-  if (Number.isFinite(expiresAt) && expiresAt > now().getTime() + REQUEST_TIMEOUT_MS) {
-    return stored as CurrentCredential;
-  }
+  const usable = (credential: StoredCredential): boolean => {
+    const expiresAt = credential.expiresAt === undefined ? NaN : Date.parse(credential.expiresAt);
+    return Number.isFinite(expiresAt) && expiresAt > now().getTime() + REQUEST_TIMEOUT_MS;
+  };
+  if (usable(stored)) return stored as CurrentCredential;
   try {
-    const refreshed = await tokenRefresher.refresh(
-      stored.refreshToken,
-      boundedSignal(signal, REQUEST_TIMEOUT_MS),
-      stored.workosOrganizationId,
-    );
-    const refreshedExpiry = Date.parse(refreshed.expiresAt);
-    if (
-      refreshed.accessToken.length === 0 ||
-      refreshed.refreshToken.length === 0 ||
-      !Number.isFinite(refreshedExpiry) ||
-      refreshedExpiry <= now().getTime()
-    ) {
-      throw new Error("invalid refreshed credential");
-    }
-    // WorkOS returns a bare credential; the selection only survives if we carry it forward.
-    const carried = { ...refreshed, ...workspaceOf(stored) };
-    await store.replace(carried);
-    return carried;
+    const renewal = await renewLogin({
+      // A shared file store reads the credential again as the owner; a native store need not.
+      ...(registry.kind === "file" ? {} : { current: stored }),
+      registry,
+      login,
+      store,
+      usable,
+      renew: async (credential) => {
+        const refreshed = await tokenRefresher.refresh(
+          credential.refreshToken,
+          boundedSignal(signal, REQUEST_TIMEOUT_MS),
+          credential.workosOrganizationId,
+        );
+        const refreshedExpiry = Date.parse(refreshed.expiresAt);
+        if (
+          refreshed.accessToken.length === 0 ||
+          refreshed.refreshToken.length === 0 ||
+          !Number.isFinite(refreshedExpiry) ||
+          refreshedExpiry <= now().getTime()
+        ) {
+          throw new Error("invalid refreshed credential");
+        }
+        // WorkOS returns a bare credential; the selection only survives if we carry it forward.
+        return { ...refreshed, ...workspaceOf(credential) };
+      },
+      rejected: (error) => error instanceof TokenRefreshRejectedError,
+      forget,
+      signal,
+    });
+    return renewal.credential as CurrentCredential;
   } catch (error) {
-    if (error instanceof TokenRefreshRejectedError) {
-      // The provider ended this login; only this saved login is removed.
-      await forget();
+    // The provider ended this login (the owner removed only this saved login), or it is gone.
+    if (error instanceof TokenRefreshRejectedError || error instanceof LoginGoneError)
       throw new ProductApiAuthenticationError("authentication_required");
-    }
+    if (error instanceof LoginOwnershipTimeoutError)
+      throw new ProductApiAuthenticationError("token_refresh_failed", error.record);
     throw new ProductApiAuthenticationError("token_refresh_failed");
   }
 };
@@ -424,6 +455,8 @@ const migrateLegacyLogin = async (
       context.signal,
       context.now,
       context.refresher,
+      registry,
+      "legacy",
       () => legacy.clear(),
     );
   } catch (error) {
@@ -458,8 +491,16 @@ const migrateLegacyLogin = async (
     { name: defaultProfileName(await registry.list(), login), ...login },
     credential,
   );
-  await legacy.clear();
+  await registry.owning(["legacy"], () => legacy.clear());
 };
+
+const httpStatusOf = (error: unknown): number | undefined =>
+  typeof error === "object" &&
+  error !== null &&
+  "status" in error &&
+  typeof error.status === "number"
+    ? error.status
+    : undefined;
 
 const isProblem = (error: unknown, code: string): boolean =>
   typeof error === "object" && error !== null && "code" in error && error.code === code;
@@ -603,7 +644,7 @@ export const runProductionCli = async (
           ? []
           : await (
               overrides.profiles ??
-              new NativeKeyringProfileRegistry(undefined, platform.credentialService)
+              createProfileRegistry(platform.credentialService, overrides.platform)
             ).list();
       // The login a command names picks that organization's link of this checkout.
       return chooseLinkedProject(
@@ -632,7 +673,7 @@ export const runProductionCli = async (
           3,
           "credential_store_unavailable",
           false,
-          CREDENTIAL_STORE_UNAVAILABLE_ACTION,
+          credentialStoreUnavailableAction(error),
         ),
       );
     const result =
@@ -767,7 +808,7 @@ export const runProductionCli = async (
       ),
     );
   const registry =
-    overrides.profiles ?? new NativeKeyringProfileRegistry(undefined, platform.credentialService);
+    overrides.profiles ?? createProfileRegistry(platform.credentialService, overrides.platform);
   const linkDirectory = join(selectedSourceDirectory, platform.linkDirectory);
   const projectId = commandProjectId(command);
   // A command that named its project read no link yet, but the link still says whose project it is.
@@ -904,7 +945,6 @@ export const runProductionCli = async (
   const cli = new ProductCli({
     sourceDirectory: workingDirectory,
     sourceMetadataDirectory: platform.linkDirectory,
-    sourceWorkspace: () => inspectSourceWorkspace(workingDirectory),
     ...(boundSource === undefined
       ? {}
       : {
@@ -937,6 +977,33 @@ export const runProductionCli = async (
         accessToken,
         boundedFetch(),
       ).getAccountProfile(),
+    firstWorkspace: async (accessToken, userId, signupSource) => {
+      try {
+        await new GeneratedSdkProductApi(
+          productApiOrigin,
+          accessToken,
+          boundedFetch(),
+        ).createOrganization({
+          name: "My workspace",
+          idempotencyKey: `initial-workspace:${userId}`,
+          ...(signupSource === null ? {} : { signupSource }),
+        });
+        return "created";
+      } catch (error) {
+        if (signal.aborted) throw error;
+        // The portal's rule: only a refusal for good ends the request; anything else may have been
+        // applied, so it is not retried blindly.
+        const status = httpStatusOf(error);
+        // A 4xx other than a timeout or a rate limit will be answered the same way again.
+        return status !== undefined &&
+          status >= 400 &&
+          status < 500 &&
+          status !== 408 &&
+          status !== 429
+          ? "refused"
+          : "uncertain";
+      }
+    },
     currentIdentity: async (accessToken) =>
       await new GeneratedSdkProductApi(
         productApiOrigin,
@@ -1060,6 +1127,14 @@ const compositionFailure = (
       false,
       profileLimitAction(commandPrefix),
     );
+  if (error instanceof LoginOwnershipTimeoutError)
+    return errorDocument(
+      command,
+      5,
+      "token_refresh_failed",
+      true,
+      refreshFailedAction(commandPrefix, profile, error.record),
+    );
   if (error instanceof ProductApiAuthenticationError)
     return error.code === "authentication_required"
       ? errorDocument(
@@ -1074,7 +1149,7 @@ const compositionFailure = (
           5,
           "token_refresh_failed",
           true,
-          refreshFailedAction(commandPrefix, profile),
+          refreshFailedAction(commandPrefix, profile, error.record),
         );
   return classifyCliFailure(command, error, signal);
 };
@@ -1543,7 +1618,7 @@ const runOfflineLogout = async (
       request.bound === undefined
     ) {
       // Nothing is saved under a name: a login of an earlier client goes, and none is logged out.
-      await registry.legacy().clear();
+      await registry.owning(["legacy"], () => registry.legacy().clear());
       result = resultDocument("logout", 0, "logged_out");
     } else {
       const failure = profileSelectionError(selection, request, commandPrefix, "cli");
@@ -1555,20 +1630,29 @@ const runOfflineLogout = async (
         failure.suggestedAction,
       );
     }
-  } catch {
+  } catch (error) {
     diagnostics.record({
       correlationId: randomUUID(),
       category: "credential_store",
       subsystem: "credential_store",
       errorKind: "unavailable",
     });
-    result = errorDocument(
-      "logout",
-      3,
-      "credential_store_unavailable",
-      false,
-      CREDENTIAL_STORE_UNAVAILABLE_ACTION,
-    );
+    result =
+      error instanceof LoginOwnershipTimeoutError
+        ? errorDocument(
+            "logout",
+            5,
+            "token_refresh_failed",
+            true,
+            `Another process on this computer holds this login (record ${error.record}) and did not finish in time; nothing was removed. Run the same command again in a minute.`,
+          )
+        : errorDocument(
+            "logout",
+            3,
+            "credential_store_unavailable",
+            false,
+            credentialStoreUnavailableAction(error),
+          );
   }
   io.writeStdout(result.stdout);
   return result.exitCode;

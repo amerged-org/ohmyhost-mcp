@@ -9,7 +9,6 @@ import {
   createSourceSnapshot,
   inspectSourceWorkspace,
   SourceWorkspaceError,
-  type SourceWorkspace,
 } from "./source-workspace.js";
 import { publishSourceSnapshot } from "./source-publisher.js";
 import {
@@ -20,6 +19,9 @@ import {
   type LocalSourceMetadataDirectory,
 } from "./source-publication-store.js";
 import { readProjectLinks } from "./project-link-store.js";
+import { DIRECT_OWNERSHIP, LoginGoneError, renewLogin } from "./credential-refresh.js";
+import { LoginOwnershipTimeoutError } from "./login-ownership.js";
+import { FileCredentialStoreRefusedError } from "./file-credential-store.js";
 import {
   parseProjectDatabaseWrite,
   assertProjectDatabaseWriteReceipt,
@@ -173,6 +175,9 @@ export interface TokenRevoker {
   revoke(refreshToken: string, signal: AbortSignal): Promise<void>;
 }
 
+/** How the first-workspace request ended: made, refused for good, or not known to have ended. */
+export type FirstWorkspaceOutcome = "created" | "refused" | "uncertain";
+
 export interface TokenRefresher {
   refresh(
     refreshToken: string,
@@ -265,7 +270,6 @@ export class PublicResponseTooLargeError extends Error {
 export interface ProductCliDependencies {
   readonly sourceDirectory?: string;
   readonly sourceMetadataDirectory?: LocalSourceMetadataDirectory;
-  readonly sourceWorkspace?: () => Promise<SourceWorkspace>;
   readonly linkedSourceProvider?: "github" | "managed";
   readonly linkedProjectId?: string;
   readonly apiToken?: string;
@@ -294,6 +298,15 @@ export interface ProductCliDependencies {
    * keeping product mutation capabilities out of login.
    */
   readonly accountProfile: (accessToken: () => Promise<string>) => Promise<PublicAccount>;
+  /**
+   * The one request login may send: the first workspace of a verified account that has none. It is
+   * the portal's own request, so the portal and this login replay each other.
+   */
+  readonly firstWorkspace?: (
+    accessToken: () => Promise<string>,
+    userId: string,
+    signupSource: string | null,
+  ) => Promise<FirstWorkspaceOutcome>;
   /** Optional onboarding guidance uses only these narrow read-only SDK queries. */
   readonly githubConnectionStatus?: (
     accessToken: () => Promise<string>,
@@ -729,9 +742,29 @@ const retryAdvice = (command: string, keyed = true): string => {
 export const internalErrorAction = (command: string, keyed = true): string =>
   `The ohmyhost client stopped on an unexpected error; the stderr line starting with [ohmyhost: identifies it. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json and install the published client if it is older, then ${retryAdvice(command, keyed)}. If the current client fails the same way, report it with feedback submit (kind bug, error code internal_error) and quote that stderr line.`;
 
-/** The local credential store or saved-login index failed; a sandbox is the usual cause. */
-export const CREDENTIAL_STORE_UNAVAILABLE_ACTION =
-  "This computer's credential store (for example macOS Keychain or Windows Credential Manager) or the saved-login list in ~/.ohmyhost/profiles could not be read or written; nothing was changed. If the agent runs in a sandbox, run the command with access to them before asking the customer to sign in again. If the store is locked, ask the customer to unlock it, then run the command again. On a server, container or CI runner without a credential store, do not run login: load OHMYHOST_TOKEN from a private env file with a token from the portal's API Tokens page.";
+const FILE_STORE_REFUSAL: Readonly<Record<FileCredentialStoreRefusedError["reason"], string>> = {
+  symbolic_link: "it is a symbolic link",
+  another_owner: "it belongs to another user",
+  wrong_mode: "its mode is not allowed",
+  not_writable: "it could not be written",
+};
+
+/** One sentence that names the refused path and why, for a file store that cannot be used. */
+export const describeFileStoreRefusal = (error: unknown): string | undefined =>
+  error instanceof FileCredentialStoreRefusedError
+    ? `The saved-login files at ~/${error.path} were refused (${FILE_STORE_REFUSAL[error.reason]}). Their directories must be yours with mode 700 and the ones above them neither symbolic links nor writable by others.`
+    : undefined;
+
+/**
+ * The local credential store or the saved-login files failed. A login in a container is allowed:
+ * what remains are an agent sandbox without access to them, a locked desktop store and a refused
+ * file store.
+ */
+export const credentialStoreUnavailableAction = (error?: unknown): string =>
+  `${
+    describeFileStoreRefusal(error) ??
+    "This computer's credential store (the macOS Keychain, the Windows Credential Manager) or the saved-login files in ~/.ohmyhost/profiles could not be read or written."
+  } Nothing was changed. If the agent runs in a sandbox, run the command with access to them before asking the customer to sign in again. If a desktop store is locked, ask the customer to unlock it. Then run the command again.`;
 
 const responseContractAction = (command: string, keyed = true): string =>
   `The ohmyho.st API answered in a form this client version does not accept, usually because the client is older than the service. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json; if it is older, install the published CLI and MCP and reload MCP. Then ${retryAdvice(command, keyed)}. If the current version answers this too, report it with feedback submit (kind bug, error code response_contract_invalid).`;
@@ -782,8 +815,13 @@ export const endedLoginAction = (
 export const refreshFailedAction = (
   commandPrefix: string,
   profile: LocalProfile | undefined,
+  record?: string,
 ): string =>
-  `Renewing the saved login${profile === undefined ? "" : ` ${profile.name}`} at the sign-in service failed. Run the same command again in a minute, with the same --idempotency-key if it has one. If it fails again, run '${signInCommand(commandPrefix, profile)}' and send the customer the link and code.`;
+  `Renewing the saved login${profile === undefined ? "" : ` ${profile.name}`} at the sign-in service failed.${
+    record === undefined
+      ? ""
+      : ` Another process on this computer holds this login (record ${record}) and did not finish in time; nothing was sent to the sign-in service.`
+  } Run the same command again in a minute, with the same --idempotency-key if it has one. If it fails again, run '${signInCommand(commandPrefix, profile)}' and send the customer the link and code.`;
 
 /** The flags a failed login is repeated with; the boundary proof needs brace-free signatures. */
 interface LoginFlags {
@@ -1507,6 +1545,15 @@ export class ProductCli {
           false,
           profileLimitAction(this.dependencies.commandPrefix),
         );
+      // Another process holds this login and did not finish in time: nothing was sent or removed.
+      if (error instanceof LoginOwnershipTimeoutError)
+        return failure(
+          name,
+          5,
+          "token_refresh_failed",
+          true,
+          refreshFailedAction(this.dependencies.commandPrefix, this.#profile, error.record),
+        );
       this.recordDiagnostic(diagnosticDescriptor(error, signal));
       return classifyFailure(
         name,
@@ -1523,6 +1570,21 @@ export class ProductCli {
     return `Run '${this.dependencies.commandPrefix} github connect --organization ${organizationId} --idempotency-key KEY --json' once, then link repositories covered by the installation.`;
   }
 
+  /**
+   * The first deployment of a checkout that no project is saved for publishes the working
+   * directory as it is, whether or not it has a GitHub remote and whether or not the workspace has
+   * a GitHub installation; GitHub is the later step for deployment on every push.
+   */
+  private publishAction(organizationId: string, projectId: string | undefined): string {
+    const prefix = this.dependencies.commandPrefix;
+    const publish = `'${prefix} source publish --project ${projectId ?? "ULID"} --mode initialize --expected-source-generation 0 --message "Initial version" --idempotency-key KEY --wait --json'`;
+    const first =
+      projectId === undefined
+        ? `This checkout has no saved project link here, which a new container never has even for an app that exists. First run '${prefix} project status --json' and '${prefix} project list --json' as the deploy Skill says, and create a project only if none of them is this app. Then publish this directory as it is, without GitHub: create the project with '${prefix} project create --organization ${organizationId} --name NAME --region eu --idempotency-key KEY --json' (EU or US is the customer's one answer), read its operation until it succeeds, then run ${publish}`
+        : `This checkout is linked to project ${projectId}, which has no source yet. Publish this directory as it is, without GitHub: run ${publish}`;
+    return `${first} and deploy the commit it returns; the deploy Skill lists every step. Deployment on every push is the later step: ${this.githubConnectAction(organizationId)}`;
+  }
+
   private async githubNextAction(
     api: Pick<ProductApi, "getGithubConnection"> & {
       readonly managedSource?: Pick<NonNullable<ProductApi["managedSource"]>, "getSource">;
@@ -1533,22 +1595,18 @@ export class ProductCli {
     // a scoped key cannot read source connections or the status endpoint is unavailable.
     try {
       let provider = this.dependencies.linkedSourceProvider;
-      if (this.dependencies.linkedProjectId !== undefined) {
+      const linked = this.dependencies.linkedProjectId;
+      if (linked !== undefined) {
         if (api.managedSource === undefined) return {};
-        const binding = await api.managedSource.getSource(this.dependencies.linkedProjectId);
+        const binding = await api.managedSource.getSource(linked);
         if (binding !== null) parseProjectSourceBinding(binding);
         provider =
           binding === null ? undefined : (binding as { provider: "github" | "managed" }).provider;
       }
       if (provider === "managed") return {};
-      if (provider !== "github" && this.dependencies.sourceWorkspace !== undefined) {
-        const workspace = await this.dependencies.sourceWorkspace();
-        if (!workspace.git?.remotes.some((remote) => remote.githubRepository !== null))
-          return {
-            next_action:
-              "Ask once whether to deploy directly with ohmyho.st storing the versions or set up GitHub for this project. Inspect current source first; a missing GitHub connection does not require GitHub.",
-          };
-      }
+      // A saved binding always wins: a project that uses GitHub goes on with GitHub. Anything else,
+      // an unbound checkout or a linked project without a source, publishes the working directory.
+      if (provider !== "github") return { next_action: this.publishAction(organizationId, linked) };
       const github = parseGithubOrganizationConnectionStatus(
         await api.getGithubConnection(organizationId),
       );
@@ -1612,9 +1670,18 @@ export class ProductCli {
   }
 
   /** The next step for a login that has no organization yet. */
-  private workspaceAction(selection: WorkspaceSelection): string {
+  private workspaceAction(
+    selection: WorkspaceSelection,
+    unconfirmed?: { readonly userId: string; readonly signupSource: string | null },
+  ): string {
     const prefix = this.dependencies.commandPrefix;
     const named = this.#profile === undefined ? "" : ` --profile-name ${this.#profile.name}`;
+    // The first workspace may exist already: the identical request, as this caller, finds it or
+    // makes it once, and it must not be answered with a second workspace.
+    if (unconfirmed !== undefined && selection.outcome === "no_workspace")
+      return `The first workspace was not confirmed. Run '${prefix} organization create --name "My workspace" --idempotency-key initial-workspace:${unconfirmed.userId}${
+        unconfirmed.signupSource === null ? "" : ` --source ${unconfirmed.signupSource}`
+      }${named} --json' to repeat the identical request: it returns the workspace or creates it once. Do not create another.`;
     return selection.outcome === "choice_required"
       ? `Ask the customer which workspace to use, then run '${prefix} organization use --organization ULID${named} --json'.`
       : `Run '${prefix} organization create --name NAME --idempotency-key KEY${named} --json' to create the first workspace.`;
@@ -1654,6 +1721,8 @@ export class ProductCli {
     const readIdentity = this.dependencies.currentIdentity;
     if (profiles === undefined || readIdentity === undefined)
       throw new ProviderCapabilityBlockedError();
+    // The customer is asked to sign in only when the result can be saved.
+    await profiles.prove();
     // A device code lives five minutes and the provider offers no way to lengthen it, so the
     // sign-in outlives the code instead: while this window lasts, a lapsed code is replaced.
     const signInDeadline = this.dependencies.now().getTime() + SIGN_IN_WINDOW_MS;
@@ -1729,7 +1798,7 @@ export class ProductCli {
         refreshToken: result.tokens.refreshToken,
         expiresAt,
       };
-      const account = await this.dependencies.accountProfile(async () => signedIn.accessToken);
+      let account = await this.dependencies.accountProfile(async () => signedIn.accessToken);
       // A failed verification repeats this login with the flags it was given.
       const loginFlags = {
         organizationId,
@@ -1744,6 +1813,30 @@ export class ProductCli {
           false,
           `The browser signed in as user ${account.userId}, not ${expectedUserId}. Nothing was saved and every saved login is unchanged. Sign out of ohmyho.st in that browser or use the browser profile of ${expectedUserId}, then run '${this.dependencies.commandPrefix} login${organizationId === undefined ? "" : ` --organization ${organizationId}`} --user ${expectedUserId} --json' again.`,
         );
+      // A verified account without a workspace gets its first one; whatever the answer, the account
+      // is read again and decides, so a workspace that exists is found whoever created it.
+      let creation: FirstWorkspaceOutcome | undefined;
+      if (
+        this.dependencies.firstWorkspace !== undefined &&
+        organizationId === undefined &&
+        account.emailVerified &&
+        account.organizations.length === 0
+      ) {
+        creation = await this.dependencies.firstWorkspace(
+          async () => signedIn.accessToken,
+          account.userId,
+          account.signupSource,
+        );
+        try {
+          account = await this.dependencies.accountProfile(async () => signedIn.accessToken);
+        } catch (error) {
+          // The customer approved a code for this sign-in: a failed second read does not undo it.
+          // The creation is then unconfirmed, and the repeat command finds out.
+          throwIfAborted(signal);
+          if (creation === "refused") throw error;
+          creation = "uncertain";
+        }
+      }
       const selection = chooseWorkspace(account.organizations, organizationId);
       if (selection.outcome === "not_a_member") throw this.unknownWorkspace(selection);
       // The workspace lives in the access token, so a chosen one is requested before storing.
@@ -1811,6 +1904,7 @@ export class ProductCli {
       if (organization !== null)
         return success("login", {
           status: "authenticated",
+          credential_store: profiles.kind,
           organization: publicWorkspace(organization),
           profile: publicProfile(profile),
           ...(readGithubConnection === undefined
@@ -1839,13 +1933,19 @@ export class ProductCli {
         });
       return success("login", {
         status: "authenticated",
+        credential_store: profiles.kind,
         organization: null,
         profile: publicProfile(profile),
         organizations:
           selection.outcome === "choice_required"
             ? selection.organizations.map(publicWorkspace)
             : [],
-        next_action: this.workspaceAction(selection),
+        next_action: this.workspaceAction(
+          selection,
+          creation === "uncertain" || creation === "created"
+            ? { userId: account.userId, signupSource: account.signupSource }
+            : undefined,
+        ),
       });
     }
   }
@@ -1878,22 +1978,29 @@ export class ProductCli {
       throw new InteractiveSessionRequiredError();
     let bound: LocalProfile;
     try {
-      bound = await runBounded(
-        (bounded) =>
-          selectWorkspace(
-            {
-              store: profiles.credential(profile),
-              refresher: this.dependencies.tokenRefresher,
-              profiles,
-              profile,
-            },
-            organization,
-            bounded,
-            (accessToken) =>
-              this.dependencies.productApi(async () => accessToken).getCurrentIdentity(),
+      // Ownership is taken before the bounded refresh starts, so waiting for another process cannot
+      // use up the time the provider needs after it has rotated the refresh token.
+      bound = await profiles.owning(
+        [profile, { ...profile, organizationId: organization.id }],
+        () =>
+          runBounded(
+            (bounded) =>
+              selectWorkspace(
+                {
+                  store: profiles.credential(profile),
+                  refresher: this.dependencies.tokenRefresher,
+                  profiles,
+                  profile,
+                },
+                organization,
+                bounded,
+                (accessToken) =>
+                  this.dependencies.productApi(async () => accessToken).getCurrentIdentity(),
+              ),
+            signal,
+            this.dependencies.lifecycleTimeoutMs,
           ),
         signal,
-        this.dependencies.lifecycleTimeoutMs,
       );
     } catch (error) {
       if (error instanceof AccountVerificationError)
@@ -3425,44 +3532,58 @@ export class ProductCli {
     if (stored === undefined) {
       throw new ProductCliFailure(5, "authentication_required", false, this.loginAction());
     }
-    let refresh: { readonly credential: CurrentCredential; readonly refreshed: boolean };
+    if (this.credentialUsable(stored)) return stored.accessToken;
+    // The refresh token is spent at the provider before anything is written, so this process owns
+    // the login first and reads its credential again as the owner.
+    const profiles = this.dependencies.profiles;
     try {
-      refresh = await this.refreshIfExpired(stored, signal);
+      const renewal = await renewLogin({
+        // A shared file store reads the credential again as the owner; a native store need not.
+        ...(profiles?.kind === "file" ? {} : { current: stored }),
+        registry:
+          profiles !== undefined && this.#profile !== undefined ? profiles : DIRECT_OWNERSHIP,
+        login: this.#profile ?? "legacy",
+        store,
+        usable: (credential) => this.credentialUsable(credential),
+        renew: (credential) => this.renewCredential(credential, signal),
+        rejected: (error) => error instanceof TokenRefreshRejectedError,
+        forget: () => this.forgetLogin(store),
+        signal,
+      });
+      return renewal.credential.accessToken;
     } catch (error) {
+      if (error instanceof LoginGoneError)
+        throw new ProductCliFailure(5, "authentication_required", false, this.loginAction());
+      if (error instanceof LoginOwnershipTimeoutError)
+        throw new ProductCliFailure(
+          5,
+          "token_refresh_failed",
+          true,
+          refreshFailedAction(this.dependencies.commandPrefix, this.#profile, error.record),
+        );
       if (!(error instanceof TokenRefreshRejectedError)) throw error;
-      // The provider ended this login; only this saved login is removed.
-      const ended = this.#profile;
-      await this.forgetLogin(store);
+      // The provider ended this login; only this saved login was removed.
       throw new ProductCliFailure(
         5,
         "authentication_required",
         false,
-        endedLoginAction(this.dependencies.commandPrefix, ended),
+        endedLoginAction(this.dependencies.commandPrefix, this.#profile),
       );
     }
-    if (refresh.refreshed) await store.replace(refresh.credential);
-    return refresh.credential.accessToken;
   }
 
-  private async refreshIfExpired(
-    credential: StoredCredential,
-    signal: AbortSignal,
-  ): Promise<{ readonly credential: CurrentCredential; readonly refreshed: boolean }> {
+  private credentialUsable(credential: StoredCredential): boolean {
     const expiresAt = credential.expiresAt === undefined ? NaN : Date.parse(credential.expiresAt);
-    if (
+    return (
       Number.isFinite(expiresAt) &&
       expiresAt > this.dependencies.now().getTime() + this.dependencies.lifecycleTimeoutMs
-    ) {
-      return {
-        credential: {
-          accessToken: credential.accessToken,
-          refreshToken: credential.refreshToken,
-          expiresAt: credential.expiresAt as string,
-          ...workspaceOf(credential),
-        },
-        refreshed: false,
-      };
-    }
+    );
+  }
+
+  private async renewCredential(
+    credential: StoredCredential,
+    signal: AbortSignal,
+  ): Promise<CurrentCredential> {
     try {
       const refreshed = await runBounded(
         (bounded) =>
@@ -3482,8 +3603,7 @@ export class ProductCli {
         throw new Error("invalid refreshed expiry");
       }
       // WorkOS returns a bare credential; the selection only survives if we carry it forward.
-      // WorkOS returns a bare credential; the selection only survives if we carry it forward.
-      return { credential: { ...refreshed, ...workspaceOf(credential) }, refreshed: true };
+      return { ...refreshed, ...workspaceOf(credential) };
     } catch (error) {
       if (isCancellation(error) && signal.aborted) throw error;
       if (error instanceof ProviderCapabilityBlockedError) {
@@ -3661,7 +3781,7 @@ const classifyFailure = (
       3,
       "credential_store_unavailable",
       false,
-      CREDENTIAL_STORE_UNAVAILABLE_ACTION,
+      credentialStoreUnavailableAction(error),
     );
   }
   if (error instanceof ResponseContractError) {

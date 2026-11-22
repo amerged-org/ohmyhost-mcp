@@ -707,6 +707,10 @@ export const parseCurrentIdentity = (value: unknown): PublicCurrentIdentity => {
 /** The signed-in user and the workspaces it belongs to, as `GET /v1/me/profile` reports them. */
 export interface PublicAccount {
   readonly userId: string;
+  /** Whether the provider confirmed the account's email address; a first workspace needs it. */
+  readonly emailVerified: boolean;
+  /** The public acquisition source recorded for the account, or none for a direct visit. */
+  readonly signupSource: string | null;
   readonly organizations: readonly PublicWorkspace[];
 }
 
@@ -726,6 +730,8 @@ export const parseAccountProfile = (value: unknown): PublicAccount => {
   const organizationIds = input["organization_ids"];
   if (
     !boundedString(input["user_id"], 1, 128) ||
+    typeof input["email_verified"] !== "boolean" ||
+    !(input["signup_source"] === null || boundedString(input["signup_source"], 1, 64)) ||
     !Array.isArray(organizations) ||
     !Array.isArray(organizationIds) ||
     organizationIds.some((organizationId) => !isUlid(organizationId)) ||
@@ -748,7 +754,12 @@ export const parseAccountProfile = (value: unknown): PublicAccount => {
   });
   if (new Set(workspaces.map((workspace) => workspace.id)).size !== organizationIds.length)
     throw new ResponseContractError();
-  return { userId: input["user_id"] as string, organizations: workspaces };
+  return {
+    userId: input["user_id"] as string,
+    emailVerified: input["email_verified"],
+    signupSource: input["signup_source"],
+    organizations: workspaces,
+  };
 };
 
 export interface PublicProject {

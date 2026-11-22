@@ -636,18 +636,18 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "A live connection holds it; its holder removes it with ohmyhost domain paid delete --project ULID --hostname HOST --yes --json. To connect it here, add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --json.",
+      "A live connection holds it; its holder removes it with ohmyhost domain paid delete --project ULID --hostname HOST --idempotency-key KEY --yes --json. To connect it here, add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --yes --json.",
     restAction:
-      "A live connection holds it; its holder removes it with ohmyhost domain paid delete --project ULID --hostname HOST --yes --json. To connect it here, add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --json.",
+      "A live connection holds it; its holder removes it with ohmyhost domain paid delete --project ULID --hostname HOST --idempotency-key KEY --yes --json. To connect it here, add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --yes --json.",
     title: "Domain hostname is already connected",
   },
   domain_ownership_required: {
     status: 409,
     retryable: false,
     action:
-      "This hostname is not verified for this project yet. Add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --json. Repeating before the record is published cannot work.",
+      "This hostname is not verified for this project yet. Add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --yes --json. Repeating before the record is published cannot work.",
     restAction:
-      "This hostname is not verified for this project yet. Add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --json. Repeating before the record is published cannot work.",
+      "This hostname is not verified for this project yet. Add the _omh-project.HOST TXT record that ohmyhost domain paid status --project ULID --json shows for it, then apply again with ohmyhost domain paid apply --project ULID --hostname HOST --idempotency-key KEY --yes --json. Repeating before the record is published cannot work.",
     title: "Verify the domain before connecting it",
   },
   domain_dns_conflict: {
@@ -661,7 +661,7 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "This project already has one Paid domain connection, for another hostname or one a different member configured. Read it with 'ohmyhost domain paid status --project ULID --json'. Delete it with 'ohmyhost domain paid delete --project ULID --hostname CURRENT_HOST --yes --json' only to replace it, then repeat this request with a new idempotency key. Repeating it unchanged cannot work.",
+      "This project already has one Paid domain connection, for another hostname or one a different member configured. Read it with 'ohmyhost domain paid status --project ULID --json'. Delete it with 'ohmyhost domain paid delete --project ULID --hostname CURRENT_HOST --idempotency-key KEY --yes --json' only to replace it, then repeat this request with a new idempotency key. Repeating it unchanged cannot work.",
     title: "Project already has a domain connection",
   },
   domain_deleting: {
@@ -712,7 +712,7 @@ export const PROBLEM_POLICY = {
     retryable: false,
     title: "Remove the project domain first",
     action:
-      "This project still has a live or pending custom-domain connection. Read 'ohmyhost domain paid status --project ULID --json', remove that connection with 'ohmyhost domain paid delete --project ULID --hostname HOST --yes --json', then create a fresh project deletion plan. Repeating while it remains connected cannot work.",
+      "This project still has a live or pending custom-domain connection. Read 'ohmyhost domain paid status --project ULID --json', remove that connection with 'ohmyhost domain paid delete --project ULID --hostname HOST --idempotency-key KEY --yes --json', then create a fresh project deletion plan. Repeating while it remains connected cannot work.",
   },
   native_domain_sync_pending: {
     status: 409,

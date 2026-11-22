@@ -204,7 +204,7 @@ import {
   publicWorkspace,
   selectWorkspace,
   InteractiveSessionRequiredError,
-  NativeKeyringProfileRegistry,
+  createProfileRegistry,
   GeneratedSdkManagedSourceApi,
   type ManagedSourceApi,
   type AuthenticatedProductApiOverrides,
@@ -228,8 +228,9 @@ export class SavedLoginCredentialError extends ProductApiAuthenticationError {
   public constructor(
     code: ProductApiAuthenticationError["code"],
     readonly profile: LocalProfile,
+    record?: string,
   ) {
-    super(code);
+    super(code, record);
   }
 }
 
@@ -243,19 +244,22 @@ export async function createAuthenticatedLocalMcpClient(
 ): Promise<LocalMcpProductClient> {
   const platform = resolveProductCliEnvironment(overrides.environment);
   const registry =
-    overrides.profiles ?? new NativeKeyringProfileRegistry(undefined, platform.credentialService);
+    overrides.profiles ?? createProfileRegistry(platform.credentialService, overrides.platform);
   // The login whose credential is read is the one a failed renewal concerns.
   let read: LocalProfile | undefined;
-  const profiles: ProfileRegistry = {
-    list: () => registry.list(),
-    credential: (profile) => {
-      read = profile;
-      return registry.credential(profile);
+  // Every member is the registry's own; only credential() is observed.
+  const profiles: ProfileRegistry = new Proxy(registry, {
+    get: (target, property) => {
+      if (property === "credential")
+        return (profile: LocalProfile) => {
+          read = profile;
+          return target.credential(profile);
+        };
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === "function" ? (value as () => unknown).bind(target) : value;
     },
-    save: (profile, credential, replaces) => registry.save(profile, credential, replaces),
-    remove: (profile) => registry.remove(profile),
-    legacy: () => registry.legacy(),
-  };
+  });
+
   try {
     const transport = await createAuthenticatedProductTransport(signal, {
       ...overrides,
@@ -272,7 +276,7 @@ export async function createAuthenticatedLocalMcpClient(
     );
   } catch (error) {
     if (error instanceof ProductApiAuthenticationError && read !== undefined)
-      throw new SavedLoginCredentialError(error.code, read);
+      throw new SavedLoginCredentialError(error.code, read, error.record);
     throw error;
   }
 }

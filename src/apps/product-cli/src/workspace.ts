@@ -107,35 +107,49 @@ export const selectWorkspace = async (
   if (session.profile.organizationId === organization.id) return session.profile;
   if (session.profile.organizationId !== null)
     throw new ProfileOrganizationFixedError(session.profile, organization);
-  const stored = await session.store.read();
-  if (stored === undefined) throw new InteractiveSessionRequiredError();
-  const refreshed = await session.refresher.refresh(
-    stored.refreshToken,
+  // The refresh token is spent at the provider before anything is saved, so this login and the one
+  // it becomes are owned first, in the registry's fixed order; the save below then owns nothing new.
+  const becomes: LocalProfile = { ...session.profile, organizationId: organization.id };
+  return await session.profiles.owning(
+    [session.profile, becomes],
+    async () => {
+      const stored = await session.store.read();
+      if (stored === undefined) throw new InteractiveSessionRequiredError();
+      const refreshed = await session.refresher.refresh(
+        stored.refreshToken,
+        signal,
+        organization.workos_id,
+      );
+      assertVerifiedLogin(
+        await identity(refreshed.accessToken),
+        session.profile.userId,
+        organization.id,
+      );
+      // That user's existing login in the organization keeps its name; binding under this login's alias
+      // would silently rename it for every agent that selects it by name.
+      const existing = (await session.profiles.list()).find(
+        (saved) =>
+          saved.userId === session.profile.userId && saved.organizationId === organization.id,
+      );
+      const bound: LocalProfile = {
+        ...session.profile,
+        name: existing?.name ?? session.profile.name,
+        organizationId: organization.id,
+        organizationName: organization.name,
+      };
+      await session.profiles.save(
+        bound,
+        {
+          ...refreshed,
+          workosOrganizationId: organization.workos_id,
+          organizationId: organization.id,
+        },
+        session.profile,
+      );
+      return bound;
+    },
     signal,
-    organization.workos_id,
   );
-  assertVerifiedLogin(
-    await identity(refreshed.accessToken),
-    session.profile.userId,
-    organization.id,
-  );
-  // That user's existing login in the organization keeps its name; binding under this login's alias
-  // would silently rename it for every agent that selects it by name.
-  const existing = (await session.profiles.list()).find(
-    (saved) => saved.userId === session.profile.userId && saved.organizationId === organization.id,
-  );
-  const bound: LocalProfile = {
-    ...session.profile,
-    name: existing?.name ?? session.profile.name,
-    organizationId: organization.id,
-    organizationName: organization.name,
-  };
-  await session.profiles.save(
-    bound,
-    { ...refreshed, workosOrganizationId: organization.workos_id, organizationId: organization.id },
-    session.profile,
-  );
-  return bound;
 };
 
 /**

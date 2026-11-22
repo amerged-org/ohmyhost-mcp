@@ -3,6 +3,8 @@ export * from "./command.js";
 export * from "./composition.js";
 export * from "./credential-store.js";
 export * from "./file-credential-store.js";
+export * from "./login-ownership.js";
+export * from "./credential-refresh.js";
 export * from "./product-api.js";
 export * from "./profile-store.js";
 export * from "./project-link-store.js";

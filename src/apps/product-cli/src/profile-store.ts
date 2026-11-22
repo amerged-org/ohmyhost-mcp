@@ -1,7 +1,8 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { link, mkdir, open, readFile, readdir, unlink } from "node:fs/promises";
+import { link, mkdir, open, readFile, readdir, rmdir, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 
 import {
   CredentialStoreIntegrityError,
@@ -13,6 +14,15 @@ import {
   type CurrentCredential,
   type KeyringEntryFactory,
 } from "./credential-store.js";
+import { OwnerOnlyFileCredentialStore } from "./file-credential-store.js";
+import {
+  LoginOwnership,
+  LoginOwnershipTimeoutError,
+  linuxProcessProbe,
+  quietly,
+  type LoginOwnershipHold,
+  type ProcessProbe,
+} from "./login-ownership.js";
 
 /**
  * One saved interactive login: a verified user signed in to at most one organization. The name is
@@ -25,8 +35,13 @@ export interface LocalProfile {
   readonly organizationName: string | null;
 }
 
+/** A login that can be owned: a saved one, or the single entry of clients before named profiles. */
+export type LoginRef = LocalProfile | "legacy";
+
 /** Saved logins of one platform environment: a non-secret index and one secret entry each. */
 export interface ProfileRegistry {
+  /** Where the logins are kept: owner-only files, or the operating system's credential store. */
+  readonly kind: "file" | "native";
   list(): Promise<readonly LocalProfile[]>;
   credential(profile: LocalProfile): CredentialStore;
   /**
@@ -41,6 +56,22 @@ export interface ProfileRegistry {
   remove(profile: LocalProfile): Promise<void>;
   /** The single entry of clients before named profiles, read only to migrate it. */
   legacy(): CredentialStore;
+  /**
+   * Proves that this store can save and remove a login and write the index, and leaves nothing
+   * behind. It uses a random private name that no login can have, so no saved login is touched.
+   */
+  prove(): Promise<void>;
+  /**
+   * Runs `operation` while this process alone may change these logins. Every operation that spends a
+   * refresh token, or writes or removes a credential or its index entry, runs inside it. A nested
+   * call inside the same operation owns nothing new. Where the store cannot be shared between
+   * processes this is a direct call.
+   */
+  owning<Result>(
+    logins: readonly LoginRef[],
+    operation: () => Promise<Result>,
+    signal?: AbortSignal,
+  ): Promise<Result>;
 }
 
 /** The requested name already belongs to a login of another user or organization. */
@@ -58,6 +89,13 @@ export class ProfileLimitError extends Error {
     this.name = "ProfileLimitError";
   }
 }
+
+/** A credential that proves a store works; it is removed at once and is no login. */
+const PROBE_CREDENTIAL = (): CurrentCredential => ({
+  accessToken: "probe",
+  refreshToken: "probe",
+  expiresAt: new Date().toISOString(),
+});
 
 const MAX_PROFILES = 64;
 /** Each lost race means another writer finished a change, so this bounds concurrent writers. */
@@ -103,13 +141,86 @@ const admitProfile = (next: readonly LocalProfile[], profile: LocalProfile): voi
 };
 
 /**
- * Tokens stay in the operating system's credential store, one entry per login. The list of logins
- * is a separate non-secret file index, so saving or removing one login never rewrites a shared
+ * The saved logins of one environment: a non-secret file index and one secret entry each. The list
+ * of logins is separate from the secrets, so saving or removing one login never rewrites a shared
  * credential entry that another process may be changing at the same moment.
  */
-export class NativeKeyringProfileRegistry implements ProfileRegistry {
-  readonly #createEntry: KeyringEntryFactory;
+abstract class IndexedProfileRegistry implements ProfileRegistry {
   readonly #index: ProfileIndexFiles;
+
+  protected constructor(indexDirectory: string) {
+    this.#index = new ProfileIndexFiles(indexDirectory);
+  }
+
+  public abstract readonly kind: "file" | "native";
+
+  public abstract credential(profile: LocalProfile): CredentialStore;
+
+  public abstract legacy(): CredentialStore;
+
+  public abstract owning<Result>(
+    logins: readonly LoginRef[],
+    operation: () => Promise<Result>,
+    signal?: AbortSignal,
+  ): Promise<Result>;
+
+  /** Saves and removes one probe login with a name that is not a login name. */
+  protected abstract proveCredential(): Promise<void>;
+
+  public async prove(): Promise<void> {
+    await this.#index.probe();
+    await this.proveCredential();
+  }
+
+  public async list(): Promise<readonly LocalProfile[]> {
+    return (await this.#index.read()).profiles;
+  }
+
+  public async save(
+    profile: LocalProfile,
+    credential: CurrentCredential,
+    replaces?: LocalProfile,
+  ): Promise<void> {
+    assertProfile(profile);
+    await this.owning(replaces === undefined ? [profile] : [profile, replaces], async () => {
+      // Refused before anything is written, so a conflicting or surplus login changes nothing.
+      const before = await this.list();
+      admitProfile(nextProfileIndex(before, profile, replaces), profile);
+      await this.credential(profile).replace(credential);
+      try {
+        await this.#index.update((current) => {
+          const next = nextProfileIndex(current, profile, replaces);
+          admitProfile(next, profile);
+          return next;
+        });
+      } catch (error) {
+        // Another process changed the index meanwhile, or it could not be written: a login new to
+        // this computer leaves no token behind that no index entry names.
+        if (!before.some((saved) => sameLogin(saved, profile)))
+          await this.credential(profile).clear();
+        throw error;
+      }
+      if (replaces !== undefined && !sameLogin(replaces, profile))
+        await this.credential(replaces).clear();
+    });
+  }
+
+  public async remove(profile: LocalProfile): Promise<void> {
+    await this.owning([profile], async () => {
+      await this.credential(profile).clear();
+      await this.#index.update((current) =>
+        current.some((saved) => sameLogin(saved, profile))
+          ? current.filter((saved) => !sameLogin(saved, profile))
+          : undefined,
+      );
+    });
+  }
+}
+
+/** Tokens stay in the operating system's credential store, one entry per login. */
+export class NativeKeyringProfileRegistry extends IndexedProfileRegistry {
+  public readonly kind = "native";
+  readonly #createEntry: KeyringEntryFactory;
 
   public constructor(
     createEntry: KeyringEntryFactory | undefined = undefined,
@@ -117,12 +228,8 @@ export class NativeKeyringProfileRegistry implements ProfileRegistry {
     indexDirectory?: string,
   ) {
     if (!SERVICE_NAME.test(serviceName)) throw new CredentialStoreUnavailableError();
+    super(indexDirectory ?? profileIndexDirectory(serviceName));
     this.#createEntry = createEntry ?? createNativeEntryFactory(serviceName);
-    this.#index = new ProfileIndexFiles(indexDirectory ?? profileIndexDirectory(serviceName));
-  }
-
-  public async list(): Promise<readonly LocalProfile[]> {
-    return (await this.#index.read()).profiles;
   }
 
   public credential(profile: LocalProfile): CredentialStore {
@@ -141,42 +248,179 @@ export class NativeKeyringProfileRegistry implements ProfileRegistry {
     );
   }
 
-  public async save(
-    profile: LocalProfile,
-    credential: CurrentCredential,
-    replaces?: LocalProfile,
-  ): Promise<void> {
-    assertProfile(profile);
-    // Refused before anything is written, so a conflicting or surplus login changes nothing.
-    const before = await this.list();
-    admitProfile(nextProfileIndex(before, profile, replaces), profile);
-    await this.credential(profile).replace(credential);
+  protected async proveCredential(): Promise<void> {
+    const probe = new NativeNapiKeyringCredentialStore(
+      this.#createEntry,
+      this.serviceName,
+      `probe:${randomUUID()}`,
+    );
     try {
-      await this.#index.update((current) => {
-        const next = nextProfileIndex(current, profile, replaces);
-        admitProfile(next, profile);
-        return next;
-      });
+      await probe.replace(PROBE_CREDENTIAL());
     } catch (error) {
-      // Another process changed the index meanwhile, or it could not be written: a login new to
-      // this computer leaves no token behind that no index entry names.
-      if (!before.some((saved) => sameLogin(saved, profile)))
-        await this.credential(profile).clear();
+      await quietly(probe.clear());
       throw error;
     }
-    if (replaces !== undefined && !sameLogin(replaces, profile))
-      await this.credential(replaces).clear();
+    await probe.clear();
   }
 
-  public async remove(profile: LocalProfile): Promise<void> {
-    await this.credential(profile).clear();
-    await this.#index.update((current) =>
-      current.some((saved) => sameLogin(saved, profile))
-        ? current.filter((saved) => !sameLogin(saved, profile))
-        : undefined,
-    );
+  /** The operating system serializes access to one entry; nothing else is coordinated here. */
+  public owning<Result>(
+    _logins: readonly LoginRef[],
+    operation: () => Promise<Result>,
+  ): Promise<Result> {
+    return operation();
   }
 }
+
+export interface FileProfileRegistryOptions {
+  readonly home?: string;
+  readonly indexDirectory?: string;
+  readonly ownerId?: number;
+  readonly probe?: ProcessProbe;
+  /** The longest a process waits to become the owner of a login. */
+  readonly waitMs?: number;
+  readonly pollMs?: number;
+}
+
+/** The provider's request timeout: a process waits no longer than one request for a login. */
+const OWNERSHIP_WAIT_MS = 30_000;
+
+/** The logins whose ownership the running async operation already holds, by directory. */
+const heldLogins = new AsyncLocalStorage<ReadonlySet<string>>();
+
+/**
+ * The login's directory name: its keyring account as one path segment. User and organization IDs
+ * contain neither `.` nor `:`, so the mapping cannot make two logins one.
+ */
+const loginKey = (login: LoginRef): string =>
+  login === "legacy" ? "legacy" : profileAccount(login).replaceAll(":", ".");
+
+/**
+ * Tokens in owner-only files below the environment's profile directory, one directory per login.
+ * The CLI and the local MCP server use them from separate processes, so every operation that
+ * spends a refresh token or changes a login runs as that login's single owner.
+ */
+export class FileProfileRegistry extends IndexedProfileRegistry {
+  public readonly kind = "file";
+  readonly #root: string;
+  readonly #home: string;
+  readonly #ancestors: readonly string[];
+  readonly #ownerId: number;
+  readonly #probe: ProcessProbe;
+  readonly #waitMs: number;
+  readonly #pollMs: number | undefined;
+
+  public constructor(serviceName = "ohmyhost", options: FileProfileRegistryOptions = {}) {
+    if (!SERVICE_NAME.test(serviceName)) throw new CredentialStoreUnavailableError();
+    const home = options.home ?? homedir();
+    const indexDirectory = options.indexDirectory ?? profileIndexDirectory(serviceName);
+    super(indexDirectory);
+    const ownerId = options.ownerId ?? process.getuid?.();
+    if (ownerId === undefined) throw new CredentialStoreUnavailableError();
+    const anchor = join(home, ".ohmyhost");
+    this.#home = home;
+    this.#root = join(indexDirectory, "credentials");
+    this.#ancestors = indexDirectory.startsWith(anchor + sep)
+      ? [anchor, ...directoriesBelow(anchor, indexDirectory)]
+      : [indexDirectory];
+    this.#ownerId = ownerId;
+    this.#probe = options.probe ?? linuxProcessProbe();
+    this.#waitMs = options.waitMs ?? OWNERSHIP_WAIT_MS;
+    this.#pollMs = options.pollMs;
+  }
+
+  public credential(profile: LocalProfile): CredentialStore {
+    return this.#storeAt(join(this.#root, loginKey(profile)));
+  }
+
+  public legacy(): CredentialStore {
+    return this.#storeAt(join(this.#root, loginKey("legacy")));
+  }
+
+  public async owning<Result>(
+    logins: readonly LoginRef[],
+    operation: () => Promise<Result>,
+    signal?: AbortSignal,
+  ): Promise<Result> {
+    const outer = heldLogins.getStore();
+    // A fixed order, so two operations that each need two logins cannot wait for one another.
+    const wanted = [...new Set(logins.map((login) => join(this.#root, loginKey(login))))]
+      .sort()
+      .filter((directory) => outer?.has(directory) !== true);
+    if (wanted.length === 0) return await operation();
+    const holds: LoginOwnershipHold[] = [];
+    try {
+      for (const directory of wanted) {
+        await this.#storeAt(directory).prepare();
+        try {
+          holds.push(
+            await new LoginOwnership(directory, {
+              probe: this.#probe,
+              waitMs: this.#waitMs,
+              ...(this.#pollMs === undefined ? {} : { pollMs: this.#pollMs }),
+            }).acquire(signal),
+          );
+        } catch (error) {
+          // The record is named relative to the home directory, the way a refused path is.
+          if (error instanceof LoginOwnershipTimeoutError)
+            throw new LoginOwnershipTimeoutError(
+              relative(this.#home, join(directory, error.record)),
+            );
+          // An abort ends the wait; any other failure means ownership cannot be taken here at all.
+          if (signal?.aborted === true) throw error;
+          throw new CredentialStoreUnavailableError();
+        }
+      }
+      return await heldLogins.run(new Set([...(outer ?? []), ...wanted]), operation);
+    } finally {
+      for (const hold of holds.reverse()) await hold.release();
+    }
+  }
+
+  protected async proveCredential(): Promise<void> {
+    const directory = join(this.#root, `probe.${randomUUID()}`);
+    const probe = this.#storeAt(directory);
+    try {
+      await probe.replace(PROBE_CREDENTIAL());
+      await probe.clear();
+    } finally {
+      await quietly(probe.clear());
+      await quietly(rmdir(directory));
+    }
+  }
+
+  #storeAt(directory: string): OwnerOnlyFileCredentialStore {
+    return new OwnerOnlyFileCredentialStore(directory, this.#ownerId, {
+      ancestors: this.#ancestors,
+      root: this.#root,
+      home: this.#home,
+    });
+  }
+}
+
+/** Every directory from just below `anchor` down to `target`, outermost first. */
+const directoriesBelow = (anchor: string, target: string): string[] => {
+  const result: string[] = [];
+  let current = anchor;
+  for (const segment of target.slice(anchor.length).split(sep).filter(Boolean)) {
+    current = join(current, segment);
+    result.push(current);
+  }
+  return result;
+};
+
+/**
+ * The store of this platform: owner-only files on Linux, where a container or a server has no
+ * credential store, and the operating system's store everywhere else. The platform alone decides;
+ * a failed store call never changes it.
+ */
+export const createProfileRegistry = (
+  serviceName: string,
+  platform: NodeJS.Platform = process.platform,
+): ProfileRegistry =>
+  platform === "linux"
+    ? new FileProfileRegistry(serviceName)
+    : new NativeKeyringProfileRegistry(undefined, serviceName);
 
 /**
  * The saved logins as numbered files that are never rewritten. A change reads the newest one and
@@ -205,6 +449,26 @@ export class ProfileIndexFiles {
       return { version, profiles: parseProfileIndex(serialized) };
     }
     throw new CredentialStoreUnavailableError();
+  }
+
+  /**
+   * Writes and removes one temporary file beside the index, and links it to a second name the way
+   * every index change and every ownership record is made, so a login could be listed and owned.
+   */
+  public async probe(): Promise<void> {
+    const temporary = join(this.directory, `.index-${randomUUID()}.tmp`);
+    const linked = join(this.directory, `.index-${randomUUID()}.tmp`);
+    try {
+      await mkdir(this.directory, { recursive: true, mode: 0o700 });
+      await writeDurably(temporary, "probe");
+      await link(temporary, linked);
+      await unlink(linked);
+      await unlink(temporary);
+    } catch {
+      await removeTemporary(linked);
+      await removeTemporary(temporary);
+      throw new CredentialStoreUnavailableError();
+    }
   }
 
   /** Applies `change` to the newest index; `undefined` means nothing to change. */
