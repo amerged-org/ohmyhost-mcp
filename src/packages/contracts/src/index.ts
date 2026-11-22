@@ -3,9 +3,16 @@ import { parse as parseYaml } from "yaml";
 
 import schema from "../schemas/ohmyhost.schema.json" with { type: "json" };
 import { normalizeApplicationRoot, type ApplicationRoot } from "./application-root.js";
-import { normalizeCrons } from "./functions.js";
+import { normalizeCron, normalizeCrons } from "./functions.js";
 import { normalizeBrowserPolicy, type BrowserPolicy } from "./browser-capabilities.js";
 import { isCustomerEgressOrigin } from "./egress-origin.js";
+import {
+  CONFIGURATION_EXPECTATIONS,
+  CONFIGURATION_FIELD_PATH,
+  configurationExpectation,
+  MAX_CONFIGURATION_FIELD_ISSUES,
+  type ConfigurationFieldIssue,
+} from "./framework-admission.js";
 
 export * from "./application-root.js";
 export * from "./framework-admission.js";
@@ -77,10 +84,22 @@ const validateOhmyhostConfig = new Ajv2020({
 
 export function parseOhmyhostConfig(value: unknown): OhmyhostConfig {
   if (!validateOhmyhostConfig(value)) {
-    throw new TypeError(`ohmyhost.yaml is invalid: ${formatErrors(validateOhmyhostConfig.errors)}`);
+    const fields = schemaFieldIssues(validateOhmyhostConfig.errors);
+    semanticFieldIssues(value, fields);
+    throw new OhmyhostConfigError(fields);
   }
+  try {
+    return normalizeConfiguration(value);
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    const fields: ConfigurationFieldIssue[] = [];
+    semanticFieldIssues(value, fields);
+    if (fields.length === 0) throw error;
+    throw new OhmyhostConfigError(fields);
+  }
+}
 
-  const input = value as OhmyhostConfig;
+function normalizeConfiguration(input: OhmyhostConfig): OhmyhostConfig {
   const config: OhmyhostConfig = {
     version: 1,
     project: input.project,
@@ -189,23 +208,156 @@ export function requireApplicationBuild(config: OhmyhostConfig): OhmyhostApplica
   return config.build;
 }
 
-export function parseOhmyhostConfigYaml(source: string): OhmyhostConfig {
+export class OhmyhostConfigError extends TypeError {
+  public readonly fields: readonly ConfigurationFieldIssue[];
+
+  constructor(fields: readonly ConfigurationFieldIssue[], message?: string) {
+    const details = fields.map(({ path, expected }) => `${path}: ${expected}`);
+    super(
+      message ??
+        (details.length === 0
+          ? "ohmyhost.yaml is invalid"
+          : `ohmyhost.yaml is invalid. ${details.join(". ")}`),
+    );
+    this.name = "OhmyhostConfigError";
+    this.fields = Object.freeze([...fields]);
+  }
+}
+
+/** An invalid but readable YAML document can still select the manifest used for its example. */
+export function parseOhmyhostConfigYaml(
+  source: string,
+  onInvalid?: (applicationRoot: unknown, runtimeMode: unknown) => void,
+): OhmyhostConfig {
   if (typeof source !== "string") {
     throw new TypeError("ohmyhost.yaml must be a string");
   }
 
   let value: unknown;
   try {
-    value = parseYaml(source) as unknown;
+    value = parseYaml(source, { logLevel: "error" }) as unknown;
   } catch {
-    throw new TypeError("ohmyhost.yaml is not valid YAML");
+    throw new OhmyhostConfigError(
+      [{ path: "$", expected: CONFIGURATION_EXPECTATIONS.yaml }],
+      "ohmyhost.yaml is not valid YAML",
+    );
   }
 
-  return parseOhmyhostConfig(value);
+  try {
+    return parseOhmyhostConfig(value);
+  } catch (error) {
+    const input = configRecord(value);
+    onInvalid?.(input?.["applicationRoot"], configRecord(input?.["runtime"])?.["mode"]);
+    throw error;
+  }
 }
 
-function formatErrors(errors: ErrorObject[] | null | undefined): string {
-  return (errors ?? [])
-    .map(({ instancePath, message }) => `${instancePath || "/"} ${message ?? "is invalid"}`)
-    .join("; ");
+function configRecord(value: unknown): Readonly<Record<string, unknown>> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : undefined;
+}
+
+function addFieldIssue(fields: ConfigurationFieldIssue[], path: string, expected: string): void {
+  if (fields.length >= MAX_CONFIGURATION_FIELD_ISSUES) return;
+  const safePath = path.length <= 240 && CONFIGURATION_FIELD_PATH.test(path) ? path : "$";
+  if (!fields.some((field) => field.path === safePath && field.expected === expected))
+    fields.push(Object.freeze({ path: safePath, expected }));
+}
+
+function schemaFieldIssues(errors: ErrorObject[] | null | undefined): ConfigurationFieldIssue[] {
+  const fields: ConfigurationFieldIssue[] = [];
+  for (const { instancePath, keyword, params } of errors ?? []) {
+    if (keyword === "if") continue;
+    const expected =
+      keyword === "required"
+        ? CONFIGURATION_EXPECTATIONS.required
+        : keyword === "additionalProperties"
+          ? CONFIGURATION_EXPECTATIONS.unknown
+          : keyword === "uniqueItems"
+            ? CONFIGURATION_EXPECTATIONS.unique
+            : configurationExpectation(
+                keyword,
+                params["type"] ??
+                  params["allowedValue"] ??
+                  params["allowedValues"] ??
+                  params["pattern"] ??
+                  params["limit"],
+              );
+    if (expected === undefined) continue;
+    const name = keyword === "required" ? params["missingProperty"] : undefined;
+    const path =
+      typeof name === "string"
+        ? `${instancePath}/${name.replaceAll("~", "~0").replaceAll("/", "~1")}`
+        : instancePath || "$";
+    addFieldIssue(fields, path, expected);
+  }
+  return fields;
+}
+
+function semanticFieldIssues(value: unknown, fields: ConfigurationFieldIssue[]): void {
+  const config = configRecord(value);
+  const runtime = configRecord(config?.["runtime"]);
+  const healthcheck = runtime?.["healthcheck"];
+  if (typeof healthcheck === "string") {
+    try {
+      normalizeHealthcheck(healthcheck);
+    } catch {
+      addFieldIssue(fields, "/runtime/healthcheck", CONFIGURATION_EXPECTATIONS.healthcheck);
+    }
+  }
+  const origins = configRecord(runtime?.["egress"])?.["allow"];
+  if (Array.isArray(origins)) {
+    for (const [index, origin] of origins.entries()) {
+      if (typeof origin === "string" && !isCustomerEgressOrigin(origin))
+        addFieldIssue(fields, `/runtime/egress/allow/${index}`, CONFIGURATION_EXPECTATIONS.egress);
+    }
+  }
+  const browser = configRecord(runtime?.["browser"]);
+  if (browser !== undefined) {
+    for (const [group, settings] of Object.entries(browser)) {
+      if (
+        group === "workers" ||
+        ![
+          "connect",
+          "scripts",
+          "styles",
+          "images",
+          "fonts",
+          "frames",
+          "frameAncestors",
+          "cors",
+        ].includes(group)
+      )
+        continue;
+      const origins = group === "cors" ? configRecord(settings)?.["origins"] : settings;
+      if (!Array.isArray(origins)) continue;
+      for (const [index, origin] of origins.entries()) {
+        if (typeof origin !== "string") continue;
+        try {
+          normalizeBrowserPolicy(
+            group === "cors" ? { cors: { origins: [origin] } } : { [group]: [origin] },
+          );
+        } catch {
+          const path = group === "cors" ? "cors/origins" : group;
+          addFieldIssue(
+            fields,
+            `/runtime/browser/${path}/${index}`,
+            CONFIGURATION_EXPECTATIONS.browser,
+          );
+        }
+      }
+    }
+  }
+  const crons = configRecord(config?.["functions"])?.["crons"];
+  if (Array.isArray(crons)) {
+    for (const [index, cron] of crons.entries()) {
+      if (typeof cron !== "string") continue;
+      try {
+        normalizeCron(cron);
+      } catch {
+        addFieldIssue(fields, `/functions/crons/${index}`, CONFIGURATION_EXPECTATIONS.cron);
+      }
+    }
+  }
 }

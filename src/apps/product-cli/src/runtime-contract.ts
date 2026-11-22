@@ -10,8 +10,13 @@ import {
 } from "@ohmyhost/contracts/project-data-changes";
 import {
   frameworkConversionDiagnosticFromDetail,
-  parseFrameworkConversionDetail,
+  frameworkConversionDetail,
+  hasConfigurationFields,
+  readSourceProblemDiagnostic,
+  type FrameworkConversionDiagnostic,
 } from "@ohmyhost/contracts/framework-admission";
+import { parseInvalidRequestFields } from "@ohmyhost/contracts/chat-guidance";
+import { renderConfigurationExample } from "@ohmyhost/contracts/framework-source-rules";
 import {
   parseOperationDeploymentProgress,
   type OperationDeploymentProgress,
@@ -29,10 +34,11 @@ import { isSaasCnameTarget, type SaasCnameTarget } from "@ohmyhost/contracts/pla
 import {
   publicOperationFailure,
   parseMigrationFailureDiagnostic,
-  publicOperationReconciliation,
+  parsePublicOperationReconciliation,
   type PublicOperationFailure,
   type PublicOperationReconciliation,
 } from "@ohmyhost/contracts/operation-failure";
+import { parseOperationWork, type OperationWork } from "@ohmyhost/contracts/chat-guidance";
 export type { PublicOperationFailure } from "@ohmyhost/contracts/operation-failure";
 
 import { PROBLEM_POLICY, type ProblemCode } from "@ohmyhost/contracts/problem-policy";
@@ -59,6 +65,8 @@ export interface SafeProblem {
   /** The error's documentation page, when the server names one on docs.ohmyho.st. */
   readonly docsUrl?: string;
   readonly retryAfterSeconds?: number;
+  readonly invalidFields?: readonly string[];
+  readonly frameworkDiagnostic?: FrameworkConversionDiagnostic;
   readonly code: ProblemCode;
   readonly retryable: boolean;
   readonly suggestedAction: string;
@@ -68,7 +76,12 @@ export interface PublicCurrentIdentity {
   readonly actor_id: string;
   readonly email: string | null;
   readonly organization_ids: readonly string[];
-  readonly organizations: readonly { readonly id: string; readonly name: string }[];
+  readonly organizations: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly plan?: "free" | "paid";
+    readonly remaining_credits_micros?: string;
+  }[];
 }
 
 /** One workspace the signed-in user belongs to, with the provider identity a selection needs. */
@@ -688,8 +701,12 @@ export const parseCurrentIdentity = (value: unknown): PublicCurrentIdentity => {
     throw new ResponseContractError();
   }
   organizations.forEach((organization: unknown, index) => {
-    const entry = exactRecord(organization, ["id", "name"]);
+    const entry = exactRecord(organization, ["id", "name", "plan", "remaining_credits_micros"]);
     if (
+      (("plan" in entry || "remaining_credits_micros" in entry) &&
+        ((entry["plan"] !== "free" && entry["plan"] !== "paid") ||
+          typeof entry["remaining_credits_micros"] !== "string" ||
+          !/^(0|[1-9][0-9]{0,18})$/u.test(entry["remaining_credits_micros"]))) ||
       entry["id"] !== organizationIds[index] ||
       !boundedString(entry["name"], 1, 128) ||
       entry["name"].trim() !== entry["name"] ||
@@ -918,29 +935,9 @@ export const parseProjectSource = (value: unknown): void => {
     }
     return;
   }
-  const input = exactRecord(value, [
-    "provider",
-    "installation_id",
-    "repository_full_name",
-    "status",
-    "linked_at",
-    "updated_at",
-    "failure_summary",
-  ]);
-  if (
-    input["provider"] !== "github" ||
-    typeof input["installation_id"] !== "string" ||
-    !/^[1-9][0-9]{0,19}$/u.test(input["installation_id"]) ||
-    typeof input["repository_full_name"] !== "string" ||
-    !/^[^/]+\/[^/]+$/u.test(input["repository_full_name"]) ||
-    (input["status"] !== "pending" &&
-      input["status"] !== "ready" &&
-      input["status"] !== "failed" &&
-      input["status"] !== "revoked") ||
-    !isIsoInstant(input["linked_at"]) ||
-    !isIsoInstant(input["updated_at"]) ||
-    (input["failure_summary"] !== undefined && !boundedString(input["failure_summary"], 1, 512))
-  ) {
+  try {
+    assertGithubSourceResponse("legacy", value);
+  } catch {
     throw new ResponseContractError();
   }
 };
@@ -1015,6 +1012,7 @@ export interface PublicOperation {
   readonly result?: Readonly<Record<string, unknown>>;
   readonly error?: PublicOperationFailure;
   readonly reconciliation?: PublicOperationReconciliation;
+  readonly work?: OperationWork;
 }
 
 export interface PublicProviderReconciliationAttempt {
@@ -1445,9 +1443,13 @@ export const parseSafeProblem = (value: unknown): SafeProblem => {
     "retryable",
     "suggested_action",
     "retry_after_seconds",
+    "invalid_fields",
+    "configuration_diagnostic",
+    "valid_example",
   ]);
   const code = input["code"];
-  if (typeof code !== "string" || !(code in PROBLEM_POLICY)) throw new ResponseContractError();
+  if (typeof code !== "string" || !Object.hasOwn(PROBLEM_POLICY, code))
+    throw new ResponseContractError();
   const policy = PROBLEM_POLICY[code as ProblemCode];
   if (
     input["status"] !== policy.status ||
@@ -1466,11 +1468,31 @@ export const parseSafeProblem = (value: unknown): SafeProblem => {
   const retryAfter = input["retry_after_seconds"];
   if (
     retryAfter !== undefined &&
-    (code !== "rate_limited" ||
+    ((code !== "rate_limited" && code !== "service_unavailable") ||
       typeof retryAfter !== "number" ||
       !Number.isSafeInteger(retryAfter) ||
       retryAfter < 1 ||
       retryAfter > 86400)
+  )
+    throw new ResponseContractError();
+  const invalidFields = parseInvalidRequestFields(input["invalid_fields"]);
+  if (
+    input["invalid_fields"] !== undefined &&
+    (code !== "invalid_request" || invalidFields === null)
+  )
+    throw new ResponseContractError();
+  const diagnostic = readSourceProblemDiagnostic(
+    code,
+    input["detail"],
+    input["configuration_diagnostic"],
+  );
+  const configuration = hasConfigurationFields(diagnostic) ? diagnostic : null;
+  if (
+    (input["configuration_diagnostic"] !== undefined && configuration === null) ||
+    input["valid_example"] !==
+      (configuration?.example == null
+        ? undefined
+        : renderConfigurationExample(configuration.example))
   )
     throw new ResponseContractError();
   const docsUrl = String(input["type"]);
@@ -1481,13 +1503,17 @@ export const parseSafeProblem = (value: unknown): SafeProblem => {
     code: code as ProblemCode,
     retryable: policy.retryable,
     suggestedAction:
-      (code === "framework_conversion_required"
-        ? (parseFrameworkConversionDetail(input["detail"]) ?? policy.action)
+      (code === "framework_conversion_required" || code === "source_syntax_error"
+        ? (frameworkConversionDetail(diagnostic) ?? policy.action)
         : code === "invalid_request"
           ? (parseFeedbackSubmissionDetail(input["detail"]) ?? policy.action)
-          : policy.action) +
+          : code === "service_unavailable" && retryAfter !== undefined
+            ? "Nothing was changed. Read again."
+            : policy.action) +
       (retryAfter === undefined ? "" : ` Retry after ${String(retryAfter)} seconds.`),
     ...(retryAfter === undefined ? {} : { retryAfterSeconds: retryAfter as number }),
+    ...(invalidFields === null ? {} : { invalidFields }),
+    ...(diagnostic === null ? {} : { frameworkDiagnostic: diagnostic }),
   };
 };
 
@@ -1523,6 +1549,7 @@ export const parseOperation = (value: unknown): PublicOperation => {
     "error",
     "reconciliation",
     "progress",
+    "work",
   ]);
   const id = input["id"];
   const state = input["state"];
@@ -1563,30 +1590,19 @@ export const parseOperation = (value: unknown): PublicOperation => {
     throw new ResponseContractError();
   }
   let reconciliation: PublicOperationReconciliation | undefined;
-  if (input["reconciliation"] !== undefined) {
-    const observed = exactRecord(input["reconciliation"], [
-      "state",
-      "attempt_id",
-      "observed_at",
-      "suggested_action",
-    ]);
-    if (
-      (state !== "queued" && state !== "running") ||
-      (observed["state"] !== "required" && observed["state"] !== "pending") ||
-      !isIsoInstant(observed["observed_at"]) ||
-      !boundedString(observed["suggested_action"], 1, 500) ||
-      (observed["state"] === "required"
-        ? observed["attempt_id"] !== null
-        : !isUlid(observed["attempt_id"]))
-    )
-      throw new ResponseContractError();
-    reconciliation = publicOperationReconciliation({
-      state: observed["state"],
-      attempt_id: observed["attempt_id"] as string | null,
-      observed_at: observed["observed_at"] as string,
-    });
-    if (reconciliation.suggested_action !== observed["suggested_action"])
-      throw new ResponseContractError();
+  let work: OperationWork | undefined;
+  try {
+    if (input["reconciliation"] !== undefined) {
+      if (state !== "queued" && state !== "running") throw new ResponseContractError();
+      reconciliation = parsePublicOperationReconciliation(input["reconciliation"]);
+    }
+    if (input["work"] !== undefined) {
+      work = parseOperationWork(input["work"]);
+      if ((work.wait_reason !== undefined) !== (state === "queued" || state === "running"))
+        throw new ResponseContractError();
+    }
+  } catch {
+    throw new ResponseContractError();
   }
   return {
     id,
@@ -1598,6 +1614,7 @@ export const parseOperation = (value: unknown): PublicOperation => {
       : { blocking_operation_id: blockingOperationId as string }),
     ...(deploymentId === undefined ? {} : { deployment_id: deploymentId as string }),
     ...(progress === undefined ? {} : { progress }),
+    ...(work === undefined ? {} : { work }),
     ...(result === undefined ? {} : { result }),
     ...(error === undefined ? {} : { error }),
     ...(reconciliation === undefined ? {} : { reconciliation }),

@@ -1,0 +1,395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ohmyho.st/ohmyhost/v1/schema.json",
+  "title": "ohmyhost.yaml",
+  "description": "Version 1 project build and runtime configuration.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "project", "build", "runtime"],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "project": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z](?:[a-z0-9-]*[a-z0-9])?$"
+    },
+    "applicationRoot": {
+      "$ref": "#/$defs/applicationRoot"
+    },
+    "build": {
+      "$ref": "#/$defs/build"
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "database": {
+      "$ref": "#/$defs/database"
+    },
+    "auth": {
+      "$ref": "#/$defs/auth"
+    },
+    "mail": {
+      "$ref": "#/$defs/mail"
+    },
+    "storage": {
+      "$ref": "#/$defs/storage"
+    },
+    "ai": {
+      "$ref": "#/$defs/ai"
+    },
+    "functions": {
+      "$ref": "#/$defs/functions"
+    },
+    "browser": {
+      "$ref": "#/$defs/browserRendering"
+    }
+  },
+  "$defs": {
+    "applicationRoot": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^(?:\\.|[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*)$",
+      "allOf": [
+        {
+          "pattern": "^(?:\\.|[A-Za-z0-9][A-Za-z0-9._-]{0,62}(?:/[A-Za-z0-9][A-Za-z0-9._-]{0,62}){0,7})$"
+        }
+      ]
+    },
+    "nonEmptyCommand": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!/)(?!.*[\\\\:])(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["install"],
+      "properties": {
+        "install": {
+          "$ref": "#/$defs/nonEmptyCommand"
+        },
+        "command": {
+          "$ref": "#/$defs/nonEmptyCommand"
+        },
+        "output": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "ssg_cache_max_mib": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "description": "Maximum private immutable Next.js prerender cache in MiB; defaults to 32. Cache storage costs zero credits. Public assets retain their independent limit."
+        },
+        "next_revalidate_path": {
+          "type": "boolean",
+          "description": "Opt into deployment-scoped on-demand Next.js path revalidation."
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["static", "edge", "functions", "auto"]
+        },
+        "healthcheck": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^/"
+        },
+        "browser": {
+          "$ref": "#/$defs/browser"
+        },
+        "egress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allow"],
+          "properties": {
+            "allow": {
+              "type": "array",
+              "maxItems": 11,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^https://"
+              }
+            }
+          }
+        }
+      }
+    },
+    "browserOrigins": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "pattern": "^https://"
+      }
+    },
+    "browser": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "connect": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?:https|wss)://"
+          }
+        },
+        "scripts": {
+          "$ref": "#/$defs/browserOrigins"
+        },
+        "styles": {
+          "$ref": "#/$defs/browserOrigins"
+        },
+        "images": {
+          "$ref": "#/$defs/browserOrigins"
+        },
+        "fonts": {
+          "$ref": "#/$defs/browserOrigins"
+        },
+        "frames": {
+          "$ref": "#/$defs/browserOrigins"
+        },
+        "frameAncestors": {
+          "$ref": "#/$defs/browserOrigins"
+        },
+        "workers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "self": {
+              "type": "boolean"
+            },
+            "blob": {
+              "type": "boolean"
+            }
+          }
+        },
+        "cors": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "origins": {
+              "$ref": "#/$defs/browserOrigins"
+            },
+            "credentials": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "migrations": {
+          "$ref": "#/$defs/relativePath"
+        }
+      },
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        },
+        "required": ["enabled"]
+      },
+      "then": {
+        "properties": {
+          "migrations": {
+            "$ref": "#/$defs/relativePath"
+          }
+        },
+        "required": ["migrations"]
+      }
+    },
+    "mail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "jurisdiction", "public"],
+      "properties": {
+        "provider": {
+          "const": "r2"
+        },
+        "jurisdiction": {
+          "type": "string",
+          "enum": ["us", "eu"]
+        },
+        "public": {
+          "const": false
+        }
+      }
+    },
+    "ai": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "jurisdiction": {
+          "type": "string",
+          "enum": ["eu", "any"]
+        }
+      },
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        },
+        "required": ["enabled"]
+      },
+      "then": {
+        "properties": {
+          "jurisdiction": {
+            "type": "string",
+            "enum": ["eu", "any"]
+          }
+        },
+        "required": ["jurisdiction"]
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["none", "better-auth", "omh-native"]
+        }
+      }
+    },
+    "functions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["crons"],
+      "properties": {
+        "crons": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 9,
+            "maxLength": 64
+          }
+        }
+      }
+    },
+    "browserRendering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "runtime": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "functions"
+              }
+            },
+            "required": ["mode"]
+          }
+        },
+        "required": ["runtime"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "build": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["install"],
+            "properties": {
+              "install": {
+                "$ref": "#/$defs/nonEmptyCommand"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "type": "object",
+        "properties": {
+          "build": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["install", "command", "output"],
+            "properties": {
+              "install": {
+                "$ref": "#/$defs/nonEmptyCommand"
+              },
+              "command": {
+                "$ref": "#/$defs/nonEmptyCommand"
+              },
+              "output": {
+                "$ref": "#/$defs/relativePath"
+              },
+              "ssg_cache_max_mib": {
+                "$ref": "#/$defs/build/properties/ssg_cache_max_mib"
+              },
+              "next_revalidate_path": {
+                "$ref": "#/$defs/build/properties/next_revalidate_path"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

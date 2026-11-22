@@ -41,11 +41,20 @@ import {
   McpSourceChangesInputError,
 } from "@ohmyhost/contracts/mcp-source-codec";
 import {
+  CHAT_ACCESS_INSTRUCTIONS,
   CHAT_MAIN_PATH_INSTRUCTIONS,
+  OPERATION_GET_DESCRIPTION,
+  OPERATION_RECONCILE_DESCRIPTION,
   PREVIEW_GET_DESCRIPTION,
   PREVIEW_OPEN_DESCRIPTION,
+  chatArgumentIssues,
+  chatRestArgumentIssues,
+  chatToolInput,
+  renderChatProblem,
   withChatGuidance,
+  type ChatArgumentIssue,
 } from "@ohmyhost/contracts/chat-guidance";
+import type { FrameworkConversionDiagnostic } from "@ohmyhost/contracts/framework-admission";
 import type { ManagedMailCommand, SharedMailCommand } from "@ohmyhost/sdk-ts";
 import {
   parseManagedSourceRequest,
@@ -207,7 +216,7 @@ export interface LocalMcpProductClient {
   getDatabaseCompute(input: {
     projectId: string;
     environment: "dev" | "prod";
-  }): Promise<import("@ohmyhost/contracts/database-compute").DatabaseCompute>;
+  }): Promise<import("@ohmyhost/contracts/database-compute").DatabaseComputeRead>;
   getProjectContext(
     projectId: string,
   ): Promise<import("@ohmyhost/contracts/project-context").ProjectContext>;
@@ -683,7 +692,7 @@ const deletableSecretName = z
   );
 
 const LOCAL_SERVER_INSTRUCTIONS =
-  "Continue an existing app from its reachable workspace and saved project binding. Reuse a matching local CLI/MCP profile or private token source unless the user chooses remote; verify its identity and workspace. Remote tool availability alone never selects remote. If remote identity/workspace mismatches, stop the access-link loop. Unreachable local context is an access gap, not deleted credentials; never substitute an unrelated Review/demo account or change the saved source. " +
+  CHAT_ACCESS_INSTRUCTIONS +
   CHAT_MAIN_PATH_INSTRUCTIONS +
   "Operate the user's ohmyho.st hosting account: projects, managed or GitHub sources and deployments, databases, domains, mail, usage and budgets. " +
   "Use the existing project source binding first; an unbound local or cloud checkout is published as it is, with or without a GitHub remote, and GitHub is the later step for deployment on every push, so ask no routing question and do not require GitHub just because no connection exists. " +
@@ -700,23 +709,18 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
       title: "Inspect local application source",
       description:
         "Read local working-directory, Git/worktree, monorepo and sanitized remote context without sign-in. This tool exists only in local MCP and never proves repository authorization. No source files or history are uploaded.",
-      inputSchema: z.object({ directory: z.string().min(1).max(4096).default(".") }),
+      inputSchema: chatToolInput(z.object({ directory: z.string().min(1).max(4096).default(".") })),
       annotations: readAnnotations(),
     },
     async (input) => {
+      if (!input.success) return toolError(input.error, dependencies);
       try {
+        const { directory } = input.data;
         return toolResult({
-          ...(await inspectSourceWorkspace(input.directory)),
-          pending_publications: await inspectLocalSourcePublications(input.directory),
+          ...(await inspectSourceWorkspace(directory)),
+          pending_publications: await inspectLocalSourcePublications(directory),
         });
       } catch (error) {
-        if (error instanceof SourceWorkspaceError)
-          return {
-            ...toolResult({
-              error: { code: error.code, retryable: false, suggested_action: error.message },
-            }),
-            isError: true,
-          };
         return toolError(error, dependencies);
       }
     },
@@ -726,7 +730,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_compute_get",
-    "Read current managed database memory, total storage, region and observed state without running SQL or waking the database. Shared Dev/Prod resolves to one physical database. First provisioning is distinct from cold (sleeping) and warm (running). A null database means no confirmed placement. A configured size does not prove an in-progress resize finished. This read never resizes or changes billing.",
+    "Read current managed database memory, total storage, region and observed state without running SQL or waking the database. Shared Dev/Prod resolves to one physical database. First provisioning is distinct from cold (sleeping) and warm (running). An existing environment without a confirmed database placement returns not_set_up with guidance for provisioning or setup. A configured size does not prove an in-progress resize finished. This read never resizes or changes billing.",
     z.object({ project_id: identifier, environment: z.enum(["dev", "prod"]).default("dev") }),
     (client, input) =>
       client.getDatabaseCompute({ projectId: input.project_id, environment: input.environment }),
@@ -1834,7 +1838,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "identity_get",
-    "Get the ohmyho.st customer/agent identity this call acts as: user and account email, scoped organization IDs and names and, in context, the saved login or OHMYHOST_TOKEN that supplied it. Compare it with the user and organization the customer named before any change. This does not authenticate the hosted application's end users or provision a customer AuthKit tenant; application authentication is the customer's chosen integration.",
+    "Get the ohmyho.st customer/agent identity this call acts as: user and account email, scoped organization IDs and names, plan and remaining credits when authorized and available, and, in context, the saved login or OHMYHOST_TOKEN that supplied it. Compare it with the user and organization the customer named before any change. This does not authenticate the hosted application's end users or provision a customer AuthKit tenant; application authentication is the customer's chosen integration.",
     z.object({}),
     (client, _input, signal) => client.getCurrentIdentity(signal),
   );
@@ -1993,7 +1997,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "project_status",
-    "Get source, existing environment IDs, deployment URLs, custom production domains, Dev access mode, latest operation and cleanup status. Dev may be absent; add it with project_development_add. Protected Dev needs project_dev_share_link_get for a persistent share link. Select environments by name; never infer a Prod ID from the default environment.",
+    "Get source, existing environment IDs, deployment URLs, custom production domains, Dev access mode, latest operation and cleanup status. Dev may be absent; add it with project_development_add. Use preview_open to show the app, with environment dev on Paid when the project has Dev, or prod on Free or when Dev is absent. Give the protected Dev share_url from project_dev_share_link_get only when the user asks for the deployed Dev site. Select environments by name; never infer a Prod ID from the default environment.",
     z.object({ project_id: identifier }),
     (client, input) => client.getProjectStatus(input.project_id),
   );
@@ -2080,7 +2084,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "project_dev_share_link_get",
-    "Owner only: get or create the persistent protected Dev link. The same link works for multiple visitors and has no automatic expiry. Keep it out of notes and logs.",
+    "Owner only: get or create the persistent share link for the protected Dev site (Paid only). The same link works for multiple visitors and has no automatic expiry. Keep it out of notes and logs.",
     z.object({ project_id: identifier }),
     (client, input) => client.ensureDevShareLink(input.project_id),
     mutationAnnotations(),
@@ -2155,7 +2159,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "project_dev_access_create",
-    "Create an owner-only one-hour single-use access link for the protected Dev app. Anonymous Dev HTTP 404 is expected; it does not prove deployment failure. Open redeem_url once in the intended browser or isolated cookie jar, then use the clean origin with its session cookie. Keep the link and cookie private, out of reports, logs and project notes. A new ticket invalidates earlier one-time ticket sessions and unused owner tickets but not the persistent share link; do not blindly retry an uncertain request. This grants no customer application login or Prod access.",
+    "Create an owner-only one-hour single-use access link for the protected Dev site (Paid only). Anonymous Dev HTTP 404 is expected; it does not prove deployment failure. Open redeem_url once in the intended browser or isolated cookie jar, then use the clean origin with its session cookie. Keep the link and cookie private, out of reports, logs and project notes. A new ticket invalidates earlier one-time ticket sessions and unused owner tickets but not the persistent share link; do not blindly retry an uncertain request. This grants no customer application login or Prod access.",
     z.object({ project_id: identifier }),
     (client, input) => client.createDevAccessTicket(input.project_id),
     { ...mutationAnnotations(), idempotentHint: false },
@@ -2173,7 +2177,10 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
         idempotency_key: idempotencyKey,
       })
       .strict()
-      .refine((i) => (i.project_id === undefined) === (i.environment_id === undefined)),
+      .refine((i) => (i.project_id === undefined) === (i.environment_id === undefined), {
+        path: ["environment_id"],
+        message: "Supply project_id and environment_id together.",
+      }),
     (client, input) => {
       if (!client.connection) throw new Error("connection_provider_unavailable");
       return client.connection({
@@ -2467,7 +2474,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "source_get",
-    "Get linked source status. Set include_binding to true to read the source connection ID and generation before managed changes or an explicit source switch.",
+    "Get linked source status and preparation guidance when pending. include_binding true reads the connection ID and generation for managed changes or an explicit source switch.",
     z.object({ project_id: identifier, include_binding: z.boolean().default(false) }),
     (client, input) => {
       if (input.include_binding !== true) return client.getSource(input.project_id);
@@ -2560,7 +2567,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "operation_get",
-    "Get durable operation status and current deployment progress/reconciliation guidance. Follow progress.phase and progress.suggested_action. waiting_for_mail requires the mail domain status now for the current verification issue and DNS records (use mail_domain_status in either MCP transport or GET /v1/projects/{project_id}/environments/{environment_id}/mail-domain over REST); publishing means the build completed but runtime preparation/publication is unfinished. Poll this operation after progress.next_poll_after_seconds. A queued/running operation with reconciliation.state=required needs one confirmed operation_reconcile using the same operation; pending means poll this operation after 60 seconds. Never infer deployment success from a completed reconciliation attempt or start another build to recover it. A deploy, promotion or rollback names its deployment_id in every state; when state is failed, read that deployment with deployment_logs and follow error.suggested_action before changing source.",
+    OPERATION_GET_DESCRIPTION,
     z.object({ operation_id: identifier }),
     (client, input) => client.getOperation(input.operation_id),
   );
@@ -2597,7 +2604,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "operation_reconcile",
-    "Start an explicitly confirmed provider reconciliation attempt",
+    OPERATION_RECONCILE_DESCRIPTION,
     z.object({
       operation_id: identifier,
       idempotency_key: idempotencyKey,
@@ -3220,7 +3227,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "native_auth_config_get",
-    "Read Owner Native Auth configuration and readiness.",
+    "Read Native Auth policy for one environment. If setup is missing, returns readiness for the plan, project approval, sender domain and application identity.",
     z.object(nativeScope),
     (client, input) =>
       nativeRun(client, {
@@ -3934,8 +3941,10 @@ function registerProductTool<Schema extends z.ZodObject<z.ZodRawShape>, Result>(
   },
 ) {
   const inputSchema = schema.extend({ profile_name: profileName });
-  const callback = (async (input: unknown, context: { mcpReq: { signal: AbortSignal } }) => {
-    const parsed = inputSchema.parse(input) as z.output<Schema> & {
+  const toolInput = chatToolInput(inputSchema);
+  const callback: ToolCallback<typeof toolInput> = async (input, context) => {
+    if (!input.success) return toolError(input.error, dependencies);
+    const parsed = input.data as z.output<Schema> & {
       readonly profile_name?: string | undefined;
     };
     // The login name chooses the account; it is never part of what the tool sends.
@@ -3945,7 +3954,9 @@ function registerProductTool<Schema extends z.ZodObject<z.ZodRawShape>, Result>(
       client = await dependencies.authenticatedClient(context.mcpReq.signal, selection(parsed));
       const value = await execute(client, call as z.output<Schema>, context.mcpReq.signal);
       // Local project creation does not request a managed starter.
-      const result = toolResult(withChatGuidance(name, value, { starterRequested: false }));
+      const result = toolResult(
+        withChatGuidance(name, value, { starterRequested: false, local: true }),
+      );
       const scope = parsed as Record<string, unknown>;
       if (
         typeof scope["project_id"] === "string" &&
@@ -3965,8 +3976,8 @@ function registerProductTool<Schema extends z.ZodObject<z.ZodRawShape>, Result>(
     } catch (error) {
       return toolError(error, dependencies, client?.actingAs?.());
     }
-  }) as ToolCallback<typeof inputSchema>;
-  server.registerTool(name, { description, inputSchema, annotations }, callback);
+  };
+  server.registerTool(name, { description, inputSchema: toolInput, annotations }, callback);
 }
 
 /**
@@ -4035,7 +4046,9 @@ function fixedOrganizationAction(
 interface SafeFailure {
   readonly code: string;
   readonly retryable: boolean;
-  readonly suggestedAction: string;
+  readonly suggestedAction?: string;
+  readonly issues?: readonly ChatArgumentIssue[];
+  readonly frameworkDiagnostic?: FrameworkConversionDiagnostic;
   readonly retryAfterSeconds?: number;
   readonly requestId?: string;
 }
@@ -4053,14 +4066,8 @@ function toolError(
   return {
     ...toolResult({
       error: {
-        code: safe.code,
-        retryable: safe.retryable,
-        suggested_action: safe.suggestedAction,
-        ...("message" in safe && safe.message !== undefined ? { message: safe.message } : {}),
-        ...(safe.requestId === undefined ? {} : { request_id: safe.requestId }),
-        ...(safe.retryAfterSeconds === undefined
-          ? {}
-          : { retry_after_seconds: safe.retryAfterSeconds }),
+        ...renderChatProblem(safe.code, safe),
+        ...(safe.suggestedAction === undefined ? {} : { suggested_action: safe.suggestedAction }),
         ...(actingAs !== undefined && ACCOUNT_SENSITIVE_PROBLEMS.has(safe.code)
           ? { acting_as: actingAs }
           : {}),
@@ -4075,12 +4082,19 @@ function toolError(
  * problem. What no branch recognizes is reported as such, never as a guessed cause.
  */
 function safeFailure(error: unknown, commandPrefix: string): SafeFailure {
+  if (error instanceof z.ZodError)
+    return { code: "invalid_request", retryable: false, issues: chatArgumentIssues(error.issues) };
   if (error instanceof McpSourceChangesInputError)
     return {
       code: "invalid_request",
       retryable: false,
-      suggestedAction:
-        "Provide exactly one content_text or content_base64 per file, within the 2 MiB source limits. Use null content_base64 to delete a file.",
+      issues: [
+        {
+          argument: "changes",
+          reason:
+            "Provide exactly one content_text or content_base64 per file, within the 2 MiB source limits. Use null content_base64 to delete a file.",
+        },
+      ],
     };
   if (error instanceof LocalSourcePublicationError)
     return {
@@ -4110,7 +4124,17 @@ function safeFailure(error: unknown, commandPrefix: string): SafeFailure {
     if (local !== undefined) return local;
   }
   try {
-    return parseSafeProblem(error);
+    const { code, retryable, requestId, retryAfterSeconds, frameworkDiagnostic, invalidFields } =
+      parseSafeProblem(error);
+    const issues = chatRestArgumentIssues(invalidFields);
+    return {
+      code,
+      retryable,
+      requestId,
+      ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
+      ...(frameworkDiagnostic === undefined ? {} : { frameworkDiagnostic }),
+      ...(issues === undefined ? {} : { issues }),
+    };
   } catch {
     return {
       code: "client_request_failed",

@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.76; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.77; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.76 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.77 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -95,7 +95,7 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `github_connect`: Owner or Admin: connect GitHub once for this workspace.
 - `github_disconnect`: Owner only: disconnect this workspace's GitHub connection.
 - `github_status`: Read this workspace's GitHub connection.
-- `identity_get`: Get the ohmyho.st customer/agent identity this call acts as: user and account email, scoped organization IDs and names and, in context, the saved login or OHMYHOST_TOKEN that supplied it.
+- `identity_get`: Get the ohmyho.st customer/agent identity this call acts as: user and account email, scoped organization IDs and names, plan and remaining credits when authorized and available, and, in context, the saved login or OHMYHOST_TOKEN that supplied it.
 - `integration_connection_begin`: Create a protected Make consent link for the selected workspace and signed-in user.
 - `integration_connection_disconnect`: Disconnect a connection grant and revoke its provider credential.
 - `integration_connection_discover`: Read accessible Make organizations, teams and connection metadata.
@@ -119,7 +119,7 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `mail_webhook_rotate`: Owner only: issue a new server-only signing secret for the project's Prod mail webhook endpoint.
 - `mail_webhook_set`: Set the required HTTPS endpoint on the project's Prod application using its Prod environment ID.
 - `mail_webhook_verify`: Send a signed test to the Prod application endpoint and enable receiving after it accepts the event.
-- `native_auth_config_get`: Read Owner Native Auth configuration and readiness.
+- `native_auth_config_get`: Read Native Auth policy for one environment.
 - `native_auth_config_set`: Update Owner Native Auth configuration at the current revision.
 - `native_auth_provider_get`: Read provider setup without its secret.
 - `native_auth_provider_secret_input_request`: Return an account-bound stdin-only command; never place a provider secret in MCP arguments.
@@ -132,9 +132,9 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `native_auth_user_revoke_sessions`: Revoke an Owner-authorized Native Auth user's sessions.
 - `native_auth_user_suspend`: Suspend an Owner-authorized Native Auth user.
 - `native_auth_users_list`: List Native Auth users with bounded pagination.
-- `operation_get`: Get durable operation status and current deployment progress/reconciliation guidance.
+- `operation_get`: Read the original operation’s state, work kind, current step, age, usual duration, wait reason and next step.
 - `operation_logs`: Read available operation events for at most ten seconds, stopping earlier at max_events or a terminal event.
-- `operation_reconcile`: Start an explicitly confirmed provider reconciliation attempt
+- `operation_reconcile`: Recovers an operation after operation_get reports reconciliation_required.
 - `organization_account_get`: Owner-only: read the effective Free/Paid plan, its Stripe or granted source, the monthly credits that expire at next_expiry, the top-up and bonus credits that never expire, the reservations that hold part of them, and available_micros (monthly plus one-time minus reservations).
 - `organization_create`: Create an organization owned by the signed-in user.
 - `organization_credits_get`: Read the owner's shared organization credit balance (available_micros is monthly plus one-time credit minus reservations) and the seven-day grace_started_at/grace_expires_at that begins when the credit is used up.
@@ -145,8 +145,8 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `organization_use`: Bind a saved login that has no organization yet to one workspace, so later calls act inside it.
 - `powered_by_flag_get`: Read whether the production site shows the opt-in "Powered by ohmyho.st" flag.
 - `powered_by_flag_set`: Owner only, ask the human first: show or hide a small "Powered by ohmyho.st" flag on the right edge of the production site.
-- `preview_get`: Read the stable private preview of this exact environment: its link, state, saved and applied version, and ready_to_show.
-- `preview_open`: Open or create the stable private preview of this exact environment and return its link, state and ready_to_show.
+- `preview_get`: Read the stable private live preview for this project and environment: its link, state, saved and applied version, and ready_to_show.
+- `preview_open`: Open or create the stable private live preview for this project and environment and return its link, state and ready_to_show.
 - `preview_rotate`: Rotate the preview URL and close old connections.
 - `preview_stop`: Stop the preview and remove backups while preserving its URL.
 - `profile_list`: List the saved ohmyho.st logins on this computer: each has a name, a user and an organization, never a token.
@@ -156,9 +156,9 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `project_create`: Create an ohmyho.st project.
 - `project_data_change`: Owner only: execute the exact reviewed project_data_plan after explicit customer confirmation.
 - `project_data_plan`: Owner only: plan a Dev/Prod data assignment change and review the data, files, deployments and database logins it keeps or removes.
-- `project_dev_access_create`: Create an owner-only one-hour single-use access link for the protected Dev app.
+- `project_dev_access_create`: Create an owner-only one-hour single-use access link for the protected Dev site (Paid only).
 - `project_dev_access_mode_set`: Owner only: choose public Dev (no platform token) or protected Dev (share link required).
-- `project_dev_share_link_get`: Owner only: get or create the persistent protected Dev link.
+- `project_dev_share_link_get`: Owner only: get or create the persistent share link for the protected Dev site (Paid only).
 - `project_dev_share_link_revoke`: Owner only: revoke the persistent Dev link and active sessions immediately without changing the Dev access mode.
 - `project_dev_share_link_rotate`: Owner only: replace the persistent Dev link and immediately revoke old links and sessions.
 - `project_development_add`: Add Dev to an existing project.
@@ -183,7 +183,7 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `source_diff`: Compare two managed versions without changing files or deployments.
 - `source_file`: Read one managed source file with its exact hash and mode.
 - `source_files`: List the exact managed source tree at a version; omit commit_sha to read current main.
-- `source_get`: Get linked source status.
+- `source_get`: Get linked source status and preparation guidance when pending.
 - `source_initialize`: Create managed version history for an unbound project.
 - `source_inspect`: Read local working-directory, Git/worktree, monorepo and sanitized remote context without sign-in.
 - `source_link`: Link a repository covered by the workspace GitHub connection.
@@ -215,7 +215,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.76 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.77 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

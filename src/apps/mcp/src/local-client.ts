@@ -15,7 +15,7 @@ import {
   assertProjectDatabaseWriteReceipt,
 } from "@ohmyhost/contracts/database-access";
 import { assertOrganizationAccount } from "@ohmyhost/contracts/credit-pricing";
-import { assertDatabaseCompute } from "@ohmyhost/contracts/database-compute";
+import { assertDatabaseComputeRead } from "@ohmyhost/contracts/database-compute";
 import {
   assertDatabaseExecutionUsagePage,
   assertDatabaseSchedule,
@@ -379,8 +379,11 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
       { project_id: input.projectId, environment: input.environment },
       { client: this.#client },
     );
-    assertDatabaseCompute(value);
-    if (value.project_id !== input.projectId || value.environment !== input.environment)
+    assertDatabaseComputeRead(value);
+    if (
+      "project_id" in value &&
+      (value.project_id !== input.projectId || value.environment !== input.environment)
+    )
       throw new TypeError("Compute response scope mismatch");
     return value;
   }

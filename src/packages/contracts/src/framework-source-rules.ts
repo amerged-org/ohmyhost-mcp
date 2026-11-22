@@ -15,9 +15,11 @@ import {
   frameworkVersionDiagnostic,
   isResolvedFrameworkVersion,
   managedCustomerAuthAdmissionIssue,
+  PACKAGE_MANAGER_CONTRACTS,
   parseFrameworkConversionDiagnostic,
   resolveFrameworkConfig,
   resolvePackageManager,
+  type ConfigurationExample,
   type FrameworkConversionDiagnostic,
   type FrameworkVersionAdmission,
   type FrameworkVersionPackage,
@@ -124,6 +126,85 @@ const BUILD_OUTPUTS: Readonly<Partial<Record<FrameworkSourceFramework, string>>>
   "vite-static": "dist",
   "tanstack-start": "dist/client",
 });
+/** Picks a minimal configuration from the manifest, lockfile and inspected framework config. */
+export function detectConfigurationExample(
+  files: readonly string[],
+  inspection: ReadonlyMap<string, string | null>,
+  requestedMode: unknown,
+): ConfigurationExample | null {
+  const manifest = parsePackageManifest(inspection.get(PACKAGE_MANIFEST));
+  if (manifest === null) return null;
+  try {
+    const { manager: package_manager } = resolvePackageManager({
+      packageManager: packageManagerDeclaration(manifest),
+      files,
+    });
+    const family = classifyFrameworkFamily(declaredDependencyNames(manifest));
+    if (
+      requestedMode === "functions" ||
+      (family === "unknown" && files.includes(WORKER_MODULE_PATH))
+    )
+      return { framework: "functions", package_manager, runtime: "functions" };
+    if (family === "nextjs") return { framework: family, package_manager, runtime: "edge" };
+    if (family === "astro") {
+      const path = resolveFrameworkConfig("astro.config", files);
+      const text = path === null ? null : (inspection.get(path) ?? null);
+      const runtime =
+        path !== null && text !== null && astroConfigFindings(text, path, "edge").length === 0
+          ? "edge"
+          : "static";
+      return { framework: family, package_manager, runtime };
+    }
+    if (family === "tanstack-start") {
+      const path = resolveFrameworkConfig("vite.config", files);
+      const text = path === null ? null : (inspection.get(path) ?? null);
+      const runtime =
+        (text === null ? null : tanStackViteConfigRuntime(text)) ??
+        (requestedMode === "edge" ? "edge" : "static");
+      return { framework: family, package_manager, runtime };
+    }
+    if (family === "vite")
+      return {
+        framework: "vite-static",
+        package_manager,
+        runtime:
+          requestedMode === "edge" && files.includes(VITE_COMPANION_ENTRY_PATH) ? "edge" : "static",
+      };
+    return null;
+  } catch (error) {
+    if (error instanceof FrameworkAdmissionError) return null;
+    throw error;
+  }
+}
+
+export function renderConfigurationExample(example: ConfigurationExample): string {
+  const { framework, package_manager, runtime } = example;
+  const { installCommand, buildCommand } = PACKAGE_MANAGER_CONTRACTS[package_manager];
+  const output =
+    framework === "nextjs" ? ".open-next/assets" : frameworkBuildOutput(framework, runtime);
+  return [
+    "version: 1",
+    "project: example-app",
+    "build:",
+    `  install: ${installCommand}`,
+    ...(runtime === "functions" ? [] : [`  command: ${buildCommand}`, `  output: ${output}`]),
+    "runtime:",
+    `  mode: ${runtime}`,
+    "",
+  ].join("\n");
+}
+
+function frameworkBuildOutput(
+  framework: FrameworkSourceFramework,
+  mode: string,
+): string | undefined {
+  return framework === "astro"
+    ? mode === "edge"
+      ? "dist/client"
+      : "dist"
+    : BUILD_OUTPUTS[framework];
+}
+
 const REQUIRED_CONFIG_PATHS: Readonly<Partial<Record<FrameworkSourceFramework, string>>> =
   Object.freeze({
     astro: "astro.config.mjs",
@@ -726,12 +807,7 @@ function configurationFindings(input: FrameworkSourceRuleInput): FrameworkConver
     (build.ssg_cache_max_mib !== undefined || build.next_revalidate_path === true)
   )
     findings.push(diagnostic({ code: "build_option_unsupported", path: REPOSITORY_CONFIG }));
-  const output =
-    framework === "astro"
-      ? configuration.runtime.mode === "edge"
-        ? "dist/client"
-        : "dist"
-      : BUILD_OUTPUTS[framework];
+  const output = frameworkBuildOutput(framework, configuration.runtime.mode);
   if (build !== null && output !== undefined && build.output !== output)
     findings.push(
       diagnostic({ code: "build_output_unsupported", path: REPOSITORY_CONFIG, framework }),

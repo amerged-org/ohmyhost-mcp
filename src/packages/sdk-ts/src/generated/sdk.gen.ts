@@ -2278,7 +2278,7 @@ export const detachProjectMailDomainBinding = <ThrowOnError extends boolean = tr
 /**
  * Read project sender settings
  *
- * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.
+ * Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate. Callers without sender read access receive 404 whether or not a binding exists.
  */
 export const getProjectMailDomainBinding = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -3669,7 +3669,7 @@ export const completeCloudflareDnsAuthorization = <ThrowOnError extends boolean 
 /**
  * Get the current authenticated identity
  *
- * Returns the stable ohmyhost actor, the current user's or API-key owner's email, and the credential's organization scope with current display names. Machine-to-machine credentials have a null email. Organizations match organization_ids in the same order.
+ * Returns the stable ohmyhost actor, the current user's or API-key owner's email, and the credential's organization scope with current display names. Machine-to-machine credentials have a null email. Organizations match organization_ids in the same order. Each workspace includes plan and remaining credits when authorized and available.
  */
 export const getCurrentIdentity = <ThrowOnError extends boolean = true>(
   parameters?: {
@@ -6441,7 +6441,7 @@ export const applyPaidProjectDomain = <ThrowOnError extends boolean = true>(
 /**
  * Plan a deployment
  *
- * Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. Native Auth requires rollout approval for this workspace and project; a missing approval returns 409 native_auth_launch_unavailable before a build is reserved. A commit the platform does not admit answers 409 with a nonretryable problem code; for framework_conversion_required, detail is a fixed catalog sentence that names the file, the rule and the required change whenever the refusal is typed.
+ * Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. Native Auth requires rollout approval for this workspace and project; a missing approval returns 409 native_auth_launch_unavailable before a build is reserved. A commit the platform does not admit answers 409 with a nonretryable problem code. For framework_conversion_required, detail names the rule when the refusal is typed. An invalid ohmyhost.yaml includes configuration_diagnostic and, when its framework and package manager are identified, valid_example. For source_syntax_error, detail names the file and its one-based line and column without including a source excerpt.
  */
 export const planDeployment = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -6725,7 +6725,7 @@ export const streamDeploymentLogs = <ThrowOnError extends boolean = true>(
 /**
  * Read actual managed database compute configuration
  *
- * Project readers can observe current Dev or Prod compute without receiving provider IDs or credentials and without executing SQL or waking the database. Explicitly shared data resolves to the same physical database for both environments. A null database means the owned environment has no confirmed managed placement. Provider failures return a problem, never invented defaults. Configuration describes observed settings, not a completed resize operation. suspend_timeout_seconds is the configured provider value; 0 means provider default and -1 means never suspend.
+ * Project readers can observe current Dev or Prod compute without receiving provider IDs or credentials and without executing SQL or waking the database. Explicitly shared data resolves to the same physical database for both environments. An owned environment without a confirmed placement returns not_set_up with guidance to wait for active provisioning or to set up the database. A missing environment returns 404. Provider failures return a problem, never invented defaults. Configuration describes observed settings, not a completed resize operation. suspend_timeout_seconds is the configured provider value; 0 means provider default and -1 means never suspend.
  */
 export const getDatabaseCompute = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -8080,7 +8080,7 @@ export const setProjectDatabaseSchedule = <ThrowOnError extends boolean = true>(
 /**
  * List the recent runs of one database schedule
  *
- * Returns the newest runs first, with the outcome of each run.
+ * Returns the newest runs first, with the outcome of each run. A missing schedule returns 404.
  */
 export const listProjectDatabaseScheduleRuns = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -8755,7 +8755,7 @@ export const getOperation = <ThrowOnError extends boolean = true>(
 /**
  * Reconcile an uncertain platform delivery or provider mutation
  *
- * Owner-only, idempotent recovery for an operation retained after an uncertain platform delivery or provider mutation. The control plane derives the exact recovery decision, including any deterministic internal Workflow handoff; the request has no body. Exhausted lifecycle recovery returns reconciliation_exhausted (409, retryable false); stop retries and report the original operation through feedback. An operation with no uncertain delivery or provider mutation pending returns reconciliation_not_pending (409, retryable false).
+ * Owner-only, idempotent recovery for an operation retained after an uncertain platform delivery or provider mutation. Read the operation for a reconciliation_required state. The control plane derives the exact recovery decision, including any deterministic internal Workflow handoff. Use the original write's idempotency key and read the original operation in the returned Location. The request has no body. Exhausted lifecycle recovery returns reconciliation_exhausted (409, retryable false); stop retries and report the original operation through feedback. An operation with no uncertain delivery or provider mutation pending returns reconciliation_not_pending (409, retryable false).
  */
 export const reconcileOperation = <ThrowOnError extends boolean = true>(
   parameters: {

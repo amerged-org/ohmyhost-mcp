@@ -635,6 +635,24 @@ export function assertDatabaseWebhookReplayAccepted(
     throw new TypeError("Invalid database webhook replay");
 }
 
+export const SCHEDULE_NOT_SET_UP = {
+  status: "not_set_up",
+  next_step: "Create this schedule with database_schedule_set.",
+} as const;
+export type DatabaseScheduleRead = DatabaseSchedule | typeof SCHEDULE_NOT_SET_UP;
+
+export function assertDatabaseScheduleRead(value: unknown): asserts value is DatabaseScheduleRead {
+  if (record(value) && value["status"] === "not_set_up") {
+    if (
+      !exact(value, ["status", "next_step"]) ||
+      value["next_step"] !== SCHEDULE_NOT_SET_UP.next_step
+    )
+      throw new TypeError("Invalid database schedule setup response");
+    return;
+  }
+  assertDatabaseSchedule(value);
+}
+
 export function assertDatabaseSchedule(value: unknown): asserts value is DatabaseSchedule {
   if (
     !record(value) ||

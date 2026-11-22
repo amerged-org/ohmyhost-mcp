@@ -34,7 +34,10 @@ import {
   type ProjectDatabaseWriteRequest,
   type ProjectDatabaseWriteReceipt,
 } from "@ohmyhost/contracts/database-access";
-import { assertDatabaseCompute, type DatabaseCompute } from "@ohmyhost/contracts/database-compute";
+import {
+  assertDatabaseComputeRead,
+  type DatabaseComputeRead,
+} from "@ohmyhost/contracts/database-compute";
 import {
   DATABASE_TABLE_COLUMN_TYPES,
   DATABASE_TABLE_DEFAULTS,
@@ -45,6 +48,7 @@ import {
 import {
   assertDatabaseExecutionUsagePage,
   assertDatabaseSchedule,
+  assertDatabaseScheduleRead,
   assertDatabaseSchedulePage,
   assertDatabaseScheduleDeleted,
   assertDatabaseScheduleRunAccepted,
@@ -63,6 +67,7 @@ import {
   assertDatabaseWebhookSubscriptionActivation,
   type DatabaseExecutionUsagePage,
   type DatabaseSchedule,
+  type DatabaseScheduleRead,
   type DatabaseScheduleDeleted,
   type DatabaseSchedulePage,
   type DatabaseScheduleRunAccepted,
@@ -348,7 +353,7 @@ export interface ProductApi {
   getDatabaseCompute(input: {
     projectId: string;
     environment: "dev" | "prod";
-  }): Promise<DatabaseCompute>;
+  }): Promise<DatabaseComputeRead>;
   getProjectContext(projectId: string): Promise<ProjectContext>;
   setProjectNotes(input: {
     projectId: string;
@@ -542,7 +547,7 @@ export interface ProductApi {
     readonly projectId: string;
     readonly environment: "dev" | "prod";
     readonly name: string;
-  }): Promise<DatabaseSchedule>;
+  }): Promise<DatabaseScheduleRead>;
   deleteProjectDatabaseSchedule(input: {
     readonly projectId: string;
     readonly environment: "dev" | "prod";
@@ -944,8 +949,11 @@ export class GeneratedSdkProductApi implements ProductApi {
       { project_id: input.projectId, environment: input.environment },
       { client: this.#client },
     );
-    assertDatabaseCompute(value);
-    if (value.project_id !== input.projectId || value.environment !== input.environment)
+    assertDatabaseComputeRead(value);
+    if (
+      "project_id" in value &&
+      (value.project_id !== input.projectId || value.environment !== input.environment)
+    )
       throw new TypeError("Compute response scope mismatch");
     return value;
   }
@@ -1552,13 +1560,13 @@ export class GeneratedSdkProductApi implements ProductApi {
 
   public async getProjectDatabaseSchedule(
     input: Parameters<ProductApi["getProjectDatabaseSchedule"]>[0],
-  ): Promise<DatabaseSchedule> {
+  ): Promise<DatabaseScheduleRead> {
     const value = await getProjectDatabaseSchedule(
       { project_id: input.projectId, environment: input.environment, name: input.name },
       { client: this.#client },
     );
-    assertDatabaseSchedule(value);
-    if (value.name !== input.name || value.environment !== input.environment)
+    assertDatabaseScheduleRead(value);
+    if ("name" in value && (value.name !== input.name || value.environment !== input.environment))
       throw new TypeError(SCHEDULE_SCOPE_MISMATCH);
     return value;
   }

@@ -30,7 +30,7 @@ import {
   assertProjectDatabaseAccessPage,
 } from "@ohmyhost/contracts/database-access";
 import { assertOrganizationAccount } from "@ohmyhost/contracts/credit-pricing";
-import { assertDatabaseCompute } from "@ohmyhost/contracts/database-compute";
+import { assertDatabaseComputeRead } from "@ohmyhost/contracts/database-compute";
 import {
   parseDatabaseScheduleSetRequest,
   parseDatabaseWebhookCreateRequest,
@@ -1280,7 +1280,7 @@ export class ProductCli {
       if (command.kind === "database-compute-get") {
         const api = await this.authenticatedApi(command.credentialStore, signal),
           compute = await api.getDatabaseCompute(command);
-        assertDatabaseCompute(compute);
+        assertDatabaseComputeRead(compute);
         return success("database compute get", { status: "succeeded", compute });
       }
       if (command.kind === "project-context") {
@@ -3135,20 +3135,17 @@ export class ProductCli {
     }
     let operation = parseOperation(accepted);
     if (command.wait) operation = await this.waitForOperation(api, operation, signal);
-    // Dev access follows the project-selected mode; the clean URL alone is insufficient when protected.
     const notes =
       operation.state === "succeeded"
         ? [
-            `If this is a Dev deployment, check project status for dev_access_mode. For protected Dev, run '${this.dependencies.commandPrefix} project dev-share link --project ULID --json' and open or share its persistent share_url; public Dev opens directly.`,
+            `Show the app with '${this.dependencies.commandPrefix} project preview open --project <id> --environment dev|prod --json'. Use dev on Paid when the project has Dev, or prod on Free or when Dev is absent. If the user asks for the deployed Dev site, give the protected Dev share_url returned by '${this.dependencies.commandPrefix} project dev-share link --project <id> --json'.`,
           ]
         : [];
     return success("deploy", {
       status: command.wait ? "completed" : "accepted",
       operation,
       ...(plan === null ? {} : { plan }),
-      // The note is conditional ("if this is a Dev deployment"), so a --plan-id deploy, whose environment the CLI
-      // cannot read, gets it too. A plan known to target Prod gets none.
-      ...(notes.length > 0 && (plan === null || plan["environment"] === "dev") ? { notes } : {}),
+      ...(notes.length > 0 ? { notes } : {}),
     });
   }
 

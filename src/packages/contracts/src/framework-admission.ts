@@ -1,3 +1,4 @@
+import configSchema from "../schemas/ohmyhost.schema.json" with { type: "json" };
 import {
   compareStableVersions,
   FRAMEWORK_VERSION_POLICY,
@@ -78,29 +79,30 @@ interface PackageManagerContract {
   readonly buildCommand: string;
 }
 
-const PACKAGE_MANAGER_CONTRACTS: Readonly<Record<PackageManagerName, PackageManagerContract>> =
-  Object.freeze({
-    bun: Object.freeze({
-      lockfiles: Object.freeze(["bun.lock", "bun.lockb"] as const),
-      installCommand: "bun install --frozen-lockfile --ignore-scripts",
-      buildCommand: "bun run build",
-    }),
-    npm: Object.freeze({
-      lockfiles: Object.freeze(["package-lock.json"] as const),
-      installCommand: "npm ci --ignore-scripts",
-      buildCommand: "npm run build",
-    }),
-    pnpm: Object.freeze({
-      lockfiles: Object.freeze(["pnpm-lock.yaml"] as const),
-      installCommand: "pnpm install --frozen-lockfile --ignore-scripts",
-      buildCommand: "pnpm run build",
-    }),
-    yarn: Object.freeze({
-      lockfiles: Object.freeze(["yarn.lock"] as const),
-      installCommand: "yarn install --immutable --mode=skip-build",
-      buildCommand: "yarn run build",
-    }),
-  });
+export const PACKAGE_MANAGER_CONTRACTS: Readonly<
+  Record<PackageManagerName, PackageManagerContract>
+> = Object.freeze({
+  bun: Object.freeze({
+    lockfiles: Object.freeze(["bun.lock", "bun.lockb"] as const),
+    installCommand: "bun install --frozen-lockfile --ignore-scripts",
+    buildCommand: "bun run build",
+  }),
+  npm: Object.freeze({
+    lockfiles: Object.freeze(["package-lock.json"] as const),
+    installCommand: "npm ci --ignore-scripts",
+    buildCommand: "npm run build",
+  }),
+  pnpm: Object.freeze({
+    lockfiles: Object.freeze(["pnpm-lock.yaml"] as const),
+    installCommand: "pnpm install --frozen-lockfile --ignore-scripts",
+    buildCommand: "pnpm run build",
+  }),
+  yarn: Object.freeze({
+    lockfiles: Object.freeze(["yarn.lock"] as const),
+    installCommand: "yarn install --immutable --mode=skip-build",
+    buildCommand: "yarn run build",
+  }),
+});
 
 const ALL_LOCKFILES: readonly string[] = Object.freeze(
   Object.values(PACKAGE_MANAGER_CONTRACTS).flatMap(({ lockfiles }) => lockfiles),
@@ -610,22 +612,215 @@ const FRAMEWORK_CONVERSION_DETAILS = Object.freeze({
 } as const satisfies Readonly<Record<string, DetailDefinition>>);
 
 type DetailDefinitions = typeof FRAMEWORK_CONVERSION_DETAILS;
-export type FrameworkConversionDiagnosticCode = keyof DetailDefinitions;
+type CatalogDiagnosticCode = keyof DetailDefinitions;
 type FieldValue<Grammar> = Grammar extends readonly (infer Value extends string)[] ? Value : string;
 type DiagnosticFields<Definition> = Definition extends { readonly fields: infer Fields }
   ? { readonly [Field in keyof Fields]: FieldValue<Fields[Field]> }
   : unknown;
 
 /** A typed refusal: its code, the file it names and the bounded fields its sentence needs. */
-export type FrameworkConversionDiagnostic = {
-  [Code in FrameworkConversionDiagnosticCode]: Readonly<{ code: Code; path: string }> &
+type CatalogDiagnostic = {
+  [Code in CatalogDiagnosticCode]: Readonly<{ code: Code; path: string }> &
     DiagnosticFields<DetailDefinitions[Code]>;
-}[FrameworkConversionDiagnosticCode];
+}[CatalogDiagnosticCode];
 
-const DETAIL_DEFINITIONS: Readonly<Record<FrameworkConversionDiagnosticCode, DetailDefinition>> =
+export interface ConfigurationFieldIssue {
+  readonly path: string;
+  readonly expected: string;
+}
+
+export const CONFIGURATION_EXPECTATIONS = Object.freeze({
+  yaml: "valid YAML",
+  encoding: "UTF-8 YAML",
+  required: "a required field",
+  unknown: "remove this field",
+  unique: "unique items",
+  healthcheck: "a root-relative path without a query, fragment or dot segments",
+  egress: "a public HTTPS origin on the default port",
+  browser: "canonical public HTTPS origins (WSS is also allowed for connect)",
+  cron: "a five-field UTC cron with an interval of at least five minutes",
+});
+
+const SCHEMA_EXPECTATION_KEYWORDS = [
+  "type",
+  "const",
+  "enum",
+  "pattern",
+  "minLength",
+  "maxLength",
+  "minItems",
+  "maxItems",
+  "minimum",
+  "maximum",
+] as const;
+
+export function configurationExpectation(keyword: string, value: unknown): string | undefined {
+  switch (keyword) {
+    case "type":
+      return String(value);
+    case "const":
+      return JSON.stringify(value);
+    case "enum": {
+      if (!Array.isArray(value)) return undefined;
+      const choices = value.map((choice) => JSON.stringify(choice));
+      return choices.length === 2
+        ? choices.join(" or ")
+        : `${choices.slice(0, -1).join(", ")}, or ${choices.at(-1)}`;
+    }
+    case "pattern":
+      return `text matching ${String(value)}`;
+    case "minLength":
+      return `at least ${String(value)} character(s)`;
+    case "maxLength":
+      return `at most ${String(value)} character(s)`;
+    case "minItems":
+      return `at least ${String(value)} item(s)`;
+    case "maxItems":
+      return `at most ${String(value)} item(s)`;
+    case "minimum":
+      return `at least ${String(value)}`;
+    case "maximum":
+      return `at most ${String(value)}`;
+    default:
+      return undefined;
+  }
+}
+
+function configurationExpectations(): ReadonlySet<string> {
+  const expected = new Set<string>(Object.values(CONFIGURATION_EXPECTATIONS));
+  const schemas: unknown[] = [configSchema];
+  while (schemas.length > 0) {
+    const node = schemas.pop();
+    if (typeof node !== "object" || node === null) continue;
+    const record = node as Record<string, unknown>;
+    for (const keyword of SCHEMA_EXPECTATION_KEYWORDS) {
+      if (!Object.hasOwn(record, keyword)) continue;
+      const value = configurationExpectation(keyword, record[keyword]);
+      if (value !== undefined) expected.add(value);
+    }
+    schemas.push(...Object.values(record));
+  }
+  return expected;
+}
+
+const EXPECTED_CONFIGURATION_VALUES = configurationExpectations();
+export const CONFIGURATION_FIELD_PATH = /^(?:\$|(?:\/[A-Za-z0-9_-]{1,64})+)(?![\s\S])/u;
+export const MAX_CONFIGURATION_FIELD_ISSUES = 200;
+
+export type ConfigurationExample =
+  | Readonly<{ framework: "functions"; package_manager: PackageManagerName; runtime: "functions" }>
+  | Readonly<{ framework: "nextjs"; package_manager: PackageManagerName; runtime: "edge" }>
+  | Readonly<{
+      framework: "astro" | "vite-static" | "tanstack-start";
+      package_manager: PackageManagerName;
+      runtime: "static" | "edge";
+    }>;
+
+export type ConfigurationDiagnostic = Readonly<{
+  code: "repository_configuration_invalid";
+  path: "ohmyhost.yaml";
+  fields: readonly ConfigurationFieldIssue[];
+  example: ConfigurationExample | null;
+}>;
+
+export type SourceSyntaxDiagnostic = Readonly<{
+  code: "source_syntax_error";
+  path: string;
+  line: number;
+  column: number;
+}>;
+
+export type FrameworkConversionDiagnostic =
+  | CatalogDiagnostic
+  | ConfigurationDiagnostic
+  | SourceSyntaxDiagnostic;
+
+export type FrameworkConversionDiagnosticCode = FrameworkConversionDiagnostic["code"];
+
+export function hasConfigurationFields(
+  diagnostic: FrameworkConversionDiagnostic | null,
+): diagnostic is ConfigurationDiagnostic {
+  return diagnostic?.code === "repository_configuration_invalid" && "fields" in diagnostic;
+}
+
+function readConfigurationExample(value: unknown): ConfigurationExample | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const { framework, package_manager, runtime } = value as Record<string, unknown>;
+  if (
+    Object.keys(value).length !== 3 ||
+    !["framework", "package_manager", "runtime"].every((key) => Object.hasOwn(value, key)) ||
+    typeof package_manager !== "string" ||
+    !Object.hasOwn(PACKAGE_MANAGER_CONTRACTS, package_manager)
+  )
+    return null;
+  const manager = package_manager as PackageManagerName;
+  if (framework === "functions" && runtime === "functions")
+    return Object.freeze({ framework, package_manager: manager, runtime });
+  if (framework === "nextjs" && runtime === "edge")
+    return Object.freeze({ framework, package_manager: manager, runtime });
+  if (
+    (framework === "astro" || framework === "vite-static" || framework === "tanstack-start") &&
+    (runtime === "static" || runtime === "edge")
+  )
+    return Object.freeze({ framework, package_manager: manager, runtime });
+  return null;
+}
+
+function readConfigurationDiagnostic(
+  record: Readonly<Record<string, unknown>>,
+): ConfigurationDiagnostic | null {
+  const { path, fields, example } = record;
+  if (
+    Object.keys(record).length !== 4 ||
+    !Object.hasOwn(record, "example") ||
+    path !== "ohmyhost.yaml" ||
+    !Array.isArray(fields) ||
+    fields.length === 0 ||
+    fields.length > MAX_CONFIGURATION_FIELD_ISSUES
+  )
+    return null;
+  const parsedExample = readConfigurationExample(example);
+  if (example !== null && parsedExample === null) return null;
+  const parsedFields: ConfigurationFieldIssue[] = [];
+  for (const field of fields) {
+    if (typeof field !== "object" || field === null || Array.isArray(field)) return null;
+    const { path, expected } = field as Record<string, unknown>;
+    if (
+      Object.keys(field).length !== 2 ||
+      !Object.hasOwn(field, "path") ||
+      !Object.hasOwn(field, "expected") ||
+      typeof path !== "string" ||
+      path.length > 240 ||
+      !CONFIGURATION_FIELD_PATH.test(path) ||
+      typeof expected !== "string" ||
+      !EXPECTED_CONFIGURATION_VALUES.has(expected)
+    )
+      return null;
+    parsedFields.push(Object.freeze({ path, expected }));
+  }
+  return Object.freeze({
+    code: "repository_configuration_invalid",
+    path,
+    fields: Object.freeze(parsedFields),
+    example: parsedExample,
+  });
+}
+
+function isSourceCoordinate(value: unknown): value is number {
+  return (
+    typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= 9_999_999
+  );
+}
+
+const DETAIL_DEFINITIONS: Readonly<Record<CatalogDiagnosticCode, DetailDefinition>> =
   FRAMEWORK_CONVERSION_DETAILS;
 const PLACEHOLDER = /\{\{([a-z]+)\}\}/gu;
 const PATH_PATTERN = "[A-Za-z0-9_@()[\\]./${}-]{1,240}";
+const SOURCE_SYNTAX_DETAIL = new RegExp(
+  `^"(?<path>${PATH_PATTERN})" does not parse at line (?<line>[1-9][0-9]{0,6}), column (?<column>[1-9][0-9]{0,6})\\.$`,
+  "u",
+);
+
 const SAFE_PATH = new RegExp(`^${PATH_PATTERN}$`, "u");
 const MODULE_PATH = /^[A-Za-z0-9_@()[\]./${}-]+\.(?:astro|[cm]?[jt]sx?)$/u;
 const FRAMEWORK_CONFIG_NAME = /^(?:astro|next|open-next|vite)\.config\.(?:js|mjs|ts)$/u;
@@ -634,7 +829,7 @@ const MAXIMUM_DETAIL_LENGTH = 2_000;
 const DETAIL_PATTERNS = Object.freeze(
   Object.entries(DETAIL_DEFINITIONS).map(([code, definition]) =>
     Object.freeze({
-      code: code as FrameworkConversionDiagnosticCode,
+      code: code as CatalogDiagnosticCode,
       pattern: detailPattern(definition),
     }),
   ),
@@ -701,9 +896,7 @@ function fieldMatches(grammar: FieldGrammar, value: unknown): boolean {
   return grammar instanceof RegExp ? grammar.test(value) : grammar.includes(value);
 }
 
-function isFrameworkConversionDiagnosticCode(
-  value: unknown,
-): value is FrameworkConversionDiagnosticCode {
+function isCatalogDiagnosticCode(value: unknown): value is CatalogDiagnosticCode {
   return typeof value === "string" && Object.hasOwn(DETAIL_DEFINITIONS, value);
 }
 
@@ -715,7 +908,21 @@ export function parseFrameworkConversionDiagnostic(
   const record = value as Readonly<Record<string, unknown>>;
   const code = Object.hasOwn(record, "code") ? record["code"] : undefined;
   const path = Object.hasOwn(record, "path") ? record["path"] : undefined;
-  if (!isFrameworkConversionDiagnosticCode(code) || typeof path !== "string") return null;
+  if (typeof path !== "string") return null;
+  if (code === "source_syntax_error") {
+    const { line, column } = record;
+    return Object.keys(record).length === 4 &&
+      Object.hasOwn(record, "line") &&
+      Object.hasOwn(record, "column") &&
+      pathClassOf({ paths: ["module"], template: "" }, path) !== null &&
+      isSourceCoordinate(line) &&
+      isSourceCoordinate(column)
+      ? Object.freeze({ code, path, line, column })
+      : null;
+  }
+  if (code === "repository_configuration_invalid" && Object.hasOwn(record, "fields"))
+    return readConfigurationDiagnostic(record);
+  if (!isCatalogDiagnosticCode(code)) return null;
   const definition = DETAIL_DEFINITIONS[code];
   const fields = Object.entries(definition.fields ?? {}).map(
     ([name, grammar]) =>
@@ -743,6 +950,8 @@ function requiredDiagnostic(value: unknown): FrameworkConversionDiagnostic {
 }
 
 function renderDetail(diagnostic: FrameworkConversionDiagnostic): string {
+  if (diagnostic.code === "source_syntax_error")
+    return `"${diagnostic.path}" does not parse at line ${diagnostic.line}, column ${diagnostic.column}.`;
   const definition = DETAIL_DEFINITIONS[diagnostic.code];
   const values: Readonly<Record<string, unknown>> = diagnostic;
   const pathClass = pathClassOf(definition, diagnostic.path);
@@ -784,6 +993,16 @@ export function frameworkConversionDiagnosticFromDetail(
   value: unknown,
 ): FrameworkConversionDiagnostic | null {
   if (typeof value !== "string" || value.length > MAXIMUM_DETAIL_LENGTH) return null;
+  const syntax = SOURCE_SYNTAX_DETAIL.exec(value)?.groups;
+  if (syntax !== undefined) {
+    const parsed = parseFrameworkConversionDiagnostic({
+      code: "source_syntax_error",
+      path: syntax["path"],
+      line: Number(syntax["line"]),
+      column: Number(syntax["column"]),
+    });
+    return parsed !== null && renderDetail(parsed) === value ? parsed : null;
+  }
   for (const { code, pattern } of DETAIL_PATTERNS) {
     const groups = pattern.exec(value)?.groups;
     if (groups === undefined) continue;
@@ -804,6 +1023,24 @@ export function parseFrameworkConversionDetail(value: unknown): string | null {
   return diagnostic === null ? null : renderDetail(diagnostic);
 }
 
+export function readSourceProblemDiagnostic(
+  code: string,
+  detail: unknown,
+  configuration: unknown,
+): FrameworkConversionDiagnostic | null {
+  if (code === "framework_conversion_required") {
+    const parsed = parseFrameworkConversionDiagnostic(configuration);
+    if (hasConfigurationFields(parsed)) return parsed;
+    const legacy = frameworkConversionDiagnosticFromDetail(detail);
+    return legacy?.code === "source_syntax_error" ? null : legacy;
+  }
+  if (code === "source_syntax_error") {
+    const parsed = frameworkConversionDiagnosticFromDetail(detail);
+    return parsed?.code === "source_syntax_error" ? parsed : null;
+  }
+  return null;
+}
+
 /**
  * Places an application-relative diagnostic under its application root for the repository-wide
  * answer; ohmyhost.yaml stays at the repository root. Null when the rooted path is not admitted.
@@ -816,7 +1053,8 @@ export function rootFrameworkConversionDiagnostic(
   if (
     diagnostic === null ||
     applicationRoot === "." ||
-    DETAIL_DEFINITIONS[diagnostic.code].paths.includes("repository_config")
+    (diagnostic.code !== "source_syntax_error" &&
+      DETAIL_DEFINITIONS[diagnostic.code].paths.includes("repository_config"))
   )
     return diagnostic;
   return parseFrameworkConversionDiagnostic({

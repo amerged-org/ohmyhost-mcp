@@ -1,3 +1,4 @@
+import { SOURCE_PREPARATION_GUIDANCE } from "./chat-guidance.js";
 import { publicOperationFailure } from "./operation-failure.js";
 
 /** Canonical, credential-free contracts shared by REST, CLI and both MCP transports. */
@@ -8,7 +9,23 @@ export const MANAGED_SOURCE_LIMITS = Object.freeze({
   files: 2000,
 });
 
-export interface ManagedProjectSource {
+interface SourcePreparation {
+  readonly usual_duration_seconds?: number;
+  readonly next_step?: string;
+}
+
+function sourcePreparationKeys(body: Record<string, unknown>): string[] {
+  if (!("usual_duration_seconds" in body) && !("next_step" in body)) return [];
+  if (
+    body["status"] !== "pending" ||
+    body["usual_duration_seconds"] !== SOURCE_PREPARATION_GUIDANCE.usual_duration_seconds ||
+    body["next_step"] !== SOURCE_PREPARATION_GUIDANCE.next_step
+  )
+    invalid();
+  return ["usual_duration_seconds", "next_step"];
+}
+
+export interface ManagedProjectSource extends SourcePreparation {
   readonly provider: "managed";
   readonly source_connection_id: string;
   readonly source_generation: number;
@@ -24,7 +41,7 @@ export interface ManagedProjectSource {
 }
 
 /** Stable released GitHub projection used by existing clients and project status. */
-export interface GithubProjectSource {
+export interface GithubProjectSource extends SourcePreparation {
   readonly provider: "github";
   readonly installation_id: string;
   readonly repository_full_name: string;
@@ -54,6 +71,7 @@ export function assertGithubSourceResponse(kind: "legacy" | "binding", value: un
     "updated_at",
     ...(kind === "binding" ? ["source_connection_id", "source_generation"] : []),
     ...("failure_summary" in body ? ["failure_summary"] : []),
+    ...sourcePreparationKeys(body),
   ]);
   if (
     body["provider"] !== "github" ||
@@ -389,6 +407,7 @@ export function assertManagedSourceResponse(
       "updated_at",
       ...("initialization_operation_id" in body ? ["initialization_operation_id"] : []),
       ...("initialization_error_code" in body ? ["initialization_error_code"] : []),
+      ...sourcePreparationKeys(body),
     ]);
     if (body["provider"] !== "managed" || body["branch"] !== "main") invalid();
     ulid(body["source_connection_id"]);

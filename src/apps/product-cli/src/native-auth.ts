@@ -1,3 +1,4 @@
+import { assertNativeAuthNotSetUp } from "@ohmyhost/contracts/native-auth";
 import * as sdk from "@ohmyhost/sdk-ts";
 
 type Scope = { readonly projectId: string; readonly environmentId: string };
@@ -47,8 +48,11 @@ export async function executeNativeAuth(
   const scope = { project_id: command.projectId, environment_id: command.environmentId };
   const options = { client };
   switch (command.action) {
-    case "config_get":
-      return sdk.getNativeAuthConfiguration(scope, options);
+    case "config_get": {
+      const value = await sdk.getNativeAuthConfiguration(scope, options);
+      if ("status" in value) assertNativeAuthNotSetUp(value);
+      return value;
+    }
     case "config_set":
       return sdk.updateNativeAuthConfiguration(
         {

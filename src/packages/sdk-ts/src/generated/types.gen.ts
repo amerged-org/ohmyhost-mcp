@@ -207,6 +207,24 @@ export type ConnectionDiscovery = {
   connections: Array<ConnectionDiscoveryItem>;
 };
 
+export type NativeAuthNotSetUp = {
+  status: "not_set_up";
+  readiness: {
+    plan: "done" | "missing";
+    project_approval: "done" | "missing";
+    sender_domain: "done" | "missing";
+    app_identity: "done" | "missing";
+  };
+};
+
+/**
+ * The caller can view the scope and the requested resource has no configuration yet.
+ */
+export type ResourceNotSetUp = {
+  status: "not_set_up";
+  next_step: string;
+};
+
 export type NativeAuthConfiguration = {
   /**
    * Persistent Owner setting; source deployment cannot clear a pause.
@@ -931,6 +949,14 @@ export type ProjectSourceResponse =
   | ManagedProjectSource;
 
 export type GithubProjectSource = {
+  /**
+   * Usual preparation time on a pending source read.
+   */
+  usual_duration_seconds?: 60;
+  /**
+   * Pending source guidance on polling the original initialization.
+   */
+  next_step?: string;
   provider: "github";
   installation_id: string;
   repository_full_name: string;
@@ -941,6 +967,14 @@ export type GithubProjectSource = {
 };
 
 export type GithubSourceBinding = {
+  /**
+   * Usual preparation time on a pending source read.
+   */
+  usual_duration_seconds?: 60;
+  /**
+   * Pending source guidance on polling the original initialization.
+   */
+  next_step?: string;
   source_connection_id: Ulid;
   source_generation: number;
   provider: "github";
@@ -977,6 +1011,14 @@ export type SourceManifestFile = {
 export type SourceManifest = Array<SourceManifestFile>;
 
 export type ManagedProjectSource = {
+  /**
+   * Usual preparation time on a pending source read.
+   */
+  usual_duration_seconds?: 60;
+  /**
+   * Pending source guidance on polling the original initialization.
+   */
+  next_step?: string;
   /**
    * Actual source initialization child operation, when one exists; present only while pending or failed.
    */
@@ -1933,7 +1975,7 @@ export type CurrentIdentity = {
   email: string | null;
   organization_ids: Array<Ulid>;
   /**
-   * Current names for exactly the organization_ids scope, in the same order.
+   * Current names for exactly the organization_ids scope, in the same order, plus effective plan and available credits where the caller can read the workspace account.
    */
   organizations: Array<{
     id: Ulid;
@@ -1941,6 +1983,11 @@ export type CurrentIdentity = {
      * Current organization display name without surrounding whitespace or ASCII control characters.
      */
     name: string;
+    plan?: "free" | "paid";
+    /**
+     * Available credits in millionths, after open reservations.
+     */
+    remaining_credits_micros?: string;
   }>;
 };
 
@@ -2058,6 +2105,7 @@ export type ProblemDetails = {
     | "preview_version_conflict"
     | "production_deployment_required"
     | "framework_conversion_required"
+    | "source_syntax_error"
     | "repository_configuration_missing"
     | "migration_filename_noncanonical"
     | "environment_secret_mutation_blocked"
@@ -2108,6 +2156,7 @@ export type ProblemDetails = {
     | "api_key_permissions_unavailable"
     | "reconciliation_exhausted"
     | "reconciliation_not_pending"
+    | "reconciliation_required"
     | "service_unavailable"
     | "source_commit_not_found"
     | "domain_hostname_taken"
@@ -2134,10 +2183,42 @@ export type ProblemDetails = {
   request_id: string;
   retryable: boolean;
   /**
-   * Optional machine-readable retry delay for a rate limit, matching Retry-After.
+   * Retry delay for rate limits and temporary read failures, matching Retry-After.
    */
   retry_after_seconds?: number;
   suggested_action: string;
+  /**
+   * Schema-defined field paths for invalid_request, when validation identifies them.
+   */
+  invalid_fields?: Array<string>;
+  configuration_diagnostic?: RepositoryConfigurationDiagnostic;
+  /**
+   * Complete example ohmyhost.yaml for the detected framework and package manager.
+   */
+  valid_example?: string;
+};
+
+/**
+ * Bounded field facts for a schema-invalid repository-root ohmyhost.yaml.
+ */
+export type RepositoryConfigurationDiagnostic = {
+  code: "repository_configuration_invalid";
+  path: "ohmyhost.yaml";
+  fields: Array<{
+    /**
+     * JSON Pointer to the field or the object containing an unexpected field. "$" refers to the document.
+     */
+    path: string;
+    /**
+     * Expected value, type or constraint from the configuration rules.
+     */
+    expected: string;
+  }>;
+  example: null | {
+    framework: "astro" | "functions" | "nextjs" | "tanstack-start" | "vite-static";
+    package_manager: "bun" | "npm" | "pnpm" | "yarn";
+    runtime: "edge" | "functions" | "static";
+  };
 };
 
 /**
@@ -2173,6 +2254,34 @@ export type Operation = {
   error?: OperationFailure;
   progress?: OperationDeploymentProgress;
   reconciliation?: OperationReconciliation;
+  work?: OperationWork;
+};
+
+/**
+ * Current work on an operation status read. Usual duration is an estimate in seconds.
+ */
+export type OperationWork = {
+  kind:
+    | "project_create"
+    | "development_environment_add"
+    | "project_handle_change"
+    | "deployment"
+    | "deployment_promotion"
+    | "deployment_rollback"
+    | "source_link"
+    | "source_initialize"
+    | "source_save"
+    | "project_delete"
+    | "project_data_change"
+    | "database_compute_change"
+    | "database_write"
+    | "project_recovery"
+    | "other";
+  step: string;
+  age_seconds: number;
+  usual_duration_seconds: number;
+  wait_reason?: string;
+  next_step?: string;
 };
 
 /**
@@ -2242,6 +2351,13 @@ export type OperationReconciliation = {
   attempt_id: Ulid | null;
   observed_at: string;
   suggested_action: string;
+  code?: "reconciliation_required";
+  failing_step?: "provider_verification" | "workflow_execution" | "dispatch" | "workflow_recovery";
+  cause?: "provider_observation_uncertain" | "workflow_ended" | "delivery_unconfirmed" | "unknown";
+  /**
+   * The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.
+   */
+  can_reconcile?: boolean;
 };
 
 /**
@@ -3600,7 +3716,7 @@ export type GetNativeAuthConfigurationResponses = {
   /**
    * Current authorized resource.
    */
-  200: NativeAuthConfiguration;
+  200: NativeAuthConfiguration | NativeAuthNotSetUp;
 };
 
 export type GetNativeAuthConfigurationResponse =
@@ -5006,7 +5122,7 @@ export type GetProjectMailDomainBindingResponses = {
   /**
    * Authorized exact resource result.
    */
-  200: ProjectMailDomainBinding;
+  200: ProjectMailDomainBinding | ResourceNotSetUp;
 };
 
 export type GetProjectMailDomainBindingResponse =
@@ -5204,7 +5320,7 @@ export type GetApplicationDomainIdentityResponses = {
   /**
    * Authorized exact resource result.
    */
-  200: ApplicationDomainIdentity;
+  200: ApplicationDomainIdentity | ResourceNotSetUp;
 };
 
 export type GetApplicationDomainIdentityResponse =
@@ -10409,7 +10525,7 @@ export type GetDatabaseComputeResponses = {
   /**
    * Fresh, tenant-scoped compute observation.
    */
-  200: DatabaseCompute;
+  200: DatabaseCompute | ResourceNotSetUp;
 };
 
 export type GetDatabaseComputeResponse =
@@ -11932,7 +12048,7 @@ export type GetProjectDatabaseScheduleResponses = {
   /**
    * The database schedule.
    */
-  200: DatabaseSchedule;
+  200: DatabaseSchedule | ResourceNotSetUp;
 };
 
 export type GetProjectDatabaseScheduleResponse =
@@ -12907,7 +13023,7 @@ export type GetOperationError = GetOperationErrors[keyof GetOperationErrors];
 
 export type GetOperationResponses = {
   /**
-   * The durable operation and its current state.
+   * The durable operation and its current work, including wait and recovery guidance.
    */
   200: Operation;
 };

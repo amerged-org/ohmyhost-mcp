@@ -225,14 +225,43 @@ export function parseMigrationFailureDiagnostic(value: unknown): MigrationFailur
   });
 }
 
+export const operationReconciliationCauses = {
+  PROVIDER_OBSERVATION_UNCERTAIN: {
+    failing_step: "provider_verification",
+    cause: "provider_observation_uncertain",
+  },
+  PHYSICAL_WORKFLOW_TERMINAL: { failing_step: "workflow_execution", cause: "workflow_ended" },
+  DELIVERY_UNCONFIRMED: { failing_step: "dispatch", cause: "delivery_unconfirmed" },
+} as const;
+
 export interface OperationReconciliationObservation {
   readonly state: "required" | "pending";
   readonly attempt_id: string | null;
   readonly observed_at: string;
+  readonly recovery?: {
+    readonly failing_step:
+      | "provider_verification"
+      | "workflow_execution"
+      | "dispatch"
+      | "workflow_recovery";
+    readonly cause:
+      | "provider_observation_uncertain"
+      | "workflow_ended"
+      | "delivery_unconfirmed"
+      | "unknown";
+    readonly can_reconcile: boolean;
+  };
 }
 
-export interface PublicOperationReconciliation extends OperationReconciliationObservation {
+export interface PublicOperationReconciliation
+  extends Omit<OperationReconciliationObservation, "recovery"> {
   readonly suggested_action: string;
+  readonly code?: "reconciliation_required";
+  readonly failing_step?: NonNullable<
+    OperationReconciliationObservation["recovery"]
+  >["failing_step"];
+  readonly cause?: NonNullable<OperationReconciliationObservation["recovery"]>["cause"];
+  readonly can_reconcile?: boolean;
 }
 
 /** Reconciliation is an observation, not a terminal operation event or provider error. */
@@ -242,21 +271,73 @@ export function publicOperationReconciliation(
   if (
     !["required", "pending"].includes(observation.state) ||
     !Number.isFinite(Date.parse(observation.observed_at)) ||
+    new Date(observation.observed_at).toISOString() !== observation.observed_at ||
     (observation.state === "required"
       ? observation.attempt_id !== null
       : typeof observation.attempt_id !== "string" ||
         !/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(observation.attempt_id))
   )
     throw new TypeError("Operation reconciliation observation is invalid");
+  const recovery = observation.state === "required" ? observation.recovery : undefined;
   return Object.freeze({
     state: observation.state,
     attempt_id: observation.attempt_id,
     observed_at: observation.observed_at,
+    ...(recovery === undefined ? {} : { code: "reconciliation_required" as const, ...recovery }),
     suggested_action:
       observation.state === "required"
-        ? "Confirm reconciliation of this same operation with POST /v1/operations/{operation_id}:reconcile; preserve its existing build, data and resources. Do not submit another deployment or data change."
+        ? recovery?.can_reconcile === false
+          ? "Submit feedback with this operation ID. Do not submit another deployment or data change."
+          : "Confirm reconciliation of this same operation with POST /v1/operations/{operation_id}:reconcile; preserve its existing build, data and resources. Do not submit another deployment or data change."
         : "Reconciliation is running. Poll this same operation after 60 seconds; do not start another reconciliation or deployment.",
   });
+}
+
+export function parsePublicOperationReconciliation(value: unknown): PublicOperationReconciliation {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    throw new TypeError("Invalid reconciliation guidance");
+  const record = value as Record<string, unknown>;
+  const {
+    state,
+    attempt_id,
+    observed_at,
+    suggested_action,
+    code,
+    failing_step,
+    cause,
+    can_reconcile,
+  } = record;
+  const hasRecovery = code !== undefined;
+  if (
+    Object.keys(record).sort().join(",") !==
+      (hasRecovery
+        ? "attempt_id,can_reconcile,cause,code,failing_step,observed_at,state,suggested_action"
+        : "attempt_id,observed_at,state,suggested_action") ||
+    (state !== "required" && state !== "pending") ||
+    typeof observed_at !== "string" ||
+    (attempt_id !== null && typeof attempt_id !== "string") ||
+    (hasRecovery &&
+      (state !== "required" ||
+        code !== "reconciliation_required" ||
+        typeof can_reconcile !== "boolean" ||
+        ![
+          ...Object.values(operationReconciliationCauses),
+          { failing_step: "workflow_recovery", cause: "unknown" },
+        ].some((known) => known.failing_step === failing_step && known.cause === cause)))
+  )
+    throw new TypeError("Invalid reconciliation guidance");
+  const recovery = hasRecovery
+    ? ({ failing_step, cause, can_reconcile } as OperationReconciliationObservation["recovery"])
+    : undefined;
+  const parsed = publicOperationReconciliation({
+    state,
+    attempt_id,
+    observed_at,
+    ...(recovery === undefined ? {} : { recovery }),
+  });
+  if (parsed.suggested_action !== suggested_action)
+    throw new TypeError("Invalid reconciliation guidance");
+  return parsed;
 }
 
 /**

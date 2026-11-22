@@ -22,6 +22,25 @@ export interface DatabaseCompute {
   readonly observed_at: string;
   readonly database: null | PgcfDatabaseCompute;
 }
+export const DATABASE_NOT_SET_UP = {
+  status: "not_set_up",
+  next_step:
+    "If an operation is creating the database, wait for it to finish with operation_get. Otherwise, enable the managed database in ohmyhost.yaml, save the version and deploy it to this environment.",
+} as const;
+export type DatabaseComputeRead = DatabaseCompute | typeof DATABASE_NOT_SET_UP;
+
+export function assertDatabaseComputeRead(value: unknown): asserts value is DatabaseComputeRead {
+  if (record(value) && value["status"] === "not_set_up") {
+    if (
+      !exact(value, ["next_step", "status"]) ||
+      value["next_step"] !== DATABASE_NOT_SET_UP.next_step
+    )
+      throw new TypeError("Invalid database setup response");
+    return;
+  }
+  assertDatabaseCompute(value);
+}
+
 export function assertDatabaseCompute(value: unknown): asserts value is DatabaseCompute {
   if (
     !record(value) ||

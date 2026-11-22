@@ -1,5 +1,5 @@
 // Generated from packages/contracts/src/shared-mail.ts by scripts/generate-sdk-ts.mjs.
-// Canonical SHA-256: 5337c8bef2db195ba7235a963c5e2f5c72bf0724514240ddf77ec271a73f516b
+// Canonical SHA-256: e41c81ea147aa68b9aa3d034683e9ce0820a7ead342df48ac69ea392dea9b394
 export interface SharedMailResponseContext {
   readonly action: string;
   readonly organizationId?: string;
@@ -10,9 +10,31 @@ export interface SharedMailResponseContext {
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u;
 const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/u;
 
+export const SHARED_MAIL_NOT_SET_UP = {
+  binding_get: {
+    status: "not_set_up",
+    next_step:
+      "Set up a workspace sender with workspace_mail_domain_create and bind it to this environment with mail_binding_set.",
+  },
+  identity_get: {
+    status: "not_set_up",
+    next_step: "Start domain verification with application_domain_identity_declare.",
+  },
+} as const;
+
 /** Strict validation keeps provider data and out-of-scope resources out of client guidance. */
 export function assertSharedMailResponse(value: unknown, input: SharedMailResponseContext): void {
   const v = object(value);
+  if (v["status"] === "not_set_up") {
+    exact(v, ["status", "next_step"]);
+    if (
+      !Object.hasOwn(SHARED_MAIL_NOT_SET_UP, input.action) ||
+      v["next_step"] !==
+        SHARED_MAIL_NOT_SET_UP[input.action as keyof typeof SHARED_MAIL_NOT_SET_UP].next_step
+    )
+      invalid();
+    return;
+  }
   if (input.action === "domains_list") {
     exact(v, ["items"]);
     if (!Array.isArray(v["items"]) || v["items"].length > 100) invalid();

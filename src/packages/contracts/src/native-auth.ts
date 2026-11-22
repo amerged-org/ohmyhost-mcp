@@ -97,6 +97,32 @@ export interface NativeAuthConfiguration {
   }>;
 }
 
+export interface NativeAuthNotSetUp {
+  readonly status: "not_set_up";
+  readonly readiness: Readonly<
+    Record<"plan" | "project_approval" | "sender_domain" | "app_identity", "done" | "missing">
+  >;
+}
+
+export function assertNativeAuthNotSetUp(value: unknown): asserts value is NativeAuthNotSetUp {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join(",") !== "readiness,status" ||
+    !("status" in value) ||
+    value.status !== "not_set_up" ||
+    !("readiness" in value) ||
+    !value.readiness ||
+    typeof value.readiness !== "object" ||
+    Array.isArray(value.readiness) ||
+    Object.keys(value.readiness).sort().join(",") !==
+      "app_identity,plan,project_approval,sender_domain" ||
+    Object.values(value.readiness).some((state) => state !== "done" && state !== "missing")
+  )
+    throw new TypeError("Invalid Native Auth setup response");
+}
+
 export interface NativeAuthConfigurationUpdate {
   readonly configurationRevision: number;
   readonly enabled: boolean;

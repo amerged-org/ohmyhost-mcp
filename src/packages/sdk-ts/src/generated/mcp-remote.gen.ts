@@ -72,9 +72,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "61ed92a391a6fc6c187cab53c0e0307dcc45652563857384745d0d8aab25dde0";
+  "3a293efd8e3f7abfcfda8b592fe0eaa81240690beb34432fc6f23a7a123bbbf8";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.76";
+export const remoteMcpReleaseVersion = "0.1.77";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -1583,69 +1583,95 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       },
     ],
     outputSchema: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "enabled",
-        "configurationRevision",
-        "revocationEpoch",
-        "signupPolicy",
-        "canonicalOrigin",
-        "applicationName",
-        "allowedRedirectPaths",
-        "resetPasswordPath",
-        "invitationPath",
-        "readiness",
-      ],
-      properties: {
-        enabled: {
-          type: "boolean",
-          description: "Persistent Owner setting; source deployment cannot clear a pause.",
-        },
-        configurationRevision: { type: "integer", minimum: 0 },
-        revocationEpoch: { type: "integer", minimum: 0 },
-        signupPolicy: { type: "string", enum: ["open", "invite-only"] },
-        canonicalOrigin: { type: ["string", "null"], format: "uri" },
-        applicationName: { type: "string", minLength: 1, maxLength: 128 },
-        allowedRedirectPaths: {
-          type: "array",
-          minItems: 1,
-          maxItems: 16,
-          uniqueItems: true,
-          items: {
-            type: "string",
-            maxLength: 256,
-            pattern: "^/(?!/)(?!.*//)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))[A-Za-z0-9/_~.-]*$",
-            description:
-              "Absolute application path without query, fragment, percent escapes, backslashes or dot segments.",
-          },
-        },
-        resetPasswordPath: {
-          type: "string",
-          maxLength: 256,
-          pattern: "^/(?!/)(?!.*//)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))[A-Za-z0-9/_~.-]*$",
-          description:
-            "Absolute application path without query, fragment, percent escapes, backslashes or dot segments.",
-        },
-        invitationPath: {
-          type: "string",
-          maxLength: 256,
-          pattern: "^/(?!/)(?!.*//)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))[A-Za-z0-9/_~.-]*$",
-          description:
-            "Absolute application path without query, fragment, percent escapes, backslashes or dot segments.",
-        },
-        readiness: {
+      oneOf: [
+        {
           type: "object",
           additionalProperties: false,
-          required: ["paid", "sender", "origin", "storage"],
+          required: [
+            "enabled",
+            "configurationRevision",
+            "revocationEpoch",
+            "signupPolicy",
+            "canonicalOrigin",
+            "applicationName",
+            "allowedRedirectPaths",
+            "resetPasswordPath",
+            "invitationPath",
+            "readiness",
+          ],
           properties: {
-            paid: { type: "boolean" },
-            sender: { type: "boolean" },
-            origin: { type: "boolean" },
-            storage: { type: "boolean" },
+            enabled: {
+              type: "boolean",
+              description: "Persistent Owner setting; source deployment cannot clear a pause.",
+            },
+            configurationRevision: { type: "integer", minimum: 0 },
+            revocationEpoch: { type: "integer", minimum: 0 },
+            signupPolicy: { type: "string", enum: ["open", "invite-only"] },
+            canonicalOrigin: { type: ["string", "null"], format: "uri" },
+            applicationName: { type: "string", minLength: 1, maxLength: 128 },
+            allowedRedirectPaths: {
+              type: "array",
+              minItems: 1,
+              maxItems: 16,
+              uniqueItems: true,
+              items: {
+                type: "string",
+                maxLength: 256,
+                pattern:
+                  "^/(?!/)(?!.*//)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))[A-Za-z0-9/_~.-]*$",
+                description:
+                  "Absolute application path without query, fragment, percent escapes, backslashes or dot segments.",
+              },
+            },
+            resetPasswordPath: {
+              type: "string",
+              maxLength: 256,
+              pattern:
+                "^/(?!/)(?!.*//)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))[A-Za-z0-9/_~.-]*$",
+              description:
+                "Absolute application path without query, fragment, percent escapes, backslashes or dot segments.",
+            },
+            invitationPath: {
+              type: "string",
+              maxLength: 256,
+              pattern:
+                "^/(?!/)(?!.*//)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:/|$))[A-Za-z0-9/_~.-]*$",
+              description:
+                "Absolute application path without query, fragment, percent escapes, backslashes or dot segments.",
+            },
+            readiness: {
+              type: "object",
+              additionalProperties: false,
+              required: ["paid", "sender", "origin", "storage"],
+              properties: {
+                paid: { type: "boolean" },
+                sender: { type: "boolean" },
+                origin: { type: "boolean" },
+                storage: { type: "boolean" },
+              },
+            },
           },
         },
-      },
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["status", "readiness"],
+          properties: {
+            status: { type: "string", const: "not_set_up" },
+            readiness: {
+              type: "object",
+              additionalProperties: false,
+              required: ["plan", "project_approval", "sender_domain", "app_identity"],
+              properties: {
+                plan: { type: "string", enum: ["done", "missing"] },
+                project_approval: { type: "string", enum: ["done", "missing"] },
+                sender_domain: { type: "string", enum: ["done", "missing"] },
+                app_identity: { type: "string", enum: ["done", "missing"] },
+              },
+            },
+          },
+        },
+      ],
     },
   },
   {
@@ -3474,7 +3500,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/environments/{environment_id}/mail-domain-binding",
     summary: "Read project sender settings",
     description:
-      "Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate.",
+      "Explicit workspace sender authority and target project authority are checked independently. Shared sending requires current verified application identity with the same registrable main domain. Receiving and mailbox routing remain separate. Callers without sender read access receive 404 whether or not a binding exists.",
     disposition: "named",
     toolNames: ["mail_binding_get"],
     parameters: [
@@ -3499,70 +3525,87 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       },
     ],
     outputSchema: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "mail_domain_id",
-        "organization_id",
-        "project_id",
-        "environment_id",
-        "revision",
-        "sending",
-        "sender_addresses",
-        "default_from",
-        "default_reply_to",
-        "legacy",
-        "status",
-        "application_domain_identity",
-      ],
-      properties: {
-        mail_domain_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-        organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-        project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-        environment_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-        revision: { type: "integer", minimum: 1 },
-        sending: { type: "boolean" },
-        sender_addresses: {
-          type: "array",
-          maxItems: 32,
-          uniqueItems: true,
-          items: { type: "string", minLength: 3, maxLength: 254 },
-        },
-        default_from: {
-          oneOf: [{ type: "string", minLength: 3, maxLength: 254 }, { type: "null" }],
-        },
-        default_reply_to: {
-          oneOf: [{ type: "string", minLength: 3, maxLength: 254 }, { type: "null" }],
-        },
-        legacy: { type: "boolean" },
-        status: { type: "string", enum: ["active", "detached", "suspended"] },
-        application_domain_identity: {
-          oneOf: [
-            {
-              type: "object",
-              additionalProperties: false,
-              required: ["hostname", "registrable_domain", "revision", "status"],
-              properties: {
-                hostname: {
-                  type: "string",
-                  minLength: 4,
-                  maxLength: 253,
-                  pattern: "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
-                },
-                registrable_domain: {
-                  type: "string",
-                  minLength: 4,
-                  maxLength: 253,
-                  pattern: "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
-                },
-                revision: { type: "integer", minimum: 1 },
-                status: { type: "string", enum: ["pending", "verified", "expired", "revoked"] },
-              },
-            },
-            { type: "null" },
+      oneOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "mail_domain_id",
+            "organization_id",
+            "project_id",
+            "environment_id",
+            "revision",
+            "sending",
+            "sender_addresses",
+            "default_from",
+            "default_reply_to",
+            "legacy",
+            "status",
+            "application_domain_identity",
           ],
+          properties: {
+            mail_domain_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            environment_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            revision: { type: "integer", minimum: 1 },
+            sending: { type: "boolean" },
+            sender_addresses: {
+              type: "array",
+              maxItems: 32,
+              uniqueItems: true,
+              items: { type: "string", minLength: 3, maxLength: 254 },
+            },
+            default_from: {
+              oneOf: [{ type: "string", minLength: 3, maxLength: 254 }, { type: "null" }],
+            },
+            default_reply_to: {
+              oneOf: [{ type: "string", minLength: 3, maxLength: 254 }, { type: "null" }],
+            },
+            legacy: { type: "boolean" },
+            status: { type: "string", enum: ["active", "detached", "suspended"] },
+            application_domain_identity: {
+              oneOf: [
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["hostname", "registrable_domain", "revision", "status"],
+                  properties: {
+                    hostname: {
+                      type: "string",
+                      minLength: 4,
+                      maxLength: 253,
+                      pattern:
+                        "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+                    },
+                    registrable_domain: {
+                      type: "string",
+                      minLength: 4,
+                      maxLength: 253,
+                      pattern:
+                        "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+                    },
+                    revision: { type: "integer", minimum: 1 },
+                    status: { type: "string", enum: ["pending", "verified", "expired", "revoked"] },
+                  },
+                },
+                { type: "null" },
+              ],
+            },
+          },
         },
-      },
+        {
+          type: "object",
+          description:
+            "The caller can view the scope and the requested resource has no configuration yet.",
+          additionalProperties: false,
+          required: ["status", "next_step"],
+          properties: {
+            status: { type: "string", const: "not_set_up" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
+          },
+        },
+      ],
     },
   },
   {
@@ -3913,49 +3956,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       },
     ],
     outputSchema: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "organization_id",
-        "project_id",
-        "hostname",
-        "registrable_domain",
-        "status",
-        "revision",
-        "challenge",
-        "verified_at",
-        "expires_at",
-      ],
-      properties: {
-        organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-        project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-        hostname: {
-          type: "string",
-          minLength: 4,
-          maxLength: 253,
-          pattern: "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
-        },
-        registrable_domain: {
-          type: "string",
-          minLength: 4,
-          maxLength: 253,
-          pattern: "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
-        },
-        status: { type: "string", enum: ["pending", "verified", "expired", "revoked"] },
-        revision: { type: "integer", minimum: 1 },
-        challenge: {
+      oneOf: [
+        {
           type: "object",
           additionalProperties: false,
-          required: ["type", "name", "value"],
+          required: [
+            "organization_id",
+            "project_id",
+            "hostname",
+            "registrable_domain",
+            "status",
+            "revision",
+            "challenge",
+            "verified_at",
+            "expires_at",
+          ],
           properties: {
-            type: { type: "string", const: "TXT" },
-            name: { type: "string", minLength: 4, maxLength: 253 },
-            value: { type: "string", minLength: 16, maxLength: 255 },
+            organization_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            hostname: {
+              type: "string",
+              minLength: 4,
+              maxLength: 253,
+              pattern: "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+            },
+            registrable_domain: {
+              type: "string",
+              minLength: 4,
+              maxLength: 253,
+              pattern: "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+            },
+            status: { type: "string", enum: ["pending", "verified", "expired", "revoked"] },
+            revision: { type: "integer", minimum: 1 },
+            challenge: {
+              type: "object",
+              additionalProperties: false,
+              required: ["type", "name", "value"],
+              properties: {
+                type: { type: "string", const: "TXT" },
+                name: { type: "string", minLength: 4, maxLength: 253 },
+                value: { type: "string", minLength: 16, maxLength: 255 },
+              },
+            },
+            verified_at: { oneOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+            expires_at: { type: "string", format: "date-time" },
           },
         },
-        verified_at: { oneOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
-        expires_at: { type: "string", format: "date-time" },
-      },
+        {
+          type: "object",
+          description:
+            "The caller can view the scope and the requested resource has no configuration yet.",
+          additionalProperties: false,
+          required: ["status", "next_step"],
+          properties: {
+            status: { type: "string", const: "not_set_up" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
+          },
+        },
+      ],
     },
   },
   {
@@ -6176,7 +6234,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/me",
     summary: "Get the current authenticated identity",
     description:
-      "Returns the stable ohmyhost actor, the current user's or API-key owner's email, and the credential's organization scope with current display names. Machine-to-machine credentials have a null email. Organizations match organization_ids in the same order.",
+      "Returns the stable ohmyhost actor, the current user's or API-key owner's email, and the credential's organization scope with current display names. Machine-to-machine credentials have a null email. Organizations match organization_ids in the same order. Each workspace includes plan and remaining credits when authorized and available.",
     disposition: "named",
     toolNames: ["identity_get"],
     parameters: [
@@ -6212,7 +6270,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         },
         organizations: {
           type: "array",
-          description: "Current names for exactly the organization_ids scope, in the same order.",
+          description:
+            "Current names for exactly the organization_ids scope, in the same order, plus effective plan and available credits where the caller can read the workspace account.",
           items: {
             type: "object",
             additionalProperties: false,
@@ -6226,6 +6285,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 pattern: "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])\\S(?:[\\s\\S]*\\S)?(?![\\s\\S])",
                 description:
                   "Current organization display name without surrounding whitespace or ASCII control characters.",
+              },
+              plan: { type: "string", enum: ["free", "paid"] },
+              remaining_credits_micros: {
+                type: "string",
+                pattern: "^(0|[1-9][0-9]{0,18})$",
+                description: "Available credits in millionths, after open reservations.",
               },
             },
           },
@@ -7412,6 +7477,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -8508,6 +8631,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -8929,6 +9110,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -9047,6 +9286,18 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                     "updated_at",
                   ],
                   properties: {
+                    usual_duration_seconds: {
+                      type: "integer",
+                      const: 60,
+                      description: "Usual preparation time on a pending source read.",
+                    },
+                    next_step: {
+                      type: "string",
+                      minLength: 1,
+                      maxLength: 500,
+                      description:
+                        "Pending source guidance on polling the original initialization.",
+                    },
                     provider: { type: "string", const: "github" },
                     installation_id: { type: "string", pattern: "^[1-9][0-9]*$", maxLength: 20 },
                     repository_full_name: {
@@ -9077,6 +9328,18 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                     "updated_at",
                   ],
                   properties: {
+                    usual_duration_seconds: {
+                      type: "integer",
+                      const: 60,
+                      description: "Usual preparation time on a pending source read.",
+                    },
+                    next_step: {
+                      type: "string",
+                      minLength: 1,
+                      maxLength: 500,
+                      description:
+                        "Pending source guidance on polling the original initialization.",
+                    },
                     initialization_operation_id: {
                       type: "string",
                       pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
@@ -9440,6 +9703,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                     },
                     observed_at: { type: "string", format: "date-time" },
                     suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+                    code: { type: "string", const: "reconciliation_required" },
+                    failing_step: {
+                      type: "string",
+                      enum: [
+                        "provider_verification",
+                        "workflow_execution",
+                        "dispatch",
+                        "workflow_recovery",
+                      ],
+                    },
+                    cause: {
+                      type: "string",
+                      enum: [
+                        "provider_observation_uncertain",
+                        "workflow_ended",
+                        "delivery_unconfirmed",
+                        "unknown",
+                      ],
+                    },
+                    can_reconcile: {
+                      type: "boolean",
+                      description:
+                        "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+                    },
+                  },
+                },
+                work: {
+                  type: "object",
+                  description:
+                    "Current work on an operation status read. Usual duration is an estimate in seconds.",
+                  additionalProperties: false,
+                  required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+                  properties: {
+                    kind: {
+                      type: "string",
+                      enum: [
+                        "project_create",
+                        "development_environment_add",
+                        "project_handle_change",
+                        "deployment",
+                        "deployment_promotion",
+                        "deployment_rollback",
+                        "source_link",
+                        "source_initialize",
+                        "source_save",
+                        "project_delete",
+                        "project_data_change",
+                        "database_compute_change",
+                        "database_write",
+                        "project_recovery",
+                        "other",
+                      ],
+                    },
+                    step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+                    age_seconds: { type: "integer", minimum: 0 },
+                    usual_duration_seconds: { type: "integer", minimum: 1 },
+                    wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+                    next_step: { type: "string", minLength: 1, maxLength: 500 },
                   },
                 },
               },
@@ -10428,6 +10749,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -10498,6 +10877,17 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             "updated_at",
           ],
           properties: {
+            usual_duration_seconds: {
+              type: "integer",
+              const: 60,
+              description: "Usual preparation time on a pending source read.",
+            },
+            next_step: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              description: "Pending source guidance on polling the original initialization.",
+            },
             provider: { type: "string", const: "github" },
             installation_id: { type: "string", pattern: "^[1-9][0-9]*$", maxLength: 20 },
             repository_full_name: {
@@ -10526,6 +10916,17 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             "updated_at",
           ],
           properties: {
+            usual_duration_seconds: {
+              type: "integer",
+              const: 60,
+              description: "Usual preparation time on a pending source read.",
+            },
+            next_step: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              description: "Pending source guidance on polling the original initialization.",
+            },
             source_connection_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
             source_generation: { type: "integer", minimum: 1, maximum: 2147483646 },
             provider: { type: "string", const: "github" },
@@ -10558,6 +10959,17 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             "updated_at",
           ],
           properties: {
+            usual_duration_seconds: {
+              type: "integer",
+              const: 60,
+              description: "Usual preparation time on a pending source read.",
+            },
+            next_step: {
+              type: "string",
+              minLength: 1,
+              maxLength: 500,
+              description: "Pending source guidance on polling the original initialization.",
+            },
             initialization_operation_id: {
               type: "string",
               pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
@@ -10862,6 +11274,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -11495,6 +11965,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -11794,6 +12322,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -12103,6 +12689,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -12644,6 +13288,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -12986,6 +13688,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -13635,6 +14395,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -13902,6 +14720,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -14408,7 +15284,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/deployments:plan",
     summary: "Plan a deployment",
     description:
-      "Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. Native Auth requires rollout approval for this workspace and project; a missing approval returns 409 native_auth_launch_unavailable before a build is reserved. A commit the platform does not admit answers 409 with a nonretryable problem code; for framework_conversion_required, detail is a fixed catalog sentence that names the file, the rule and the required change whenever the refusal is typed.",
+      "Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. Native Auth requires rollout approval for this workspace and project; a missing approval returns 409 native_auth_launch_unavailable before a build is reserved. A commit the platform does not admit answers 409 with a nonretryable problem code. For framework_conversion_required, detail names the rule when the refusal is typed. An invalid ohmyhost.yaml includes configuration_diagnostic and, when its framework and package manager are identified, valid_example. For source_syntax_error, detail names the file and its one-based line and column without including a source excerpt.",
     disposition: "named",
     toolNames: ["deployment_plan"],
     requestBody: {
@@ -14835,6 +15711,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -15565,6 +16499,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -15589,7 +16581,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/database/compute",
     summary: "Read actual managed database compute configuration",
     description:
-      "Project readers can observe current Dev or Prod compute without receiving provider IDs or credentials and without executing SQL or waking the database. Explicitly shared data resolves to the same physical database for both environments. A null database means the owned environment has no confirmed managed placement. Provider failures return a problem, never invented defaults. Configuration describes observed settings, not a completed resize operation. suspend_timeout_seconds is the configured provider value; 0 means provider default and -1 means never suspend.",
+      "Project readers can observe current Dev or Prod compute without receiving provider IDs or credentials and without executing SQL or waking the database. Explicitly shared data resolves to the same physical database for both environments. An owned environment without a confirmed placement returns not_set_up with guidance to wait for active provisioning or to set up the database. A missing environment returns 404. Provider failures return a problem, never invented defaults. Configuration describes observed settings, not a completed resize operation. suspend_timeout_seconds is the configured provider value; 0 means provider default and -1 means never suspend.",
     disposition: "named",
     toolNames: ["database_compute_get"],
     parameters: [
@@ -15614,61 +16606,76 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       },
     ],
     outputSchema: {
-      type: "object",
-      additionalProperties: false,
-      required: ["project_id", "environment", "data_mode", "observed_at", "database"],
-      properties: {
-        project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-        environment: { type: "string", enum: ["dev", "prod"] },
-        data_mode: { type: "string", enum: ["shared", "isolated"] },
-        observed_at: { type: "string", format: "date-time" },
-        database: {
-          oneOf: [
-            { type: "null" },
-            {
-              type: "object",
-              additionalProperties: false,
-              description:
-                "Fixed resources; storage includes engine and WAL overhead. First provisioning is distinct from a sleeping database.",
-              required: [
-                "provider",
-                "size_class_id",
-                "memory_mib",
-                "cpu_millicores",
-                "storage_mib",
-                "max_connections",
-                "suspend_timeout_seconds",
-                "state",
-                "pending_state",
-                "disabled",
-                "region",
+      oneOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["project_id", "environment", "data_mode", "observed_at", "database"],
+          properties: {
+            project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            environment: { type: "string", enum: ["dev", "prod"] },
+            data_mode: { type: "string", enum: ["shared", "isolated"] },
+            observed_at: { type: "string", format: "date-time" },
+            database: {
+              oneOf: [
+                { type: "null" },
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  description:
+                    "Fixed resources; storage includes engine and WAL overhead. First provisioning is distinct from a sleeping database.",
+                  required: [
+                    "provider",
+                    "size_class_id",
+                    "memory_mib",
+                    "cpu_millicores",
+                    "storage_mib",
+                    "max_connections",
+                    "suspend_timeout_seconds",
+                    "state",
+                    "pending_state",
+                    "disabled",
+                    "region",
+                  ],
+                  properties: {
+                    provider: { type: "string", const: "pgcf" },
+                    size_class_id: {
+                      type: "string",
+                      enum: ["r256-s500m", "r512-s1g", "r1024-s2g", "r2048-s4g", "r4096-s8g"],
+                    },
+                    memory_mib: { type: "integer", enum: [256, 512, 1024, 2048, 4096] },
+                    cpu_millicores: { type: "integer", enum: [250, 500, 1000, 2000] },
+                    storage_mib: { type: "integer", enum: [500, 1024, 2048, 4096, 8192] },
+                    max_connections: { type: "integer", enum: [20, 40, 80, 160, 200] },
+                    suspend_timeout_seconds: { type: "integer", minimum: 60, maximum: 900 },
+                    state: {
+                      type: "string",
+                      enum: ["provisioning", "cold", "warm", "suspended", "error"],
+                    },
+                    pending_state: {
+                      type: ["string", "null"],
+                      enum: ["provisioning", "cold", "warm", "suspended", "error", null],
+                    },
+                    disabled: { type: "boolean" },
+                    region: { type: "string", enum: ["us", "eu"] },
+                  },
+                },
               ],
-              properties: {
-                provider: { type: "string", const: "pgcf" },
-                size_class_id: {
-                  type: "string",
-                  enum: ["r256-s500m", "r512-s1g", "r1024-s2g", "r2048-s4g", "r4096-s8g"],
-                },
-                memory_mib: { type: "integer", enum: [256, 512, 1024, 2048, 4096] },
-                cpu_millicores: { type: "integer", enum: [250, 500, 1000, 2000] },
-                storage_mib: { type: "integer", enum: [500, 1024, 2048, 4096, 8192] },
-                max_connections: { type: "integer", enum: [20, 40, 80, 160, 200] },
-                suspend_timeout_seconds: { type: "integer", minimum: 60, maximum: 900 },
-                state: {
-                  type: "string",
-                  enum: ["provisioning", "cold", "warm", "suspended", "error"],
-                },
-                pending_state: {
-                  type: ["string", "null"],
-                  enum: ["provisioning", "cold", "warm", "suspended", "error", null],
-                },
-                disabled: { type: "boolean" },
-                region: { type: "string", enum: ["us", "eu"] },
-              },
             },
-          ],
+          },
         },
-      },
+        {
+          type: "object",
+          description:
+            "The caller can view the scope and the requested resource has no configuration yet.",
+          additionalProperties: false,
+          required: ["status", "next_step"],
+          properties: {
+            status: { type: "string", const: "not_set_up" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
+          },
+        },
+      ],
     },
   },
   {
@@ -18730,44 +19737,59 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
       },
     ],
     outputSchema: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "name",
-        "environment",
-        "cron",
-        "every_seconds",
-        "statements",
-        "timeout_ms",
-        "enabled",
-        "next_run_at",
-        "created_at",
-      ],
       oneOf: [
         {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "name",
+            "environment",
+            "cron",
+            "every_seconds",
+            "statements",
+            "timeout_ms",
+            "enabled",
+            "next_run_at",
+            "created_at",
+          ],
+          oneOf: [
+            {
+              properties: {
+                cron: { type: "string", minLength: 9, maxLength: 120 },
+                every_seconds: { type: "null" },
+              },
+            },
+            {
+              properties: {
+                cron: { type: "null" },
+                every_seconds: { type: "integer", minimum: 60, maximum: 2678400 },
+              },
+            },
+          ],
           properties: {
-            cron: { type: "string", minLength: 9, maxLength: 120 },
-            every_seconds: { type: "null" },
+            name: { type: "string", pattern: "^[a-z][a-z0-9_-]{0,62}$" },
+            environment: { type: "string", enum: ["dev", "prod"] },
+            cron: { type: ["string", "null"] },
+            every_seconds: { type: ["integer", "null"] },
+            statements: { type: "array", maxItems: 20, items: { type: "string" } },
+            timeout_ms: { type: "integer", minimum: 1000, maximum: 30000 },
+            enabled: { type: "boolean" },
+            next_run_at: { type: ["string", "null"], format: "date-time" },
+            created_at: { type: "string", format: "date-time" },
           },
         },
         {
+          type: "object",
+          description:
+            "The caller can view the scope and the requested resource has no configuration yet.",
+          additionalProperties: false,
+          required: ["status", "next_step"],
           properties: {
-            cron: { type: "null" },
-            every_seconds: { type: "integer", minimum: 60, maximum: 2678400 },
+            status: { type: "string", const: "not_set_up" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       ],
-      properties: {
-        name: { type: "string", pattern: "^[a-z][a-z0-9_-]{0,62}$" },
-        environment: { type: "string", enum: ["dev", "prod"] },
-        cron: { type: ["string", "null"] },
-        every_seconds: { type: ["integer", "null"] },
-        statements: { type: "array", maxItems: 20, items: { type: "string" } },
-        timeout_ms: { type: "integer", minimum: 1000, maximum: 30000 },
-        enabled: { type: "boolean" },
-        next_run_at: { type: ["string", "null"], format: "date-time" },
-        created_at: { type: "string", format: "date-time" },
-      },
     },
   },
   {
@@ -18876,7 +19898,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     method: "GET",
     path: "/v1/projects/{project_id}/database/schedules/{name}/runs",
     summary: "List the recent runs of one database schedule",
-    description: "Returns the newest runs first, with the outcome of each run.",
+    description:
+      "Returns the newest runs first, with the outcome of each run. A missing schedule returns 404.",
     disposition: "named",
     toolNames: ["database_schedule_run_list"],
     parameters: [
@@ -19667,6 +20690,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -20114,6 +21195,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -20923,6 +22062,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -20952,7 +22149,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/operations/{operation_id}:reconcile",
     summary: "Reconcile an uncertain platform delivery or provider mutation",
     description:
-      "Owner-only, idempotent recovery for an operation retained after an uncertain platform delivery or provider mutation. The control plane derives the exact recovery decision, including any deterministic internal Workflow handoff; the request has no body. Exhausted lifecycle recovery returns reconciliation_exhausted (409, retryable false); stop retries and report the original operation through feedback. An operation with no uncertain delivery or provider mutation pending returns reconciliation_not_pending (409, retryable false).",
+      "Owner-only, idempotent recovery for an operation retained after an uncertain platform delivery or provider mutation. Read the operation for a reconciliation_required state. The control plane derives the exact recovery decision, including any deterministic internal Workflow handoff. Use the original write's idempotency key and read the original operation in the returned Location. The request has no body. Exhausted lifecycle recovery returns reconciliation_exhausted (409, retryable false); stop retries and report the original operation through feedback. An operation with no uncertain delivery or provider mutation pending returns reconciliation_not_pending (409, retryable false).",
     disposition: "named",
     toolNames: ["operation_reconcile"],
     parameters: [
@@ -22638,6 +23835,64 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -24529,6 +25784,64 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -25457,6 +26770,64 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -25704,6 +27075,64 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -26349,6 +27778,64 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
@@ -26358,7 +27845,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_compute_get",
     title: "Read actual managed database compute configuration",
     description:
-      "Read current managed database memory, total storage, region and observed state without running SQL or waking the database. Shared Dev/Prod resolves to one physical database. First provisioning is distinct from cold (sleeping) and warm (running). A null database means no confirmed placement. A configured size does not prove an in-progress resize finished. This read never resizes or changes billing.",
+      "Read current managed database memory, total storage, region and observed state without running SQL or waking the database. Shared Dev/Prod resolves to one physical database. First provisioning is distinct from cold (sleeping) and warm (running). An existing environment without a confirmed database placement returns not_set_up with guidance for provisioning or setup. A configured size does not prove an in-progress resize finished. This read never resizes or changes billing.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -26380,61 +27867,76 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
       additionalProperties: false,
     },
     outputSchema: {
-      type: "object",
-      additionalProperties: false,
-      required: ["project_id", "environment", "data_mode", "observed_at", "database"],
-      properties: {
-        project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
-        environment: { type: "string", enum: ["dev", "prod"] },
-        data_mode: { type: "string", enum: ["shared", "isolated"] },
-        observed_at: { type: "string", format: "date-time" },
-        database: {
-          oneOf: [
-            { type: "null" },
-            {
-              type: "object",
-              additionalProperties: false,
-              description:
-                "Fixed resources; storage includes engine and WAL overhead. First provisioning is distinct from a sleeping database.",
-              required: [
-                "provider",
-                "size_class_id",
-                "memory_mib",
-                "cpu_millicores",
-                "storage_mib",
-                "max_connections",
-                "suspend_timeout_seconds",
-                "state",
-                "pending_state",
-                "disabled",
-                "region",
+      oneOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["project_id", "environment", "data_mode", "observed_at", "database"],
+          properties: {
+            project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            environment: { type: "string", enum: ["dev", "prod"] },
+            data_mode: { type: "string", enum: ["shared", "isolated"] },
+            observed_at: { type: "string", format: "date-time" },
+            database: {
+              oneOf: [
+                { type: "null" },
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  description:
+                    "Fixed resources; storage includes engine and WAL overhead. First provisioning is distinct from a sleeping database.",
+                  required: [
+                    "provider",
+                    "size_class_id",
+                    "memory_mib",
+                    "cpu_millicores",
+                    "storage_mib",
+                    "max_connections",
+                    "suspend_timeout_seconds",
+                    "state",
+                    "pending_state",
+                    "disabled",
+                    "region",
+                  ],
+                  properties: {
+                    provider: { type: "string", const: "pgcf" },
+                    size_class_id: {
+                      type: "string",
+                      enum: ["r256-s500m", "r512-s1g", "r1024-s2g", "r2048-s4g", "r4096-s8g"],
+                    },
+                    memory_mib: { type: "integer", enum: [256, 512, 1024, 2048, 4096] },
+                    cpu_millicores: { type: "integer", enum: [250, 500, 1000, 2000] },
+                    storage_mib: { type: "integer", enum: [500, 1024, 2048, 4096, 8192] },
+                    max_connections: { type: "integer", enum: [20, 40, 80, 160, 200] },
+                    suspend_timeout_seconds: { type: "integer", minimum: 60, maximum: 900 },
+                    state: {
+                      type: "string",
+                      enum: ["provisioning", "cold", "warm", "suspended", "error"],
+                    },
+                    pending_state: {
+                      type: ["string", "null"],
+                      enum: ["provisioning", "cold", "warm", "suspended", "error", null],
+                    },
+                    disabled: { type: "boolean" },
+                    region: { type: "string", enum: ["us", "eu"] },
+                  },
+                },
               ],
-              properties: {
-                provider: { type: "string", const: "pgcf" },
-                size_class_id: {
-                  type: "string",
-                  enum: ["r256-s500m", "r512-s1g", "r1024-s2g", "r2048-s4g", "r4096-s8g"],
-                },
-                memory_mib: { type: "integer", enum: [256, 512, 1024, 2048, 4096] },
-                cpu_millicores: { type: "integer", enum: [250, 500, 1000, 2000] },
-                storage_mib: { type: "integer", enum: [500, 1024, 2048, 4096, 8192] },
-                max_connections: { type: "integer", enum: [20, 40, 80, 160, 200] },
-                suspend_timeout_seconds: { type: "integer", minimum: 60, maximum: 900 },
-                state: {
-                  type: "string",
-                  enum: ["provisioning", "cold", "warm", "suspended", "error"],
-                },
-                pending_state: {
-                  type: ["string", "null"],
-                  enum: ["provisioning", "cold", "warm", "suspended", "error", null],
-                },
-                disabled: { type: "boolean" },
-                region: { type: "string", enum: ["us", "eu"] },
-              },
             },
-          ],
+          },
         },
-      },
+        {
+          type: "object",
+          description:
+            "The caller can view the scope and the requested resource has no configuration yet.",
+          additionalProperties: false,
+          required: ["status", "next_step"],
+          properties: {
+            status: { type: "string", const: "not_set_up" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
+          },
+        },
+      ],
     },
   },
   {
@@ -27782,7 +29284,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
   {
     name: "database_schedule_get",
     title: "Read one database schedule",
-    description: "Read one database schedule",
+    description: "Read one database schedule or its setup step when the schedule is missing.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -27814,44 +29316,59 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
       additionalProperties: false,
     },
     outputSchema: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "name",
-        "environment",
-        "cron",
-        "every_seconds",
-        "statements",
-        "timeout_ms",
-        "enabled",
-        "next_run_at",
-        "created_at",
-      ],
       oneOf: [
         {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "name",
+            "environment",
+            "cron",
+            "every_seconds",
+            "statements",
+            "timeout_ms",
+            "enabled",
+            "next_run_at",
+            "created_at",
+          ],
+          oneOf: [
+            {
+              properties: {
+                cron: { type: "string", minLength: 9, maxLength: 120 },
+                every_seconds: { type: "null" },
+              },
+            },
+            {
+              properties: {
+                cron: { type: "null" },
+                every_seconds: { type: "integer", minimum: 60, maximum: 2678400 },
+              },
+            },
+          ],
           properties: {
-            cron: { type: "string", minLength: 9, maxLength: 120 },
-            every_seconds: { type: "null" },
+            name: { type: "string", pattern: "^[a-z][a-z0-9_-]{0,62}$" },
+            environment: { type: "string", enum: ["dev", "prod"] },
+            cron: { type: ["string", "null"] },
+            every_seconds: { type: ["integer", "null"] },
+            statements: { type: "array", maxItems: 20, items: { type: "string" } },
+            timeout_ms: { type: "integer", minimum: 1000, maximum: 30000 },
+            enabled: { type: "boolean" },
+            next_run_at: { type: ["string", "null"], format: "date-time" },
+            created_at: { type: "string", format: "date-time" },
           },
         },
         {
+          type: "object",
+          description:
+            "The caller can view the scope and the requested resource has no configuration yet.",
+          additionalProperties: false,
+          required: ["status", "next_step"],
           properties: {
-            cron: { type: "null" },
-            every_seconds: { type: "integer", minimum: 60, maximum: 2678400 },
+            status: { type: "string", const: "not_set_up" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       ],
-      properties: {
-        name: { type: "string", pattern: "^[a-z][a-z0-9_-]{0,62}$" },
-        environment: { type: "string", enum: ["dev", "prod"] },
-        cron: { type: ["string", "null"] },
-        every_seconds: { type: ["integer", "null"] },
-        statements: { type: "array", maxItems: 20, items: { type: "string" } },
-        timeout_ms: { type: "integer", minimum: 1000, maximum: 30000 },
-        enabled: { type: "boolean" },
-        next_run_at: { type: ["string", "null"], format: "date-time" },
-        created_at: { type: "string", format: "date-time" },
-      },
     },
   },
   {
@@ -29127,6 +30644,64 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
             },
             observed_at: { type: "string", format: "date-time" },
             suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
           },
         },
       },
