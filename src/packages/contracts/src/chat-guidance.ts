@@ -5,6 +5,7 @@ import {
   type FrameworkConversionDiagnostic,
 } from "./framework-admission.js";
 import { renderConfigurationExample } from "./framework-source-rules.js";
+import { previewFailureSay } from "./previews.js";
 import { PROBLEM_POLICY, type ProblemChatGuidance, type ProblemCode } from "./problem-policy.js";
 
 type ChatGuidance = { next_step: string; say_to_user?: string };
@@ -201,13 +202,14 @@ export const CHAT_ACCESS_INSTRUCTIONS =
 export const CHAT_MAIN_PATH_INSTRUCTIONS =
   "Main path: project_create, then source_changes to save a version, then preview_open to show the app. Use preview_open to show an existing app too. Later saves update the same preview without a deployment. " +
   "Preview, Dev site and live site are different: the preview is a private live preview for every plan; the Dev site (Paid only) and the live site are deployments. " +
-  "When ready_to_show is true, give the user the preview link and ask whether they would like to see it. Publish with deployment_plan and deployment_create when the user asks or agrees. A request that already says deploy, publish or go live is that agreement. " +
+  "When ready_to_show is true, give the user the preview link and ask whether they would like to see it. Publish with deployment_plan and deployment_create when the user asks to publish, deploy or go live. " +
+  "A preview link works for at most 24 hours; if a result carries failure, follow its next_step instead of waiting. " +
   "Results may carry next_step for you and say_to_user for the user. Say it in the user's language. Share IDs, commits, states and codes only on request. ";
 
 export const PREVIEW_OPEN_DESCRIPTION =
-  "Open or create the stable private live preview for this project and environment and return its link, state and ready_to_show. Available on Free and Paid. Source saves update it without a deployment. The link is for the user: hand it over when ready_to_show is true. Private means: keep it out of source files, notes and logs. It has no expiry until rotated.";
+  "Open or create the private live preview for this project and environment and return its link, state, expires_at, failure and ready_to_show. Available on Free and Paid. Source saves update it without a deployment. The link is for the user: hand it over when ready_to_show is true. Private means: keep it out of source files, notes and logs. The link is valid for at most 24 hours from creation; the preview sleeps after 10 minutes without activity and wakes when the link is opened, and preview_open makes a new preview and link after the 24 hours. If the start failed, failure carries a code and next_step: follow it instead of waiting.";
 export const PREVIEW_GET_DESCRIPTION =
-  "Read the stable private live preview for this project and environment: its link, state, saved and applied version, and ready_to_show. The link is for the user: hand it over when ready_to_show is true. Private means: keep it out of source files, notes and logs.";
+  "Read the private live preview for this project and environment: its link, state, saved and applied version, expires_at, failure and ready_to_show. The link is for the user: hand it over when ready_to_show is true. Private means: keep it out of source files, notes and logs. The link is valid for at most 24 hours from creation. If the start failed, failure carries a code and next_step: follow it instead of waiting.";
 
 export function previewGuidance(view: ChatResult): ChatGuidance | null {
   if (view["source"] === null)
@@ -220,9 +222,22 @@ export function previewGuidance(view: ChatResult): ChatGuidance | null {
   if (view["ready_to_show"] === true)
     return {
       next_step:
-        "The preview shows the saved version. Give the user this link and ask whether they want to see it. Publish only when the user asks or agrees.",
+        "The preview shows the saved version. Give the user this link and ask whether they want to see it.",
       say_to_user: `Your app is ready as a private preview: ${url} Do you want to see it?`,
     };
+  const failure = view["failure"];
+  if (
+    typeof failure === "object" &&
+    failure !== null &&
+    typeof (failure as Record<string, unknown>)["code"] === "string" &&
+    typeof (failure as Record<string, unknown>)["next_step"] === "string"
+  ) {
+    const { code, next_step } = failure as { code: string; next_step: string };
+    return {
+      next_step,
+      say_to_user: previewFailureSay(code) ?? "Your preview could not start. I am looking into it.",
+    };
+  }
   if (view["status"] === "sleeping")
     return {
       next_step:

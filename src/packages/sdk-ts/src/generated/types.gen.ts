@@ -10,7 +10,7 @@ export type Preview = {
   environment: "dev" | "prod";
   status: "cold" | "starting" | "ready" | "sleeping";
   /**
-   * Stable private capability URL without an expiration time.
+   * Private capability URL. It stops working at expires_at; preview_open then creates a new preview with a new URL.
    */
   url: string;
   /**
@@ -25,6 +25,47 @@ export type Preview = {
    * True when the preview is ready and its applied version has the same sequence as the saved version.
    */
   ready_to_show: boolean;
+  /**
+   * The immutable deadline, 24 hours after the preview was created. Activity, rotation and saves never move it.
+   */
+  expires_at: string;
+  /**
+   * Why the last start attempt failed, or null. A failure of an older saved version is not reported.
+   */
+  failure: PreviewFailure;
+  /**
+   * Seconds before another start attempt is made after a failure that a retry can change, or null.
+   */
+  retry_after_seconds: null | number;
+};
+
+export type PreviewFailure = null | {
+  code:
+    | "source_migration_filename_noncanonical"
+    | "source_refused"
+    | "source_configuration_missing"
+    | "source_unavailable"
+    | "admission_credits"
+    | "admission_scope"
+    | "startup_install_failed"
+    | "startup_server_not_ready"
+    | "startup_server_exited"
+    | "startup_failed"
+    | "backup_recovery"
+    | "containment"
+    | "native_auth_launch_unavailable"
+    | "native_preparing"
+    | "paid_plan_required";
+  retryable: boolean;
+  next_step: string;
+  /**
+   * The refused migration files, or the refused rule and file.
+   */
+  detail?: {
+    paths?: Array<string>;
+    rule?: string;
+    path?: string;
+  };
 };
 
 export type PreviewSource = null | {

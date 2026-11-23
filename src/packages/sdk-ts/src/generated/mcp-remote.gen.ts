@@ -72,9 +72,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "3a293efd8e3f7abfcfda8b592fe0eaa81240690beb34432fc6f23a7a123bbbf8";
+  "29f1eaaba1c597da76ba21d01b6baeea4de5088fc7032a215a1fec65350d7d3b";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.77";
+export const remoteMcpReleaseVersion = "0.1.78";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -168,6 +168,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         "source",
         "applied_source",
         "ready_to_show",
+        "expires_at",
+        "failure",
+        "retry_after_seconds",
       ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -177,7 +180,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         url: {
           type: "string",
           format: "uri",
-          description: "Stable private capability URL without an expiration time.",
+          description:
+            "Private capability URL. It stops working at expires_at; preview_open then creates a new preview with a new URL.",
         },
         source: {
           oneOf: [
@@ -215,6 +219,67 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           description:
             "True when the preview is ready and its applied version has the same sequence as the saved version.",
         },
+        expires_at: {
+          type: "string",
+          format: "date-time",
+          description:
+            "The immutable deadline, 24 hours after the preview was created. Activity, rotation and saves never move it.",
+        },
+        failure: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["code", "retryable", "next_step"],
+              properties: {
+                code: {
+                  type: "string",
+                  enum: [
+                    "source_migration_filename_noncanonical",
+                    "source_refused",
+                    "source_configuration_missing",
+                    "source_unavailable",
+                    "admission_credits",
+                    "admission_scope",
+                    "startup_install_failed",
+                    "startup_server_not_ready",
+                    "startup_server_exited",
+                    "startup_failed",
+                    "backup_recovery",
+                    "containment",
+                    "native_auth_launch_unavailable",
+                    "native_preparing",
+                    "paid_plan_required",
+                  ],
+                },
+                retryable: { type: "boolean" },
+                next_step: { type: "string", minLength: 1, maxLength: 1200 },
+                detail: {
+                  type: "object",
+                  additionalProperties: false,
+                  description: "The refused migration files, or the refused rule and file.",
+                  properties: {
+                    paths: {
+                      type: "array",
+                      maxItems: 5,
+                      items: { type: "string", minLength: 1, maxLength: 200 },
+                    },
+                    rule: { type: "string", minLength: 1, maxLength: 200 },
+                    path: { type: "string", minLength: 1, maxLength: 200 },
+                  },
+                },
+              },
+            },
+          ],
+          description:
+            "Why the last start attempt failed, or null. A failure of an older saved version is not reported.",
+        },
+        retry_after_seconds: {
+          description:
+            "Seconds before another start attempt is made after a failure that a retry can change, or null.",
+          oneOf: [{ type: "null" }, { type: "integer", minimum: 1, maximum: 10 }],
+        },
       },
     },
   },
@@ -241,7 +306,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/preview",
     summary: "Open or create a project environment preview",
     description:
-      "Requires project write permission. Returns the existing stable URL or creates one. Opening its URL starts a sleeping preview; source saves update it independently of deployments.",
+      "Requires project write permission. Returns the preview's URL or creates a preview, and creates a new one with a new URL once the previous one has passed its 24 hours. Opening its URL starts a sleeping preview; source saves update it independently of deployments. When a start failed, `failure` carries a code and the next step; the call does not wait for the full bound.",
     disposition: "named",
     toolNames: ["preview_open"],
     parameters: [
@@ -279,6 +344,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         "source",
         "applied_source",
         "ready_to_show",
+        "expires_at",
+        "failure",
+        "retry_after_seconds",
       ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -288,7 +356,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         url: {
           type: "string",
           format: "uri",
-          description: "Stable private capability URL without an expiration time.",
+          description:
+            "Private capability URL. It stops working at expires_at; preview_open then creates a new preview with a new URL.",
         },
         source: {
           oneOf: [
@@ -326,6 +395,67 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           description:
             "True when the preview is ready and its applied version has the same sequence as the saved version.",
         },
+        expires_at: {
+          type: "string",
+          format: "date-time",
+          description:
+            "The immutable deadline, 24 hours after the preview was created. Activity, rotation and saves never move it.",
+        },
+        failure: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["code", "retryable", "next_step"],
+              properties: {
+                code: {
+                  type: "string",
+                  enum: [
+                    "source_migration_filename_noncanonical",
+                    "source_refused",
+                    "source_configuration_missing",
+                    "source_unavailable",
+                    "admission_credits",
+                    "admission_scope",
+                    "startup_install_failed",
+                    "startup_server_not_ready",
+                    "startup_server_exited",
+                    "startup_failed",
+                    "backup_recovery",
+                    "containment",
+                    "native_auth_launch_unavailable",
+                    "native_preparing",
+                    "paid_plan_required",
+                  ],
+                },
+                retryable: { type: "boolean" },
+                next_step: { type: "string", minLength: 1, maxLength: 1200 },
+                detail: {
+                  type: "object",
+                  additionalProperties: false,
+                  description: "The refused migration files, or the refused rule and file.",
+                  properties: {
+                    paths: {
+                      type: "array",
+                      maxItems: 5,
+                      items: { type: "string", minLength: 1, maxLength: 200 },
+                    },
+                    rule: { type: "string", minLength: 1, maxLength: 200 },
+                    path: { type: "string", minLength: 1, maxLength: 200 },
+                  },
+                },
+              },
+            },
+          ],
+          description:
+            "Why the last start attempt failed, or null. A failure of an older saved version is not reported.",
+        },
+        retry_after_seconds: {
+          description:
+            "Seconds before another start attempt is made after a failure that a retry can change, or null.",
+          oneOf: [{ type: "null" }, { type: "integer", minimum: 1, maximum: 10 }],
+        },
       },
     },
   },
@@ -358,7 +488,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/preview",
     summary: "Stop a project environment preview",
     description:
-      "Stops the runtime and removes its backups while preserving the stable URL. Repeat uncertain calls with the same idempotency key.",
+      "Stops the runtime and removes its backups while preserving the URL until its deadline. Repeat uncertain calls with the same idempotency key.",
     disposition: "named",
     toolNames: ["preview_stop"],
     parameters: [
@@ -403,6 +533,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         "source",
         "applied_source",
         "ready_to_show",
+        "expires_at",
+        "failure",
+        "retry_after_seconds",
       ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -412,7 +545,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         url: {
           type: "string",
           format: "uri",
-          description: "Stable private capability URL without an expiration time.",
+          description:
+            "Private capability URL. It stops working at expires_at; preview_open then creates a new preview with a new URL.",
         },
         source: {
           oneOf: [
@@ -449,6 +583,67 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "boolean",
           description:
             "True when the preview is ready and its applied version has the same sequence as the saved version.",
+        },
+        expires_at: {
+          type: "string",
+          format: "date-time",
+          description:
+            "The immutable deadline, 24 hours after the preview was created. Activity, rotation and saves never move it.",
+        },
+        failure: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["code", "retryable", "next_step"],
+              properties: {
+                code: {
+                  type: "string",
+                  enum: [
+                    "source_migration_filename_noncanonical",
+                    "source_refused",
+                    "source_configuration_missing",
+                    "source_unavailable",
+                    "admission_credits",
+                    "admission_scope",
+                    "startup_install_failed",
+                    "startup_server_not_ready",
+                    "startup_server_exited",
+                    "startup_failed",
+                    "backup_recovery",
+                    "containment",
+                    "native_auth_launch_unavailable",
+                    "native_preparing",
+                    "paid_plan_required",
+                  ],
+                },
+                retryable: { type: "boolean" },
+                next_step: { type: "string", minLength: 1, maxLength: 1200 },
+                detail: {
+                  type: "object",
+                  additionalProperties: false,
+                  description: "The refused migration files, or the refused rule and file.",
+                  properties: {
+                    paths: {
+                      type: "array",
+                      maxItems: 5,
+                      items: { type: "string", minLength: 1, maxLength: 200 },
+                    },
+                    rule: { type: "string", minLength: 1, maxLength: 200 },
+                    path: { type: "string", minLength: 1, maxLength: 200 },
+                  },
+                },
+              },
+            },
+          ],
+          description:
+            "Why the last start attempt failed, or null. A failure of an older saved version is not reported.",
+        },
+        retry_after_seconds: {
+          description:
+            "Seconds before another start attempt is made after a failure that a retry can change, or null.",
+          oneOf: [{ type: "null" }, { type: "integer", minimum: 1, maximum: 10 }],
         },
       },
     },
@@ -527,6 +722,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         "source",
         "applied_source",
         "ready_to_show",
+        "expires_at",
+        "failure",
+        "retry_after_seconds",
       ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -536,7 +734,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         url: {
           type: "string",
           format: "uri",
-          description: "Stable private capability URL without an expiration time.",
+          description:
+            "Private capability URL. It stops working at expires_at; preview_open then creates a new preview with a new URL.",
         },
         source: {
           oneOf: [
@@ -573,6 +772,67 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "boolean",
           description:
             "True when the preview is ready and its applied version has the same sequence as the saved version.",
+        },
+        expires_at: {
+          type: "string",
+          format: "date-time",
+          description:
+            "The immutable deadline, 24 hours after the preview was created. Activity, rotation and saves never move it.",
+        },
+        failure: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["code", "retryable", "next_step"],
+              properties: {
+                code: {
+                  type: "string",
+                  enum: [
+                    "source_migration_filename_noncanonical",
+                    "source_refused",
+                    "source_configuration_missing",
+                    "source_unavailable",
+                    "admission_credits",
+                    "admission_scope",
+                    "startup_install_failed",
+                    "startup_server_not_ready",
+                    "startup_server_exited",
+                    "startup_failed",
+                    "backup_recovery",
+                    "containment",
+                    "native_auth_launch_unavailable",
+                    "native_preparing",
+                    "paid_plan_required",
+                  ],
+                },
+                retryable: { type: "boolean" },
+                next_step: { type: "string", minLength: 1, maxLength: 1200 },
+                detail: {
+                  type: "object",
+                  additionalProperties: false,
+                  description: "The refused migration files, or the refused rule and file.",
+                  properties: {
+                    paths: {
+                      type: "array",
+                      maxItems: 5,
+                      items: { type: "string", minLength: 1, maxLength: 200 },
+                    },
+                    rule: { type: "string", minLength: 1, maxLength: 200 },
+                    path: { type: "string", minLength: 1, maxLength: 200 },
+                  },
+                },
+              },
+            },
+          ],
+          description:
+            "Why the last start attempt failed, or null. A failure of an older saved version is not reported.",
+        },
+        retry_after_seconds: {
+          description:
+            "Seconds before another start attempt is made after a failure that a retry can change, or null.",
+          oneOf: [{ type: "null" }, { type: "integer", minimum: 1, maximum: 10 }],
         },
       },
     },
@@ -6850,9 +7110,9 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     operationId: "configureBillingRecharge",
     method: "PUT",
     path: "/v1/organizations/{organization_id}/billing/recharge",
-    summary: "Enable or disable explicitly authorized auto-recharge",
+    summary: "Enable or disable auto-recharge",
     description:
-      "Owner-only. An agent must obtain explicit approval for off-session charges and the gross monthly spending cap before enabling. Each refill costs USD 9 before tax for 1000 top-up credits when available credits fall below 100. Active Paid access is required to enable recharge and initiate a payment; bought credits never expire, also after a downgrade to Free. A saved Stripe card is required; follow setup_url if returned. Current revision prevents stale edits; retry the original Idempotency-Key and payload after uncertainty. Disable prevents new charge initiation; already initiated payments may complete. No subscription or Paid features are created.",
+      "Owner-only. Enabling records the Owner's consent to off-session charges and the gross monthly spending cap. Each refill costs USD 9 before tax for 1000 top-up credits when available credits fall below 100. Active Paid access is required to enable recharge and initiate a payment; bought credits never expire, also after a downgrade to Free. A saved Stripe card is required; follow setup_url if returned. Current revision prevents stale edits; retry the original Idempotency-Key and payload after uncertainty. Disable prevents new charge initiation; already initiated payments may complete. No subscription or Paid features are created.",
     disposition: "named",
     toolNames: ["billing_recharge_configure"],
     requestBody: {
@@ -24590,7 +24850,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "billing_checkout_create",
     title: "Create or resume an owner's hosted Stripe Checkout",
     description:
-      "Owner-only: create or resume a hosted Checkout. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 top-up credits. Monthly Paid credits expire at billing-period end; top-ups never expire, also after a downgrade to Free. Return the URL to the human to review/pay; never auto-pay or treat browser return as confirmation. Preserve the same offer/packs/idempotency key after uncertainty. An existing active, overdue, unpaid or paused subscription must be managed through billing_portal_create, not replaced with another Paid purchase. Then read checkout status and organization credits. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
+      "Owner-only: create or resume a hosted Checkout. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 top-up credits. Monthly Paid credits expire at billing-period end; top-ups never expire, also after a downgrade to Free. The human reviews and pays at the returned URL; browser return is not confirmation of payment. Preserve the same offer/packs/idempotency key after uncertainty. An existing active, overdue, unpaid or paused subscription must be managed through billing_portal_create, not replaced with another Paid purchase. Then read checkout status and organization credits. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -24878,9 +25138,9 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
   },
   {
     name: "billing_recharge_configure",
-    title: "Enable or disable explicitly authorized auto-recharge",
+    title: "Enable or disable auto-recharge",
     description:
-      "Owner-only: enable or disable automatic off-session payments. Enabling requires active Paid access. NEVER enable without explicit human approval for USD 9 plus tax per 1000 top-up credits, which never expire, refill below 100 credits, and the chosen gross USD monthly limit. Set consent off_session_v1 only after that approval; null when disabling. Read current revision first. Preserve the original idempotency key and payload after uncertainty. A saved Stripe card may require setup_url. Disabling prevents new payment initiation; in-progress payments may finish. This does not create a subscription or Paid access.",
+      "Owner-only: enable or disable automatic off-session payments. Enabling requires active Paid access. Enabling records the Owner's consent to off-session charges of USD 9 plus tax per 1000 top-up credits, which never expire, when credits fall below 100, up to the chosen gross USD monthly limit. Send consent off_session_v1 when enabling; null when disabling. Read current revision first. Preserve the original idempotency key and payload after uncertainty. A saved Stripe card may require setup_url. Disabling prevents new payment initiation; in-progress payments may finish. This does not create a subscription or Paid access.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -25529,7 +25789,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "delete_execute",
     title: "Delete a project",
     description:
-      "Execute the exact whole-project deletion covered by the user's authorization and a fresh delete_plan. Pass its resource_etag unchanged as if_match, the returned confirmation_token and one idempotency_key. This irreversibly removes both Dev and Prod resources, databases/files/exports, managed code history and project-owned routes/mail/DNS; both addresses stop working. Reuse the original unchanged request and key after uncertainty. An accepted response is not completed deletion: poll operation_get for the returned operation until its actual outcome is known. A stale plan requires a fresh delete_plan and checking the same authorized scope, not a new approval when that scope is already authorized.",
+      "Execute the whole-project deletion described by a fresh delete_plan. Pass its resource_etag unchanged as if_match, the returned confirmation_token and one idempotency_key. This irreversibly removes both Dev and Prod resources, databases/files/exports, managed code history and project-owned routes/mail/DNS; both addresses stop working. Reuse the original unchanged request and key after uncertainty. An accepted response is not completed deletion: poll operation_get for the returned operation until its actual outcome is known. A stale plan requires a fresh delete_plan.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -26191,7 +26451,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "delete_plan",
     title: "Plan project deletion",
     description:
-      "Prepare a ten-minute persisted deletion plan for exactly the selected project_id. It issues a confirmation token but does not delete resources yet. Review the returned effects and risks: deletion removes both Dev and Prod, deployments, databases, files, schedules, SQL exports, managed code/history and project-owned routes/mail/DNS; both addresses stop working and data removal cannot be undone. Download needed data first. Use delete_execute only when the user's existing authorization covers that exact whole-project deletion. Pass the plan's resource_etag unchanged as if_match and its confirmation_token with one idempotency_key. Existing authorization for that exact scope is sufficient; do not add another approval step merely because this plan was created.",
+      "Prepare a ten-minute persisted deletion plan for exactly the selected project_id. It issues a confirmation token but does not delete resources yet. Review the returned effects and risks: deletion removes both Dev and Prod, deployments, databases, files, schedules, SQL exports, managed code/history and project-owned routes/mail/DNS; both addresses stop working and data removal cannot be undone. Download needed data first. delete_execute needs the plan's resource_etag unchanged as if_match and its confirmation_token with one idempotency_key.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -27943,7 +28203,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_write",
     title: "Execute one bounded database write in Dev or Prod",
     description:
-      "Execute one explicitly authorized INSERT, UPDATE or DELETE/upsert in the chosen Dev or Prod database. Requires Owner project permission, confirmation and an idempotency key. At most 1000 directly affected rows and five seconds. Returns a durable receipt, not rows. If outcome is unknown, never automatically repeat with another key: inspect data using database_query and retain the operation ID. Same-key retries only observe the existing attempt. Schema changes use GitHub migrations; compute wakes and is metered normally. Application RLS policies also apply to writes.",
+      "Execute one INSERT, UPDATE or DELETE/upsert in the chosen Dev or Prod database. Requires Owner project permission, confirmation and an idempotency key. At most 1000 directly affected rows and five seconds. Returns a durable receipt, not rows. If outcome is unknown, never automatically repeat with another key: inspect data using database_query and retain the operation ID. Same-key retries only observe the existing attempt. Schema changes use GitHub migrations; compute wakes and is metered normally. Application RLS policies also apply to writes.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -29070,7 +29330,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_schedule_set",
     title: "Create or replace one database schedule",
     description:
-      "Create or replace a named database schedule in the explicitly selected Dev or Prod environment. SQL statements run repeatedly as the application's runtime role with row-level security, so write statements must be safe to repeat. Select exactly one of cron (five-field UTC) or every_seconds (60 to 2678400); timeout_ms is 1000 to 30000, default 10000. Replacing an existing schedule overwrites its definition and requires confirmed: true. A reached Stop budget automatically disables schedules within about an hour after billed usage reaches it; enabled: true and database_schedule_run_now then refuse with project_budget_exceeded. To re-enable an already authorized schedule after funding or budget allows it, read its full definition with database_schedule_get and submit that definition to database_schedule_set with enabled: true and confirmed: true.",
+      "Create or replace a named database schedule in the explicitly selected Dev or Prod environment. SQL statements run repeatedly as the application's runtime role with row-level security, so write statements must be safe to repeat. Select exactly one of cron (five-field UTC) or every_seconds (60 to 2678400); timeout_ms is 1000 to 30000, default 10000. Replacing an existing schedule overwrites its definition and requires confirmed: true. A reached Stop budget automatically disables schedules within about an hour after billed usage reaches it; enabled: true and database_schedule_run_now then refuse with project_budget_exceeded. To re-enable a schedule after funding or budget allows it, read its full definition with database_schedule_get and submit that definition to database_schedule_set with enabled: true and confirmed: true.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -29543,7 +29803,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "secret_delete",
     title: "Delete an environment secret",
     description:
-      "Delete only the named secret in the explicitly selected project_id and environment_id when the user's authorization covers that exact removal. Use project_status to select the correct environment and secrets_list for names; never request or return the secret value. Removing it changes the deployed runtime binding without a new application deployment and can break the running application. Reuse the original unchanged request and idempotency_key after uncertainty. Report desired_generation, applied_generation and delivery_state accurately: pending or failed delivery is not proof that the runtime change finished. Existing authorization for the exact removal is sufficient; do not require another approval.",
+      "Delete only the named secret in the selected project_id and environment_id. Use project_status to select the correct environment and secrets_list for names; never request or return the secret value. Removing it changes the deployed runtime binding without a new application deployment and can break the running application. Reuse the original unchanged request and idempotency_key after uncertainty. Report desired_generation, applied_generation and delivery_state accurately: pending or failed delivery is not proof that the runtime change finished.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -30370,7 +30630,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "project_data_change",
     title: "Execute a confirmed Dev and Prod data assignment change",
     description:
-      "Owner only: execute the exact reviewed project_data_plan after explicit customer confirmation. Pass its change, resource_etag as if_match and confirmation_token with one idempotency_key; confirmed must be true. The operation never copies data. Read operation_get until terminal; after uncertainty reuse the same key, and never start another reset or data change with a new key just to retry. reset_dev requires isolated data, and sharing requires an existing Prod database. Deleted Dev data/files cannot be restored by reversing the mode.",
+      "Owner only: execute the exact reviewed project_data_plan. Pass its change, resource_etag as if_match and confirmation_token with one idempotency_key; confirmed must be true. The operation never copies data. Read operation_get until terminal; after uncertainty reuse the same key, and never start another reset or data change with a new key just to retry. reset_dev requires isolated data, and sharing requires an existing Prod database. Deleted Dev data/files cannot be restored by reversing the mode.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,

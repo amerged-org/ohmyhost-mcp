@@ -442,7 +442,7 @@ export type Options<
 /**
  * Stop a project environment preview
  *
- * Stops the runtime and removes its backups while preserving the stable URL. Repeat uncertain calls with the same idempotency key.
+ * Stops the runtime and removes its backups while preserving the URL until its deadline. Repeat uncertain calls with the same idempotency key.
  */
 export const stopProjectPreview = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -534,7 +534,7 @@ export const getProjectPreview = <ThrowOnError extends boolean = true>(
 /**
  * Open or create a project environment preview
  *
- * Requires project write permission. Returns the existing stable URL or creates one. Opening its URL starts a sleeping preview; source saves update it independently of deployments.
+ * Requires project write permission. Returns the preview's URL or creates a preview, and creates a new one with a new URL once the previous one has passed its 24 hours. Opening its URL starts a sleeping preview; source saves update it independently of deployments. When a start failed, `failure` carries a code and the next step; the call does not wait for the full bound.
  */
 export const openProjectPreview = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -3999,9 +3999,9 @@ export const getBillingRecharge = <ThrowOnError extends boolean = true>(
 };
 
 /**
- * Enable or disable explicitly authorized auto-recharge
+ * Enable or disable auto-recharge
  *
- * Owner-only. An agent must obtain explicit approval for off-session charges and the gross monthly spending cap before enabling. Each refill costs USD 9 before tax for 1000 top-up credits when available credits fall below 100. Active Paid access is required to enable recharge and initiate a payment; bought credits never expire, also after a downgrade to Free. A saved Stripe card is required; follow setup_url if returned. Current revision prevents stale edits; retry the original Idempotency-Key and payload after uncertainty. Disable prevents new charge initiation; already initiated payments may complete. No subscription or Paid features are created.
+ * Owner-only. Enabling records the Owner's consent to off-session charges and the gross monthly spending cap. Each refill costs USD 9 before tax for 1000 top-up credits when available credits fall below 100. Active Paid access is required to enable recharge and initiate a payment; bought credits never expire, also after a downgrade to Free. A saved Stripe card is required; follow setup_url if returned. Current revision prevents stale edits; retry the original Idempotency-Key and payload after uncertainty. Disable prevents new charge initiation; already initiated payments may complete. No subscription or Paid features are created.
  */
 export const configureBillingRecharge = <ThrowOnError extends boolean = true>(
   parameters: {

@@ -652,7 +652,7 @@ export const PROBLEM_POLICY = {
   shared_data_requires_promotion: {
     side: "yours",
     next_step:
-      "Read project_status for the current Dev deployment and call promotion_plan. Publish with deployment_promote on remote MCP or promotion_execute on local MCP when the user agrees.",
+      "Read project_status for the current Dev deployment and call promotion_plan. Publish with deployment_promote on remote MCP or promotion_execute on local MCP when the user asks to publish.",
     status: 409,
     retryable: false,
     action:

@@ -1038,6 +1038,7 @@ export type {
   PrepareManagedMailWebhookResponses,
   Preview,
   PreviewEnvironment,
+  PreviewFailure,
   PreviewSource,
   ProblemDetails,
   Project,

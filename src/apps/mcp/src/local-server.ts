@@ -957,7 +957,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "billing_recharge_configure",
-    "Owner-only: enable or disable automatic off-session payments. Enabling requires active Paid access. NEVER enable without explicit human approval for USD 9 plus tax per 1000 top-up credits, which never expire, refill below 100 credits, and the chosen gross USD monthly limit. Set consent off_session_v1 only after that approval; null when disabling. Read current revision first. Preserve the original idempotency key and payload after uncertainty. A saved Stripe card may require setup_url. Disabling prevents new payment initiation; in-progress payments may finish. This does not create a subscription or Paid access.",
+    "Owner-only: enable or disable automatic off-session payments. Enabling requires active Paid access. Enabling records the Owner's consent to off-session charges of USD 9 plus tax per 1000 top-up credits, which never expire, when credits fall below 100, up to the chosen gross USD monthly limit. Send consent off_session_v1 when enabling; null when disabling. Read current revision first. Preserve the original idempotency key and payload after uncertainty. A saved Stripe card may require setup_url. Disabling prevents new payment initiation; in-progress payments may finish. This does not create a subscription or Paid access.",
     z.object({
       organization_id: identifier,
       enabled: z.boolean(),
@@ -1185,7 +1185,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "database_write",
-    "Execute one explicitly authorized INSERT, UPDATE or DELETE/upsert in the chosen Dev or Prod database. Requires Owner project permission, confirmation and an idempotency key. At most 1000 directly affected rows and five seconds. Returns a durable receipt, not rows. If outcome is unknown, never automatically repeat with another key: inspect data using database_query and retain the operation ID. Same-key retries only observe the existing attempt. Schema changes use GitHub migrations; compute wakes and is metered normally. Application RLS policies also apply to writes.",
+    "Execute one INSERT, UPDATE or DELETE/upsert in the chosen Dev or Prod database. Requires Owner project permission, confirmation and an idempotency key. At most 1000 directly affected rows and five seconds. Returns a durable receipt, not rows. If outcome is unknown, never automatically repeat with another key: inspect data using database_query and retain the operation ID. Same-key retries only observe the existing attempt. Schema changes use GitHub migrations; compute wakes and is metered normally. Application RLS policies also apply to writes.",
     z.object({
       project_id: identifier,
       environment: z.enum(["dev", "prod"]),
@@ -1884,7 +1884,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "project_data_change",
-    "Owner only: execute the exact reviewed project_data_plan after explicit customer confirmation. Pass its change, resource_etag as if_match and confirmation_token with one idempotency_key; confirmed must be true. The operation never copies data. Read operation_get until terminal; after uncertainty reuse the same key, and never start another reset or data change with a new key just to retry. reset_dev requires isolated data, and sharing requires an existing Prod database. Deleted Dev data/files cannot be restored by reversing the mode.",
+    "Owner only: execute the exact reviewed project_data_plan. Pass its change, resource_etag as if_match and confirmation_token with one idempotency_key; confirmed must be true. The operation never copies data. Read operation_get until terminal; after uncertainty reuse the same key, and never start another reset or data change with a new key just to retry. reset_dev requires isolated data, and sharing requires an existing Prod database. Deleted Dev data/files cannot be restored by reversing the mode.",
     z.object({
       project_id: identifier,
       change: z.enum(PROJECT_DATA_CHANGE_KINDS),
@@ -2044,7 +2044,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "preview_stop",
-    "Stop the preview and remove backups while preserving its URL. Retry uncertain requests with the same key.",
+    "Stop the preview and remove backups while preserving its URL until its 24-hour deadline. Retry uncertain requests with the same key.",
     z.object({
       project_id: identifier,
       environment: z.enum(["dev", "prod"]),
@@ -2064,7 +2064,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "preview_rotate",
-    "Rotate the preview URL and close old connections. Retry uncertain requests with the same key.",
+    "Rotate the preview URL and close old connections; the preview keeps its 24-hour deadline. Retry uncertain requests with the same key.",
     z.object({
       project_id: identifier,
       environment: z.enum(["dev", "prod"]),
@@ -2750,7 +2750,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "workspace_mail_domain_dns_authorize",
-    "Request human Cloudflare consent for this selected workspace sender, zone and revision. No provider credentials are accepted. Open the returned link for the human; never approve it automatically.",
+    "Request human Cloudflare consent for this selected workspace sender, zone and revision. No provider credentials are accepted. Open the returned link for the human.",
     z
       .object({
         organization_id: identifier,
@@ -2949,7 +2949,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "application_domain_identity_authorize",
-    "Request exact-purpose Cloudflare consent to write this project hostname ownership challenge at the current revision. Open the private authorization URL for the human; never approve it automatically. Manual DNS remains available.",
+    "Request exact-purpose Cloudflare consent to write this project hostname ownership challenge at the current revision. Open the private authorization URL for the human. Manual DNS remains available.",
     z
       .object({
         project_id: identifier,
