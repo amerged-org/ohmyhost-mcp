@@ -72,9 +72,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "29f1eaaba1c597da76ba21d01b6baeea4de5088fc7032a215a1fec65350d7d3b";
+  "e3cb599fd7bafdd43c06d20e579664daa52bc72f3aa0b4bcf753766968bf339c";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.78";
+export const remoteMcpReleaseVersion = "0.1.79";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -22072,6 +22072,196 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         runtime_provider: { type: ["string", "null"], enum: ["wfp", null] },
         applied_secret_count: { type: "integer", minimum: 0, maximum: 100 },
         last_error: { type: ["string", "null"], pattern: "^[A-Z][A-Z0-9_]{0,63}$" },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["project_id", "environment_id", "names"],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        names: {
+          type: "array",
+          minItems: 1,
+          maxItems: 10,
+          uniqueItems: true,
+          description: "The secret names the form asks for, each with its own masked field.",
+          items: { type: "string", pattern: "^[A-Z][A-Z0-9_]{0,127}$" },
+        },
+      },
+    },
+    operationId: "createSecretInputRequest",
+    method: "POST",
+    path: "/v1/projects/{project_id}/environments/{environment_id}/secret-input-requests",
+    summary: "Request a protected secret form",
+    description:
+      'Creates a protected form for one to ten secrets of one environment and answers its link. The person opens the link without signing in, enters each value in a masked field and saves; the values never cross this API or the agent\'s context. The link is valid for one hour and spends on the first save with valid values. Requires a signed-in CLI session or a user API token that carries `secrets:write` on this project and environment; a connected chat client uses `secret_input_request` instead. The link stays bound to the credential that created it, and at save time the platform checks again that the token still exists and carries `secrets:write`, or that the session is still active, and that the user still holds `secrets:write` here. A revoked token, an ended session or a lost permission ends the link; `ohmyhost logout` only removes the login from that machine and does not end an open link. When the provider cannot be asked, the form answers "try again in a moment" and the link stays valid. Read the outcome per name with the request ID.',
+    disposition: "protected-handoff",
+    toolNames: [],
+    reason:
+      "A connected chat keeps using the secret_input_request portal form with its own client identity; this operation serves a signed-in CLI session or a user API token, which have no client identity.",
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["names"],
+            properties: {
+              names: {
+                type: "array",
+                minItems: 1,
+                maxItems: 10,
+                uniqueItems: true,
+                description: "The secret names the form asks for, each with its own masked field.",
+                items: { type: "string", pattern: "^[A-Z][A-Z0-9_]{0,127}$" },
+              },
+            },
+          },
+        },
+      },
+    },
+    parameters: [
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "environment_id",
+        in: "path",
+        description: "Environment identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["request_id", "url", "expires_at"],
+      properties: {
+        request_id: { type: "string", pattern: "^[a-f0-9]{64}$" },
+        url: {
+          type: "string",
+          format: "uri",
+          description:
+            "The protected form link. It is a capability; hand it only to the person who enters the values.",
+        },
+        expires_at: { type: "string", format: "date-time" },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        request_id: {
+          type: "string",
+          pattern: "^[a-f0-9]{64}$",
+          description: "The request ID that the creation answered.",
+        },
+      },
+      required: ["project_id", "environment_id", "request_id"],
+      additionalProperties: false,
+    },
+    operationId: "getSecretInputRequest",
+    method: "GET",
+    path: "/v1/projects/{project_id}/environments/{environment_id}/secret-input-requests/{request_id}",
+    summary: "Read a protected secret form outcome",
+    description:
+      "Answers `pending`, `expired`, `saved` or `incomplete`. Once the form was submitted or expired, `secrets` lists each requested name as `saved`, `failed` or `unconfirmed`. The read is for the user who created the request, and only for a credential that passes `secrets:write` on this project and environment today; the request ID alone opens nothing. Values are never returned.",
+    disposition: "equivalent-workflow",
+    toolNames: [],
+    reason:
+      "A connected chat reads the same outcome through connection_status with the request ID.",
+    parameters: [
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "environment_id",
+        in: "path",
+        description: "Environment identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "request_id",
+        in: "path",
+        required: true,
+        description: "The request ID that the creation answered.",
+        schema: { type: "string", pattern: "^[a-f0-9]{64}$" },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["request_id", "state", "expires_at"],
+      properties: {
+        request_id: { type: "string", pattern: "^[a-f0-9]{64}$" },
+        state: {
+          type: "string",
+          enum: ["pending", "expired", "saved", "incomplete"],
+          description:
+            "pending: not saved yet, or saving now. expired: the link ran out unused. saved: every name was saved. incomplete: at least one name failed or could not be confirmed.",
+        },
+        expires_at: { type: "string", format: "date-time" },
+        secrets: {
+          type: "array",
+          description:
+            "Present once the form was submitted or expired; a name that was never written is unconfirmed.",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["name", "state"],
+            properties: {
+              name: { type: "string" },
+              state: { type: "string", enum: ["saved", "failed", "unconfirmed"] },
+            },
+          },
+        },
       },
     },
   },

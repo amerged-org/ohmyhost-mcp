@@ -10,6 +10,11 @@ export interface WorkosSessionStatusRequest {
   readonly userId: string;
   readonly organizationId: string | null;
   readonly tokenExpiresAt: number;
+  /**
+   * Set only by a caller that spends something on the answer (a protected secret form): the provider is asked again and
+   * a cached answer, positive or negative, is replaced by it.
+   */
+  readonly fresh?: true;
 }
 
 export interface WorkosSessionStatusResponse {
@@ -28,7 +33,12 @@ const assertOnlyKeys = (input: Record<string, unknown>, allowed: readonly string
 
 export const parseWorkosSessionStatusRequest = (value: unknown): WorkosSessionStatusRequest => {
   const input = expectRecord(value, "invalid_session_status_request");
-  assertOnlyKeys(input, ["sessionId", "userId", "organizationId", "tokenExpiresAt"]);
+  assertOnlyKeys(input, ["sessionId", "userId", "organizationId", "tokenExpiresAt", "fresh"]);
+  if (input["fresh"] !== undefined && input["fresh"] !== true)
+    throw new WorkosContractError(
+      "invalid_session_status_request",
+      "fresh must be true when present",
+    );
   return {
     sessionId: expectString(input["sessionId"], "sessionId"),
     userId: expectString(input["userId"], "userId"),
@@ -37,6 +47,7 @@ export const parseWorkosSessionStatusRequest = (value: unknown): WorkosSessionSt
         ? null
         : expectString(input["organizationId"], "organizationId"),
     tokenExpiresAt: expectPositiveInteger(input["tokenExpiresAt"], "tokenExpiresAt"),
+    ...(input["fresh"] === true ? { fresh: true as const } : {}),
   };
 };
 

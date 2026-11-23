@@ -824,6 +824,38 @@ export type PutEnvironmentSecretRequest = {
   value: string;
 };
 
+export type CreateSecretInputRequest = {
+  /**
+   * The secret names the form asks for, each with its own masked field.
+   */
+  names: Array<string>;
+};
+
+export type SecretInputRequest = {
+  request_id: string;
+  /**
+   * The protected form link. It is a capability; hand it only to the person who enters the values.
+   */
+  url: string;
+  expires_at: string;
+};
+
+export type SecretInputRequestStatus = {
+  request_id: string;
+  /**
+   * pending: not saved yet, or saving now. expired: the link ran out unused. saved: every name was saved. incomplete: at least one name failed or could not be confirmed.
+   */
+  state: "pending" | "expired" | "saved" | "incomplete";
+  expires_at: string;
+  /**
+   * Present once the form was submitted or expired; a name that was never written is unconfirmed.
+   */
+  secrets?: Array<{
+    name: string;
+    state: "saved" | "failed" | "unconfirmed";
+  }>;
+};
+
 /**
  * Environment secret metadata. The plaintext and ciphertext are never returned.
  */
@@ -13014,6 +13046,138 @@ export type RotateEnvironmentSecretResponses = {
 
 export type RotateEnvironmentSecretResponse =
   RotateEnvironmentSecretResponses[keyof RotateEnvironmentSecretResponses];
+
+export type CreateSecretInputRequestData = {
+  body: CreateSecretInputRequest;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/secret-input-requests";
+};
+
+export type CreateSecretInputRequestErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateSecretInputRequestError =
+  CreateSecretInputRequestErrors[keyof CreateSecretInputRequestErrors];
+
+export type CreateSecretInputRequestResponses = {
+  /**
+   * The form link, its request ID and its expiry. The link is a capability, so show it only to the person who enters the values.
+   */
+  201: SecretInputRequest;
+};
+
+export type CreateSecretInputRequestResponse =
+  CreateSecretInputRequestResponses[keyof CreateSecretInputRequestResponses];
+
+export type GetSecretInputRequestData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    /**
+     * The request ID that the creation answered.
+     */
+    request_id: string;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/secret-input-requests/{request_id}";
+};
+
+export type GetSecretInputRequestErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetSecretInputRequestError =
+  GetSecretInputRequestErrors[keyof GetSecretInputRequestErrors];
+
+export type GetSecretInputRequestResponses = {
+  /**
+   * The current outcome of the form.
+   */
+  200: SecretInputRequestStatus;
+};
+
+export type GetSecretInputRequestResponse =
+  GetSecretInputRequestResponses[keyof GetSecretInputRequestResponses];
 
 export type GetOperationData = {
   body?: never;

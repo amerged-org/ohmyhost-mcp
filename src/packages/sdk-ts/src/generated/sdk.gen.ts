@@ -91,6 +91,9 @@ import type {
   CreateProjectExportResponses,
   CreateProjectRequest,
   CreateProjectResponses,
+  CreateSecretInputRequest,
+  CreateSecretInputRequestErrors,
+  CreateSecretInputRequestResponses,
   CreateUserApiKeyErrors,
   CreateUserApiKeyResponses,
   CreateWorkspaceMailDomainErrors,
@@ -223,6 +226,8 @@ import type {
   GetProjectStatusResponses,
   GetPublicDeploymentStatsErrors,
   GetPublicDeploymentStatsResponses,
+  GetSecretInputRequestErrors,
+  GetSecretInputRequestResponses,
   GetWorkspaceMailDomainDnsAuthorizationErrors,
   GetWorkspaceMailDomainDnsAuthorizationResponses,
   GetWorkspaceMailDomainErrors,
@@ -8706,6 +8711,115 @@ export const rotateEnvironmentSecret = <ThrowOnError extends boolean = true>(
       },
     ],
     url: "/v1/projects/{project_id}/environments/{environment_id}/secrets/{secret_name}/rotate",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Request a protected secret form
+ *
+ * Creates a protected form for one to ten secrets of one environment and answers its link. The person opens the link without signing in, enters each value in a masked field and saves; the values never cross this API or the agent's context. The link is valid for one hour and spends on the first save with valid values. Requires a signed-in CLI session or a user API token that carries `secrets:write` on this project and environment; a connected chat client uses `secret_input_request` instead. The link stays bound to the credential that created it, and at save time the platform checks again that the token still exists and carries `secrets:write`, or that the session is still active, and that the user still holds `secrets:write` here. A revoked token, an ended session or a lost permission ends the link; `ohmyhost logout` only removes the login from that machine and does not end an open link. When the provider cannot be asked, the form answers "try again in a moment" and the link stays valid. Read the outcome per name with the request ID.
+ */
+export const createSecretInputRequest = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    createSecretInputRequest: CreateSecretInputRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateSecretInputRequestResponses,
+  CreateSecretInputRequestErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { key: "createSecretInputRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateSecretInputRequestResponses,
+    CreateSecretInputRequestErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/secret-input-requests",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read a protected secret form outcome
+ *
+ * Answers `pending`, `expired`, `saved` or `incomplete`. Once the form was submitted or expired, `secrets` lists each requested name as `saved`, `failed` or `unconfirmed`. The read is for the user who created the request, and only for a credential that passes `secrets:write` on this project and environment today; the request ID alone opens nothing. Values are never returned.
+ */
+export const getSecretInputRequest = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    request_id: string;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetSecretInputRequestResponses,
+  GetSecretInputRequestErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "request_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetSecretInputRequestResponses,
+    GetSecretInputRequestErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/secret-input-requests/{request_id}",
     ...options,
     ...params,
   });

@@ -222,7 +222,7 @@ export function previewGuidance(view: ChatResult): ChatGuidance | null {
   if (view["ready_to_show"] === true)
     return {
       next_step:
-        "The preview shows the saved version. Give the user this link and ask whether they want to see it.",
+        "The preview shows the saved version. Give the user this link exactly as returned and ask whether they want to see it.",
       say_to_user: `Your app is ready as a private preview: ${url} Do you want to see it?`,
     };
   const failure = view["failure"];
@@ -241,12 +241,12 @@ export function previewGuidance(view: ChatResult): ChatGuidance | null {
   if (view["status"] === "sleeping")
     return {
       next_step:
-        "The preview is paused and starts again when the link is opened. Give the user the link.",
+        "The preview is paused and starts again when the link is opened. Give the user the link exactly as returned.",
       say_to_user: `Your preview is paused. It starts again when you open the link: ${url}`,
     };
   return {
     next_step:
-      "The preview is still starting or applying the saved version, which usually takes under a minute. Read preview_get again in about 10 seconds, for at most 2 minutes, before giving the user the link.",
+      "The preview is still starting or applying the saved version, which usually takes under a minute. Read preview_get again in about 10 seconds, for at most 2 minutes, before giving the user the link exactly as returned.",
     say_to_user: "Your preview is starting. This takes up to a minute.",
   };
 }
