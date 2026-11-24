@@ -1187,6 +1187,9 @@ const runOfflineInit = async (
         compatibility: result.compatibility,
         blockers: result.blockers,
         pending: result.pending,
+        ...(result.migrationEffects === undefined
+          ? {}
+          : { migrationEffects: result.migrationEffects }),
         requirements: result.requirements,
         companion: result.companion,
         // The functions runtime reports its own bindings and packages; dropping it left a

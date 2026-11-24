@@ -75,7 +75,7 @@ import {
 export const remoteMcpContractSha256 =
   "e3b994d04ab3f97174c28f77921f16c763ea6dc839bcd883e6a730ed18bfd927";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.80";
+export const remoteMcpReleaseVersion = "0.1.81";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;

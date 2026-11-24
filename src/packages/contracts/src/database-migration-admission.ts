@@ -15,14 +15,23 @@ import {
   type DatabaseMigrationRlsTarget,
 } from "./database-migration-policies.js";
 
+import {
+  readMigrationReplacement,
+  type DatabaseMigrationReplacement,
+} from "./database-migration-replacements.js";
+
+export {
+  readMigrationCreations,
+  type DatabaseMigrationReplacement,
+} from "./database-migration-replacements.js";
 export { DatabaseMigrationAdmissionError } from "./database-migration-errors.js";
 export type { DatabaseMigrationAdmissionReason } from "./database-migration-errors.js";
 export type { DatabaseMigrationCaptureTrigger } from "./database-migration-capture.js";
 export type { DatabaseMigrationRlsTarget } from "./database-migration-policies.js";
 
-const MAX_MIGRATION_COUNT = 128;
-const MAX_MIGRATION_BYTES = 256 * 1024;
-const MAX_MIGRATION_TOTAL_BYTES = 2 * 1024 * 1024;
+export const MAX_MIGRATION_COUNT = 128;
+export const MAX_MIGRATION_BYTES = 256 * 1024;
+export const MAX_MIGRATION_TOTAL_BYTES = 2 * 1024 * 1024;
 const MIGRATION_PATH = /^(?:[A-Za-z0-9][A-Za-z0-9._-]*\/)*\d{14}_[a-z0-9][a-z0-9_-]*\.sql$/u;
 
 export interface DatabaseMigrationInput {
@@ -113,10 +122,69 @@ export function admitMigrationsAfterAppliedPrefix(
   return Object.freeze({ files: Object.freeze(files), statementCount });
 }
 
+export const MAX_MIGRATION_REPLACEMENT_NOTES = 32;
+const REPLACEMENT_NOTE = "Migration candidate replaces";
+const REFUSAL_NOTE = "Migration file ";
+const MORE_REPLACEMENTS = "Review the saved migration files for any further replacement targets.";
+
+export function isMigrationReplacementNote(risk: string): boolean {
+  return (
+    risk.startsWith(REPLACEMENT_NOTE + " ") ||
+    (risk.startsWith(REFUSAL_NOTE) && risk.includes(" is refused by current admission (")) ||
+    risk === MORE_REPLACEMENTS
+  );
+}
+
+/** Source-only preview. The executor verifies ownership and the applied prefix against the target database. */
+export function describeMigrationReplacements(
+  migrations: readonly DatabaseMigrationInput[],
+): readonly string[] {
+  const notes = new Set<string>();
+  const owner = "(must be created by an earlier migration)";
+  const quote = (name: string) => (/^[a-z_][a-z0-9_]*$/u.test(name) ? name : JSON.stringify(name));
+  for (const { path, body } of migrations) {
+    const fileNotes: string[] = [];
+    try {
+      for (const [index, { replacement }] of parseDatabaseMigrationStatements(
+        new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(body),
+      ).entries()) {
+        if (replacement?.kind === "function") {
+          const note = `${REPLACEMENT_NOTE} function ${quote(replacement.schema)}.${quote(replacement.name)}(${replacement.signature}) ${owner}.`;
+          fileNotes.push(
+            note.length <= 512
+              ? note
+              : `${note.slice(0, 350)}… See statement ${index + 1} in ${path.slice(-100)}.`,
+          );
+        } else if (replacement?.kind === "trigger" && replacement.action !== "drop") {
+          fileNotes.push(
+            `${REPLACEMENT_NOTE} trigger ${quote(replacement.name)} on ${quote(replacement.schema)}.${quote(replacement.table)} ${owner}.`,
+          );
+        }
+      }
+    } catch (error) {
+      if (!(error instanceof DatabaseMigrationAdmissionError) && !(error instanceof TypeError))
+        throw error;
+      const reason = error instanceof DatabaseMigrationAdmissionError ? error.reason : "invalid";
+      const detail = error instanceof DatabaseMigrationAdmissionError ? error.detail : undefined;
+      const file = path.length > 300 ? `${path.slice(0, 299)}…` : path;
+      fileNotes.push(
+        `${REFUSAL_NOTE}${file} is refused by current admission (${reason})${detail === undefined ? "." : `: ${detail}.`}`,
+      );
+    }
+    for (const note of fileNotes) {
+      if (!notes.has(note) && notes.size === MAX_MIGRATION_REPLACEMENT_NOTES)
+        return [...notes, MORE_REPLACEMENTS];
+      notes.add(note);
+    }
+  }
+  return [...notes];
+}
+
 export interface DatabaseMigrationStatement {
   readonly sql: string;
   readonly rlsTarget?: DatabaseMigrationRlsTarget;
   readonly captureTrigger?: DatabaseMigrationCaptureTrigger;
+  readonly replacement?: DatabaseMigrationReplacement;
 }
 
 export function parseDatabaseMigrationStatements(
@@ -132,23 +200,53 @@ export function parseDatabaseMigrationStatements(
   }
   const statements = readMigrationSql(sql);
   if (statements.length === 0) throw new DatabaseMigrationAdmissionError("invalid");
-  return Object.freeze(
-    statements.map((statement) => {
-      const capture = readMigrationCaptureTrigger(statement.tokens);
-      if (capture !== undefined) {
-        rejectMigrationSqlReferences(capture.header);
-        return Object.freeze({ sql: statement.sql, captureTrigger: capture.target });
-      }
-      // Provider references are forbidden throughout executable policy SQL, while
-      // the native helper exception is narrowed by the policy reader below.
-      rejectMigrationSqlReferences(statement.tokens, true);
-      const rlsTarget = readMigrationRlsTarget(statement.tokens);
-      if (rlsTarget !== undefined) return Object.freeze({ sql: statement.sql, rlsTarget });
+  let previous: DatabaseMigrationReplacement | undefined;
+  const admitted = statements.map((statement) => {
+    const classificationSql = statement.tokens.map((token) => token.text).join(" ");
+    const replacement = readMigrationReplacement(statement.tokens, previous);
+    if (
+      previous?.kind === "trigger" &&
+      previous.action === "drop" &&
+      (replacement?.kind !== "trigger" ||
+        replacement.action !== "recreate" ||
+        replacement.schema !== previous.schema ||
+        replacement.table !== previous.table ||
+        replacement.name !== previous.name)
+    ) {
+      throw new DatabaseMigrationAdmissionError(
+        "destructive",
+        "immediately recreate the same dropped trigger in the same migration file",
+      );
+    }
+    previous = replacement;
+    if (replacement !== undefined) {
       rejectMigrationSqlReferences(statement.tokens);
-      admitStatement(statement.tokens, statement.sql);
-      return Object.freeze({ sql: statement.sql });
-    }),
-  );
+      if (replacement.kind === "function") {
+        admitFunction(statement.tokens, classificationSql);
+      }
+      return Object.freeze({ sql: statement.sql, replacement: Object.freeze(replacement) });
+    }
+    const capture = readMigrationCaptureTrigger(statement.tokens);
+    if (capture !== undefined) {
+      rejectMigrationSqlReferences(capture.header);
+      return Object.freeze({ sql: statement.sql, captureTrigger: capture.target });
+    }
+    // Provider references are forbidden throughout executable policy SQL, while
+    // the native helper exception is narrowed by the policy reader below.
+    rejectMigrationSqlReferences(statement.tokens, true);
+    const rlsTarget = readMigrationRlsTarget(statement.tokens);
+    if (rlsTarget !== undefined) return Object.freeze({ sql: statement.sql, rlsTarget });
+    rejectMigrationSqlReferences(statement.tokens);
+    admitStatement(statement.tokens, classificationSql);
+    return Object.freeze({ sql: statement.sql });
+  });
+  if (previous?.kind === "trigger" && previous.action === "drop") {
+    throw new DatabaseMigrationAdmissionError(
+      "destructive",
+      "immediately recreate the same dropped trigger in the same migration file",
+    );
+  }
+  return Object.freeze(admitted);
 }
 
 function rejectFunctionBodyReferences(sql: string): void {
@@ -269,20 +367,25 @@ function readAdditiveAlterTable(tokens: readonly MigrationSqlToken[]): boolean {
   return expectedClosers.length === 0;
 }
 
+function admitFunction(tokens: readonly MigrationSqlToken[], sql: string): void {
+  rejectFunctionBodyReferences(sql);
+  const normalized = normalizeTokens(tokens);
+  if (!/\blanguage\s+(?:sql|plpgsql)\b/u.test(normalized)) {
+    throw new DatabaseMigrationAdmissionError("unsupported", "use LANGUAGE sql or plpgsql");
+  }
+  if (/\bsecurity\s+definer\b/u.test(normalized) && !pinsSearchPath(tokens)) {
+    throw new DatabaseMigrationAdmissionError(
+      "unsupported",
+      "a SECURITY DEFINER function needs every SET search_path to be '' or to start with pg_catalog",
+    );
+  }
+}
+
 function admitStatement(tokens: readonly MigrationSqlToken[], sql: string): void {
   const normalized = normalizeTokens(tokens);
   if (normalized === "set check_function_bodies = false") return;
   if (/^create\s+function\b/u.test(normalized)) {
-    rejectFunctionBodyReferences(sql);
-    if (
-      !/\blanguage\s+(?:sql|plpgsql)\b/u.test(normalized) ||
-      (/\bsecurity\s+definer\b/u.test(normalized) && !pinsSearchPath(tokens))
-    ) {
-      throw new DatabaseMigrationAdmissionError(
-        "unsupported",
-        "a SECURITY DEFINER function needs every SET search_path to be '' or to start with pg_catalog",
-      );
-    }
+    admitFunction(tokens, sql);
     return;
   }
   if (

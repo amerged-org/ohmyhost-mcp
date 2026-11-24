@@ -52,7 +52,7 @@ const failures = {
 
   database_migrate_failed: [
     "The database migration files were not applied; none of the files of this request took effect.",
-    "Read error.migration: it names the file and the reason. Keep applied files unchanged and give new files later timestamps; add to existing tables only nullable columns without default and non-unique indexes. Save the corrected version with source_changes, then call database_migrate again with its commit_sha and a new idempotency key; never reset the database.",
+    "Read error.migration: it names the file and the reason. Keep applied files unchanged, give new files later timestamps, and keep changes to existing objects within the hosted migration rules. For a function replacement, copy the SECURITY INVOKER declaration created in an earlier applied migration and change only its body. If the function has a dependent constraint, index, column expression or RLS policy, add a new function and migrate the dependent object to it. For a trigger replacement, use the same owned table and existing trigger name. Save the corrected version with source_changes, then call database_migrate again with its commit_sha and a new idempotency key; never reset the database.",
   ],
   database_migrate_unavailable: [
     "The database could not be created or migrated in time; nothing from this request was left half applied.",
@@ -112,7 +112,7 @@ const failures = {
   ],
   database_migration_failed: [
     "The database migrations were not applied; none of this deployment's new migration files took effect.",
-    "Read the DATABASE_MIGRATION_FAILED item in 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --json' (next page: --cursor <next_cursor>) and fix what it names; run 'ohmyhost init --dry-run --json' for migration_sql_not_admitted. Keep applied files unchanged, give new files later timestamps, and add to existing tables only nullable columns without default and non-unique indexes. Save or push the corrected version and plan its commit; never reset the database.",
+    "Read the DATABASE_MIGRATION_FAILED item in 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --json' (next page: --cursor <next_cursor>) and fix what it names; run 'ohmyhost init --dry-run --json' for migration_sql_not_admitted. Keep applied files unchanged, give new files later timestamps, and keep changes to existing objects within the hosted migration rules. For a function replacement, copy the SECURITY INVOKER declaration created in an earlier applied migration and change only its body. If the function has a dependent constraint, index, column expression or RLS policy, add a new function and migrate the dependent object to it. For a trigger replacement, use the same owned table and existing trigger name. Save or push the corrected version and plan its commit; never reset the database.",
   ],
   runtime_candidate_failed: [
     "The deployed candidate failed its runtime checks.",

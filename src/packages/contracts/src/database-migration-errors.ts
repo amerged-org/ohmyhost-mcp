@@ -10,7 +10,7 @@ export class DatabaseMigrationAdmissionError extends Error {
   /** `detail` names the exact requirement for a refusal whose cause the customer can change; the code and reason do not change. */
   public constructor(
     public readonly reason: DatabaseMigrationAdmissionReason,
-    detail?: string,
+    public readonly detail?: string,
   ) {
     super(
       detail === undefined

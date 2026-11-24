@@ -47,6 +47,7 @@ import {
 } from "@ohmyhost/contracts/framework-family";
 import {
   admitExpandOnlyMigrations,
+  describeMigrationReplacements,
   DatabaseMigrationAdmissionError,
   type DatabaseMigrationAdmissionReason,
 } from "@ohmyhost/contracts/database-migration-admission";
@@ -232,6 +233,7 @@ export interface RepositoryInitResult {
   /** Ordered as planning judges the source, so the first blocker is the refusal planning answers. */
   readonly blockers: readonly RepositoryInitBlocker[];
   readonly pending: readonly RepositoryInitPending[];
+  readonly migrationEffects?: readonly string[];
   readonly requirements: readonly string[];
   readonly companion: RepositoryInitViteCompanion | null;
   readonly worker: Readonly<{
@@ -446,9 +448,9 @@ export async function initializeRepository(
   const companionSourcePresent =
     companion !== null && applicationFiles.includes(companion.sourceEntryPoint);
   // Planning stops at an invalid ohmyhost.yaml, and so does init: nothing else can be judged.
-  const { blockers, versions } =
+  const { blockers, versions, migrationEffects } =
     existing !== null && existing.blocker !== null
-      ? { blockers: [existing.blocker], versions: [] }
+      ? { blockers: [existing.blocker], versions: [], migrationEffects: [] }
       : await judgeSource({
           framework,
           config: existingConfiguration,
@@ -501,6 +503,7 @@ export async function initializeRepository(
     }),
     blockers: Object.freeze(blockers),
     pending: pendingChecks(versions),
+    ...(migrationEffects.length > 0 ? { migrationEffects } : {}),
     requirements: Object.freeze(requirements),
     companion,
     worker:
@@ -541,9 +544,11 @@ async function judgeSource(
   Readonly<{
     blockers: readonly RepositoryInitBlocker[];
     versions: readonly FrameworkVersionAdmission[];
+    migrationEffects: readonly string[];
   }>
 > {
   const source = repositorySourceFindings(context.texts);
+  const migration = await inspectMigrationSql(context, context.provider);
   return {
     blockers: [
       ...migrationFilenameBlockers(context, context.provider),
@@ -553,9 +558,10 @@ async function judgeSource(
       ...(await socketPrimitiveBlockers(context)),
       ...(await gatewayBindingBlockers(context)),
       ...(await storageClientBlockers(context)),
-      ...(await migrationSqlBlockers(context, context.provider)),
+      ...migration.blockers,
     ],
     versions: source.versions,
+    migrationEffects: migration.effects,
   };
 }
 
@@ -919,20 +925,20 @@ function migrationFilenameBlockers(
 /** What each rejection reason of the expand-only migration gate means, and how to satisfy it. */
 const MIGRATION_REJECTION: Readonly<Record<DatabaseMigrationAdmissionReason, string>> = {
   destructive:
-    "It contains DROP, TRUNCATE, INSERT, UPDATE, DELETE, BEGIN/COMMIT/ROLLBACK, CREATE OR REPLACE, or ALTER TABLE other than ADD; move row changes to 'ohmyhost database write'.",
+    "Use additive DDL or a supported replacement of a migrator-owned function or trigger. Keep the target signature and function properties, and put a restricted trigger drop immediately before its matching create. Move row changes to 'ohmyhost database write'.",
   provider_specific:
     "It mentions supabase, CREATE POLICY, ROW LEVEL SECURITY, the auth. or storage. schema, or the anon, authenticated or service_role role; comments count.",
   unsupported:
-    "It has a statement other than CREATE TABLE, TYPE, DOMAIN, SEQUENCE, VIEW, MATERIALIZED VIEW, TRIGGER, INDEX or FUNCTION, ALTER TABLE ... ADD, COMMENT ON, CREATE SCHEMA IF NOT EXISTS auth|extensions|private or CREATE EXTENSION IF NOT EXISTS pgcrypto|btree_gist|unaccent; or a function not in LANGUAGE sql or plpgsql, SECURITY DEFINER without SET search_path, or the word ohmyhost, comments included.",
+    "Check the hosted migration rules and use schema-qualified targets for replacements. An existing function replacement must preserve its properties and use SECURITY INVOKER and the same SQL or PL/pgSQL language.",
   invalid:
     "It is empty, not UTF-8 with LF line endings, has a BOM or NUL byte or an unterminated quote or comment, or exceeds 256 KiB (at most 128 files and 2 MiB in total).",
 };
 
-async function migrationSqlBlockers(
+async function inspectMigrationSql(
   context: SourceCheckContext,
   provider: RepositoryInitInventory["database"]["provider"],
-): Promise<RepositoryInitBlocker[]> {
-  if (provider !== "postgresql") return [];
+): Promise<Readonly<{ blockers: readonly RepositoryInitBlocker[]; effects: readonly string[] }>> {
+  if (provider !== "postgresql") return { blockers: [], effects: [] };
   const root = context.config?.database?.migrations ?? "postgres/migrations";
   const prefix = `${root}/`;
   const migrationPaths = context.files
@@ -943,7 +949,7 @@ async function migrationSqlBlockers(
       (path) => !/^(?:[A-Za-z0-9][A-Za-z0-9._-]*\/)*\d{14}_[a-z0-9][a-z0-9_-]*\.sql$/u.test(path),
     )
   ) {
-    return [];
+    return { blockers: [], effects: [] };
   }
   const migrations = await Promise.all(
     migrationPaths.map(async (path) =>
@@ -966,19 +972,22 @@ async function migrationSqlBlockers(
       });
     }
   }
-  if (blockers.length > 0) return blockers;
+  if (blockers.length > 0) return { blockers, effects: [] };
   try {
     admitExpandOnlyMigrations(migrations);
-    return [];
+    return { blockers: [], effects: describeMigrationReplacements(migrations) };
   } catch (error) {
     if (!(error instanceof DatabaseMigrationAdmissionError)) throw error;
-    return [
-      {
-        code: "migration_sql_not_admitted",
-        path: null,
-        message: `The migration set is not admitted (${error.reason}): ${MIGRATION_REJECTION[error.reason]}`,
-      },
-    ];
+    return {
+      effects: [],
+      blockers: [
+        {
+          code: "migration_sql_not_admitted",
+          path: null,
+          message: `The migration set is not admitted (${error.reason}): ${MIGRATION_REJECTION[error.reason]}`,
+        },
+      ],
+    };
   }
 }
 
