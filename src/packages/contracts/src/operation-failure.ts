@@ -50,6 +50,14 @@ const failures = {
     "Read current compute and report this operation ID through feedback. Preserve existing data. After the provider problem is resolved, submit a new confirmed size change.",
   ],
 
+  database_migrate_failed: [
+    "The database migration files were not applied; none of the files of this request took effect.",
+    "Read error.migration: it names the file and the reason. Keep applied files unchanged and give new files later timestamps; add to existing tables only nullable columns without default and non-unique indexes. Save the corrected version with source_changes, then call database_migrate again with its commit_sha and a new idempotency key; never reset the database.",
+  ],
+  database_migrate_unavailable: [
+    "The database could not be created or migrated in time; nothing from this request was left half applied.",
+    "Call database_migrate again with the same commit_sha and a new idempotency key: files that were applied are skipped. If it fails again, report this operation ID through feedback.",
+  ],
   recovery_dispatch_failed: [
     "The export executor could not confirm completion after bounded delivery attempts.",
     "Report the export operation ID through feedback. Check the original status before requesting another export after next_request_at.",
@@ -147,8 +155,8 @@ const failures = {
     "Run 'ohmyhost project handle check --handle NAME --json' or MCP project_handle_check, choose a handle that is still free, then submit the rename again with the current ETag and a new idempotency key. Replaying this terminal operation cannot take the handle.",
   ],
   managed_source_dispatch_failed: [
-    "The managed source change could not be dispatched for processing, so it was ended.",
-    "Read the current source to confirm it did not change, then submit the change again with a new idempotency key.",
+    "The managed source change was uploaded and sealed, but processing it did not finish after repeated attempts (the processing time limit or a service error), so it was ended and nothing was committed.",
+    "Read the current source to confirm it did not change, then submit the change again with a new idempotency key. If it fails again, report this operation id to support.",
   ],
 } as const;
 
@@ -356,7 +364,9 @@ export function publicOperationFailure(
   const detail =
     code === "auto_deploy_plan_rejected" ? frameworkConversionDetail(diagnostic) : null;
   const migration =
-    code === "database_migration_failed" ? parseMigrationFailureDiagnostic(diagnostic) : null;
+    code === "database_migration_failed" || code === "database_migrate_failed"
+      ? parseMigrationFailureDiagnostic(diagnostic)
+      : null;
   return Object.freeze({
     code,
     message,

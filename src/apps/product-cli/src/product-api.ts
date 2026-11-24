@@ -114,6 +114,7 @@ import {
   setProjectNotes,
   getDatabaseCompute,
   changeDatabaseCompute,
+  migrateDatabase,
   createClient,
   createProjectExport,
   getProjectExport,
@@ -354,6 +355,12 @@ export interface ProductApi {
     projectId: string;
     environment: "dev" | "prod";
   }): Promise<DatabaseComputeRead>;
+  migrateDatabase(input: {
+    projectId: string;
+    environment: "dev" | "prod";
+    commitSha: string;
+    idempotencyKey: string;
+  }): Promise<import("@ohmyhost/sdk-ts").Operation>;
   getProjectContext(projectId: string): Promise<ProjectContext>;
   setProjectNotes(input: {
     projectId: string;
@@ -920,6 +927,24 @@ export class GeneratedSdkProductApi implements ProductApi {
 
   public async connection(command: ConnectionCommand): Promise<unknown> {
     return executeConnectionCommand(this.#client, this.#connectionOrigin, command);
+  }
+
+  public async migrateDatabase(input: {
+    projectId: string;
+    environment: "dev" | "prod";
+    commitSha: string;
+    idempotencyKey: string;
+  }) {
+    return migrateDatabase(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        commit_sha: input.commitSha,
+        confirm: true,
+        "Idempotency-Key": input.idempotencyKey,
+      },
+      { client: this.#client },
+    );
   }
 
   public async changeDatabaseCompute(

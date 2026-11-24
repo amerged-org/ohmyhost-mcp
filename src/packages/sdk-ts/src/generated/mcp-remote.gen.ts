@@ -50,6 +50,7 @@ import {
   listOrganizationMcpConnections,
   listProjectDatabaseAccess,
   listProjectDatabaseWatches,
+  migrateDatabase,
   planPaidProjectDomain,
   planProjectDataChange,
   planProjectDeletion,
@@ -72,9 +73,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "e3cb599fd7bafdd43c06d20e579664daa52bc72f3aa0b4bcf753766968bf339c";
+  "e3b994d04ab3f97174c28f77921f16c763ea6dc839bcd883e6a730ed18bfd927";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.79";
+export const remoteMcpReleaseVersion = "0.1.80";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -171,6 +172,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         "expires_at",
         "failure",
         "retry_after_seconds",
+        "data",
       ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -217,7 +219,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         ready_to_show: {
           type: "boolean",
           description:
-            "True when the preview is ready and its applied version has the same sequence as the saved version.",
+            "True when the preview is ready and its applied version has the same sequence as the saved version. The database never delays it; the preview shows the app, and saving data works once the app is published.",
         },
         expires_at: {
           type: "string",
@@ -279,6 +281,51 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           description:
             "Seconds before another start attempt is made after a failure that a retry can change, or null.",
           oneOf: [{ type: "null" }, { type: "integer", minimum: 1, maximum: 10 }],
+        },
+        data: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["state", "environment", "shares_data_with", "options", "pending_files"],
+              properties: {
+                state: {
+                  type: "string",
+                  enum: ["not_required", "needs_database", "migrations_pending", "ready"],
+                  description:
+                    "not_required (the app declares no database), needs_database (declared, the environment has none), migrations_pending (a saved migration file is not applied there, or no finished migration job confirms the applied names and contents) or ready.",
+                },
+                environment: { type: "string", enum: ["dev", "prod"] },
+                shares_data_with: {
+                  oneOf: [{ type: "null" }, { type: "string", enum: ["prod"] }],
+                  description: "prod when this Dev database is also Prod's, otherwise null.",
+                },
+                options: {
+                  type: "array",
+                  minItems: 1,
+                  maxItems: 2,
+                  description:
+                    "The environment sets the user may choose to apply the files in (Dev needs a Paid workspace and a Dev site, otherwise prod only); with more than one environment, call database_migrate once per environment, dev first.",
+                  items: {
+                    type: "array",
+                    minItems: 1,
+                    maxItems: 2,
+                    items: { type: "string", enum: ["dev", "prod"] },
+                  },
+                },
+                pending_files: {
+                  type: "array",
+                  maxItems: 20,
+                  description:
+                    "Saved migration files the environment's database does not hold yet.",
+                  items: { type: "string", minLength: 1, maxLength: 512 },
+                },
+              },
+            },
+          ],
+          description:
+            "What the app's database holds, for information only (it never delays ready_to_show), or null until a version has been applied and its database recorded.",
         },
       },
     },
@@ -347,6 +394,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         "expires_at",
         "failure",
         "retry_after_seconds",
+        "data",
       ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -393,7 +441,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         ready_to_show: {
           type: "boolean",
           description:
-            "True when the preview is ready and its applied version has the same sequence as the saved version.",
+            "True when the preview is ready and its applied version has the same sequence as the saved version. The database never delays it; the preview shows the app, and saving data works once the app is published.",
         },
         expires_at: {
           type: "string",
@@ -455,6 +503,51 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           description:
             "Seconds before another start attempt is made after a failure that a retry can change, or null.",
           oneOf: [{ type: "null" }, { type: "integer", minimum: 1, maximum: 10 }],
+        },
+        data: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["state", "environment", "shares_data_with", "options", "pending_files"],
+              properties: {
+                state: {
+                  type: "string",
+                  enum: ["not_required", "needs_database", "migrations_pending", "ready"],
+                  description:
+                    "not_required (the app declares no database), needs_database (declared, the environment has none), migrations_pending (a saved migration file is not applied there, or no finished migration job confirms the applied names and contents) or ready.",
+                },
+                environment: { type: "string", enum: ["dev", "prod"] },
+                shares_data_with: {
+                  oneOf: [{ type: "null" }, { type: "string", enum: ["prod"] }],
+                  description: "prod when this Dev database is also Prod's, otherwise null.",
+                },
+                options: {
+                  type: "array",
+                  minItems: 1,
+                  maxItems: 2,
+                  description:
+                    "The environment sets the user may choose to apply the files in (Dev needs a Paid workspace and a Dev site, otherwise prod only); with more than one environment, call database_migrate once per environment, dev first.",
+                  items: {
+                    type: "array",
+                    minItems: 1,
+                    maxItems: 2,
+                    items: { type: "string", enum: ["dev", "prod"] },
+                  },
+                },
+                pending_files: {
+                  type: "array",
+                  maxItems: 20,
+                  description:
+                    "Saved migration files the environment's database does not hold yet.",
+                  items: { type: "string", minLength: 1, maxLength: 512 },
+                },
+              },
+            },
+          ],
+          description:
+            "What the app's database holds, for information only (it never delays ready_to_show), or null until a version has been applied and its database recorded.",
         },
       },
     },
@@ -536,6 +629,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         "expires_at",
         "failure",
         "retry_after_seconds",
+        "data",
       ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -582,7 +676,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         ready_to_show: {
           type: "boolean",
           description:
-            "True when the preview is ready and its applied version has the same sequence as the saved version.",
+            "True when the preview is ready and its applied version has the same sequence as the saved version. The database never delays it; the preview shows the app, and saving data works once the app is published.",
         },
         expires_at: {
           type: "string",
@@ -644,6 +738,51 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           description:
             "Seconds before another start attempt is made after a failure that a retry can change, or null.",
           oneOf: [{ type: "null" }, { type: "integer", minimum: 1, maximum: 10 }],
+        },
+        data: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["state", "environment", "shares_data_with", "options", "pending_files"],
+              properties: {
+                state: {
+                  type: "string",
+                  enum: ["not_required", "needs_database", "migrations_pending", "ready"],
+                  description:
+                    "not_required (the app declares no database), needs_database (declared, the environment has none), migrations_pending (a saved migration file is not applied there, or no finished migration job confirms the applied names and contents) or ready.",
+                },
+                environment: { type: "string", enum: ["dev", "prod"] },
+                shares_data_with: {
+                  oneOf: [{ type: "null" }, { type: "string", enum: ["prod"] }],
+                  description: "prod when this Dev database is also Prod's, otherwise null.",
+                },
+                options: {
+                  type: "array",
+                  minItems: 1,
+                  maxItems: 2,
+                  description:
+                    "The environment sets the user may choose to apply the files in (Dev needs a Paid workspace and a Dev site, otherwise prod only); with more than one environment, call database_migrate once per environment, dev first.",
+                  items: {
+                    type: "array",
+                    minItems: 1,
+                    maxItems: 2,
+                    items: { type: "string", enum: ["dev", "prod"] },
+                  },
+                },
+                pending_files: {
+                  type: "array",
+                  maxItems: 20,
+                  description:
+                    "Saved migration files the environment's database does not hold yet.",
+                  items: { type: "string", minLength: 1, maxLength: 512 },
+                },
+              },
+            },
+          ],
+          description:
+            "What the app's database holds, for information only (it never delays ready_to_show), or null until a version has been applied and its database recorded.",
         },
       },
     },
@@ -725,6 +864,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         "expires_at",
         "failure",
         "retry_after_seconds",
+        "data",
       ],
       properties: {
         id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
@@ -771,7 +911,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
         ready_to_show: {
           type: "boolean",
           description:
-            "True when the preview is ready and its applied version has the same sequence as the saved version.",
+            "True when the preview is ready and its applied version has the same sequence as the saved version. The database never delays it; the preview shows the app, and saving data works once the app is published.",
         },
         expires_at: {
           type: "string",
@@ -833,6 +973,51 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           description:
             "Seconds before another start attempt is made after a failure that a retry can change, or null.",
           oneOf: [{ type: "null" }, { type: "integer", minimum: 1, maximum: 10 }],
+        },
+        data: {
+          oneOf: [
+            { type: "null" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["state", "environment", "shares_data_with", "options", "pending_files"],
+              properties: {
+                state: {
+                  type: "string",
+                  enum: ["not_required", "needs_database", "migrations_pending", "ready"],
+                  description:
+                    "not_required (the app declares no database), needs_database (declared, the environment has none), migrations_pending (a saved migration file is not applied there, or no finished migration job confirms the applied names and contents) or ready.",
+                },
+                environment: { type: "string", enum: ["dev", "prod"] },
+                shares_data_with: {
+                  oneOf: [{ type: "null" }, { type: "string", enum: ["prod"] }],
+                  description: "prod when this Dev database is also Prod's, otherwise null.",
+                },
+                options: {
+                  type: "array",
+                  minItems: 1,
+                  maxItems: 2,
+                  description:
+                    "The environment sets the user may choose to apply the files in (Dev needs a Paid workspace and a Dev site, otherwise prod only); with more than one environment, call database_migrate once per environment, dev first.",
+                  items: {
+                    type: "array",
+                    minItems: 1,
+                    maxItems: 2,
+                    items: { type: "string", enum: ["dev", "prod"] },
+                  },
+                },
+                pending_files: {
+                  type: "array",
+                  maxItems: 20,
+                  description:
+                    "Saved migration files the environment's database does not hold yet.",
+                  items: { type: "string", minLength: 1, maxLength: 512 },
+                },
+              },
+            },
+          ],
+          description:
+            "What the app's database holds, for information only (it never delays ready_to_show), or null until a version has been applied and its database recorded.",
         },
       },
     },
@@ -7597,6 +7782,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -7785,6 +7972,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -7918,6 +8106,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                     "database_compute_plan_changed",
                     "database_compute_rejected",
                     "database_migration_failed",
+                    "database_migrate_failed",
+                    "database_migrate_unavailable",
                     "insufficient_organization_credits",
                     "project_budget_exceeded",
                     "paid_plan_required",
@@ -8751,6 +8941,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -8939,6 +9131,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -9230,6 +9423,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -9418,6 +9613,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -9814,6 +10010,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                         "database_compute_plan_changed",
                         "database_compute_rejected",
                         "database_migration_failed",
+                        "database_migrate_failed",
+                        "database_migrate_unavailable",
                         "insufficient_organization_credits",
                         "project_budget_exceeded",
                         "paid_plan_required",
@@ -10011,6 +10209,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                         "project_delete",
                         "project_data_change",
                         "database_compute_change",
+                        "database_migration",
                         "database_write",
                         "project_recovery",
                         "other",
@@ -10746,7 +10945,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/source:link",
     summary: "Link a GitHub source repository",
     description:
-      "Uses the workspace GitHub connection to admit a source-link operation without another browser authorization or a build. The caller must have current sources:link permission and the connected installation must cover the repository. If the workspace is not connected, run github connect first; if repository access is missing, update the installation through its settings URL. Repeat identical arguments and key after uncertainty.",
+      "Uses the workspace GitHub connection to admit a source-link operation without another browser authorization or a build. The caller must have current sources:link permission and the connected installation must cover the repository. If the workspace is not connected, run github connect first; if repository access is missing, update the installation through its settings URL. A project bound to managed source returns 409 source_switch_unsupported once the link reaches Core. Repeat identical arguments and key after uncertainty.",
     disposition: "named",
     toolNames: ["source_link"],
     requestBody: {
@@ -10869,6 +11068,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -11057,6 +11258,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -11394,6 +11596,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -11582,6 +11786,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -12085,6 +12290,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -12273,6 +12480,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -12442,6 +12650,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -12630,6 +12840,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -12809,6 +13020,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -12997,6 +13210,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -13408,6 +13622,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -13596,6 +13812,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -13808,6 +14025,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -13996,6 +14215,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -14515,6 +14735,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -14703,6 +14925,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -14840,6 +15063,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -15028,6 +15253,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -15831,6 +16057,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -16019,6 +16247,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -16430,6 +16659,362 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
+      required: ["project_id", "idempotency_key", "environment", "commit_sha", "confirm"],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        idempotency_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          description: "Identifies one mutation and its canonical request payload.",
+          allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
+        },
+        environment: { type: "string", enum: ["dev", "prod"] },
+        commit_sha: {
+          type: "string",
+          pattern: "^(?!0{40}$)[0-9a-f]{40}$",
+          description: "The saved version whose migration files are applied.",
+        },
+        confirm: { type: "boolean", const: true },
+      },
+    },
+    operationId: "migrateDatabase",
+    method: "POST",
+    path: "/v1/projects/{project_id}/database/migrations",
+    summary: "Apply the saved migration files to a database",
+    description:
+      "Requires deployment access to the project and explicit confirmation of where the tables are created. Reads the migration files of the saved commit, creates the environment's database when it has none exactly as the first deployment would, and applies the files that the database ledger does not hold, expand-only and in order. It never builds, deploys or publishes. Dev and Prod change together when the project shares one database between them. Dev needs an active Paid workspace, and Prod or a Dev that shares its database with Prod needs publication permission on an MCP connection. A project change that is still running, or a deployment that is queued, refuses the request. The response is an operation that starts within about a minute; poll it until it succeeds or names the failed file in error.migration. One attempt runs per job; if it ends unavailable, repeat the request.",
+    disposition: "named",
+    toolNames: ["database_migrate"],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["environment", "commit_sha", "confirm"],
+            properties: {
+              environment: { type: "string", enum: ["dev", "prod"] },
+              commit_sha: {
+                type: "string",
+                pattern: "^(?!0{40}$)[0-9a-f]{40}$",
+                description: "The saved version whose migration files are applied.",
+              },
+              confirm: { type: "boolean", const: true },
+            },
+          },
+        },
+      },
+    },
+    parameters: [
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "Idempotency-Key",
+        in: "header",
+        description: "Identifies one mutation and its canonical request payload.",
+        required: true,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      description:
+        "Durable record returned for an accepted asynchronous mutation. Optional reconciliation is a current observation for queued/running work, separate from immutable terminal state. A completed reconciliation attempt alone does not mean the operation succeeded.",
+      additionalProperties: false,
+      required: ["id", "state", "created_at", "updated_at"],
+      properties: {
+        blocking_operation_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description:
+            "The active operation holding this queued operation's project mutation claim.",
+        },
+        deployment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description:
+            "The deployment this operation created (deploy, promotion or rollback), in every state. After a failure, read its diagnostics with deployment logs.",
+        },
+        id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        state: { type: "string", enum: ["queued", "running", "succeeded", "failed", "cancelled"] },
+        created_at: { type: "string", format: "date-time" },
+        updated_at: { type: "string", format: "date-time" },
+        result: { type: "object", additionalProperties: true },
+        error: {
+          type: "object",
+          additionalProperties: false,
+          required: ["code", "message", "retryable", "suggested_action"],
+          properties: {
+            migration: {
+              type: "object",
+              additionalProperties: false,
+              required: ["reason", "file"],
+              description:
+                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+              properties: {
+                reason: {
+                  type: "string",
+                  enum: ["catalog_changed", "execution_failed", "ledger_conflict", "not_admitted"],
+                },
+                file: { oneOf: [{ type: "string", maxLength: 512 }, { type: "null" }] },
+                statement_index: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                sqlstate: { type: "string", pattern: "^[0-9A-Z]{5}$" },
+              },
+            },
+            code: {
+              type: "string",
+              enum: [
+                "operation_failed",
+                "operation_abandoned",
+                "native_auth_launch_unavailable",
+                "authorization_changed",
+                "source_commit_conflict",
+                "source_snapshot_invalid",
+                "source_upload_expired",
+                "recovery_dispatch_failed",
+                "recovery_job_failed",
+                "recovery_input_expired",
+                "recovery_database_unavailable",
+                "recovery_checksum_mismatch",
+                "recovery_scope_unavailable",
+                "recovery_archive_too_large",
+                "build_not_started",
+                "build_failed",
+                "database_write_rejected",
+                "database_write_unavailable",
+                "database_write_outcome_unknown",
+                "database_compute_failed",
+                "database_compute_plan_changed",
+                "database_compute_rejected",
+                "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
+                "insufficient_organization_credits",
+                "project_budget_exceeded",
+                "paid_plan_required",
+                "runtime_candidate_failed",
+                "runtime_candidate_rejected",
+                "storage_jurisdiction_conflict",
+                "provider_state_absent",
+                "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
+                "promotion_source_stale",
+                "promotion_target_stale",
+                "project_handle_taken",
+                "managed_source_dispatch_failed",
+              ],
+            },
+            message: { type: "string", minLength: 1, maxLength: 512 },
+            retryable: {
+              type: "boolean",
+              const: false,
+              description:
+                "A terminal operation cannot be retried in place; follow suggested_action.",
+            },
+            suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            detail: {
+              type: "string",
+              minLength: 1,
+              maxLength: 2000,
+              description:
+                "Present only on auto_deploy_plan_rejected when planning the pushed commit returned a typed refusal. It is the same fixed catalog sentence that the planning 409 problem returns as detail, naming the file, the rule and the required change.",
+            },
+          },
+        },
+        progress: {
+          type: "object",
+          additionalProperties: false,
+          description:
+            "Current deployment dependency observation, separate from immutable operation history. Poll the same operation; mail readiness does not mean application activation.",
+          required: [
+            "phase",
+            "project_id",
+            "deployment_id",
+            "observed_at",
+            "next_poll_after_seconds",
+            "suggested_action",
+          ],
+          properties: {
+            mail: {
+              type: "object",
+              additionalProperties: false,
+              required: ["domain", "status", "configured_at", "dns_records"],
+              description:
+                "Current mail verification details, present only while waiting_for_mail. Follow these records without rebuilding the deployment.",
+              properties: {
+                domain: { type: "string", minLength: 1, maxLength: 253 },
+                status: {
+                  type: "string",
+                  enum: [
+                    "configured",
+                    "delegation_required",
+                    "ready",
+                    "verification_pending",
+                    "verification_failed",
+                  ],
+                },
+                configured_at: { type: "string", format: "date-time" },
+                observed_at: { type: "string", format: "date-time" },
+                verification_issue: {
+                  oneOf: [
+                    {
+                      type: "string",
+                      enum: [
+                        "identity_missing",
+                        "identity_verification_failed",
+                        "dkim_verification_failed",
+                        "dkim_records_changed",
+                        "tenant_association_missing",
+                      ],
+                    },
+                    { type: "null" },
+                  ],
+                },
+                next_check_after_seconds: {
+                  oneOf: [{ type: "integer", enum: [60, 3600] }, { type: "null" }],
+                },
+                sending: { type: "string", enum: ["disabled", "pending", "ready", "failed"] },
+                receiving: { type: "string", enum: ["disabled", "pending", "ready", "failed"] },
+                dns_records: {
+                  type: "array",
+                  maxItems: 64,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["type", "name", "value", "status"],
+                    properties: {
+                      type: { type: "string", enum: ["MX", "TXT", "CNAME"] },
+                      name: { type: "string", minLength: 1, maxLength: 253 },
+                      value: { type: "string", minLength: 1, maxLength: 4096 },
+                      status: { type: "string", minLength: 1, maxLength: 64 },
+                      priority: { type: "integer", minimum: 0, maximum: 65535 },
+                    },
+                  },
+                },
+              },
+            },
+            build_completed_at: {
+              type: "string",
+              format: "date-time",
+              description:
+                "Actual successful build completion time when this operation ran a build; omitted for reused artifacts without a current build.",
+            },
+            phase: {
+              type: "string",
+              enum: [
+                "queued",
+                "building",
+                "publishing",
+                "waiting_for_mail",
+                "mail_status_unavailable",
+              ],
+            },
+            project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            deployment_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            observed_at: { type: "string", format: "date-time" },
+            next_poll_after_seconds: { type: "integer", const: 60 },
+            suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+          },
+        },
+        reconciliation: {
+          type: "object",
+          additionalProperties: false,
+          required: ["state", "attempt_id", "observed_at", "suggested_action"],
+          properties: {
+            state: { type: "string", enum: ["required", "pending"] },
+            attempt_id: {
+              oneOf: [{ type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" }, { type: "null" }],
+              description:
+                "Active attempt for pending reconciliation; null when a new confirmed reconciliation is required.",
+            },
+            observed_at: { type: "string", format: "date-time" },
+            suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_migration",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
+          },
+        },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
       required: ["project_id", "idempotency_key", "environment", "confirm"],
       oneOf: [
         {
@@ -16619,6 +17204,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -16807,6 +17394,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -17103,6 +17691,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                     "database_compute_plan_changed",
                     "database_compute_rejected",
                     "database_migration_failed",
+                    "database_migrate_failed",
+                    "database_migrate_unavailable",
                     "insufficient_organization_credits",
                     "project_budget_exceeded",
                     "paid_plan_required",
@@ -20810,6 +21400,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -20998,6 +21590,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -21315,6 +21908,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -21503,6 +22098,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -22372,6 +22968,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -22560,6 +23158,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -24145,6 +24744,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -24333,6 +24934,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -25729,6 +26331,8 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                     "database_compute_plan_changed",
                     "database_compute_rejected",
                     "database_migration_failed",
+                    "database_migrate_failed",
+                    "database_migrate_unavailable",
                     "insufficient_organization_credits",
                     "project_budget_exceeded",
                     "paid_plan_required",
@@ -26094,6 +26698,8 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -26282,6 +26888,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -27080,6 +27687,8 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -27268,6 +27877,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -27385,6 +27995,8 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -27573,6 +28185,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -27935,69 +28548,21 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     },
   },
   {
-    name: "database_compute_set",
-    title: "Select database memory and included storage",
+    name: "database_migrate",
+    title: "Apply the saved migration files to a database",
     description:
-      "Choose fixed database RAM: 256, 512, 1024, 2048 or 4096 MiB. Free permits only 256 MiB; larger sizes require Paid. Included total disk is 500, 1024, 2048, 4096 or 8192 MiB, including PostgreSQL/WAL, plus seven-day backups. Prices are 10, 20, 40, 80 or 160 credits per active hour respectively, prorated. Sleep follows 300 idle seconds; sleeping has no active-RAM charge. No separate database CPU, network or connection charges apply. First read database_compute_get, explain the size, price, possible interruption and shared Dev/Prod scope, then obtain the user's choice before confirm=true. Smaller volumes need a separate data move. Poll the original operation; never duplicate a pending request. Legacy profile input applies only during provider transition. Supply exactly one of memory_mib and profile.",
+      "Apply the migration files of one saved version to the Dev or Prod database of this project, and create that database first when the environment has none. Call it only after the user said where to apply them: Free and a project without Dev apply to prod; with a Dev site ask whether dev only or dev and prod (call it once per environment, dev first). When Dev and Prod share data it is one database; say so. Files already applied are skipped; an applied file that was edited is refused, so add a new file instead. It never builds, deploys or publishes. The preview shows the app but does not save data: saving works once the app is published. Pass the commit_sha that source_changes returned. A saved version with a noncanonical file name, no migration file or no database in ohmyhost.yaml is refused at once with its reason. The job starts within about a minute of the 202; poll the original operation with operation_get; a failed file is named in error.migration. Dev needs an active Paid workspace; Prod, and a Dev that shares its database with Prod, need publication permission on the connection. A job that ends database_migrate_unavailable applied nothing half: call it again, which starts a new job and skips the applied files.",
     annotations: {
       readOnlyHint: false,
-      destructiveHint: true,
+      destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false,
     },
-    operationId: "changeDatabaseCompute",
+    operationId: "migrateDatabase",
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["project_id", "idempotency_key", "environment", "confirm"],
-      oneOf: [
-        {
-          type: "object",
-          additionalProperties: false,
-          required: ["project_id", "idempotency_key", "environment", "confirm", "memory_mib"],
-          properties: {
-            project_id: {
-              type: "string",
-              pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
-              description: "Project identifier.",
-            },
-            idempotency_key: {
-              type: "string",
-              minLength: 1,
-              maxLength: 128,
-              description: "Identifies one mutation and its canonical request payload.",
-              allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
-            },
-            environment: { type: "string", enum: ["dev", "prod"] },
-            profile: { type: "string", enum: ["standard", "performance"] },
-            memory_mib: { type: "integer", enum: [256, 512, 1024, 2048, 4096] },
-            confirm: { type: "boolean", const: true },
-          },
-        },
-        {
-          type: "object",
-          additionalProperties: false,
-          required: ["project_id", "idempotency_key", "environment", "confirm", "profile"],
-          properties: {
-            project_id: {
-              type: "string",
-              pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
-              description: "Project identifier.",
-            },
-            idempotency_key: {
-              type: "string",
-              minLength: 1,
-              maxLength: 128,
-              description: "Identifies one mutation and its canonical request payload.",
-              allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
-            },
-            environment: { type: "string", enum: ["dev", "prod"] },
-            profile: { type: "string", enum: ["standard", "performance"] },
-            memory_mib: { type: "integer", enum: [256, 512, 1024, 2048, 4096] },
-            confirm: { type: "boolean", const: true },
-          },
-        },
-      ],
+      required: ["project_id", "idempotency_key", "environment", "commit_sha", "confirm"],
       properties: {
         project_id: {
           type: "string",
@@ -28012,8 +28577,11 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
           allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
         },
         environment: { type: "string", enum: ["dev", "prod"] },
-        profile: { type: "string", enum: ["standard", "performance"] },
-        memory_mib: { type: "integer", enum: [256, 512, 1024, 2048, 4096] },
+        commit_sha: {
+          type: "string",
+          pattern: "^(?!0{40}$)[0-9a-f]{40}$",
+          description: "The saved version whose migration files are applied.",
+        },
         confirm: { type: "boolean", const: true },
       },
     },
@@ -28088,6 +28656,8 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -28276,6 +28846,367 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
+                "database_write",
+                "project_recovery",
+                "other",
+              ],
+            },
+            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            age_seconds: { type: "integer", minimum: 0 },
+            usual_duration_seconds: { type: "integer", minimum: 1 },
+            wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            next_step: { type: "string", minLength: 1, maxLength: 500 },
+          },
+        },
+      },
+    },
+  },
+  {
+    name: "database_compute_set",
+    title: "Select database memory and included storage",
+    description:
+      "Choose fixed database RAM: 256, 512, 1024, 2048 or 4096 MiB. Free permits only 256 MiB; larger sizes require Paid. Included total disk is 500, 1024, 2048, 4096 or 8192 MiB, including PostgreSQL/WAL, plus seven-day backups. Prices are 10, 20, 40, 80 or 160 credits per active hour respectively, prorated. Sleep follows 300 idle seconds; sleeping has no active-RAM charge. No separate database CPU, network or connection charges apply. First read database_compute_get, explain the size, price, possible interruption and shared Dev/Prod scope, then obtain the user's choice before confirm=true. Smaller volumes need a separate data move. Poll the original operation; never duplicate a pending request. Legacy profile input applies only during provider transition. Supply exactly one of memory_mib and profile.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    operationId: "changeDatabaseCompute",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["project_id", "idempotency_key", "environment", "confirm"],
+      oneOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["project_id", "idempotency_key", "environment", "confirm", "memory_mib"],
+          properties: {
+            project_id: {
+              type: "string",
+              pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+              description: "Project identifier.",
+            },
+            idempotency_key: {
+              type: "string",
+              minLength: 1,
+              maxLength: 128,
+              description: "Identifies one mutation and its canonical request payload.",
+              allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
+            },
+            environment: { type: "string", enum: ["dev", "prod"] },
+            profile: { type: "string", enum: ["standard", "performance"] },
+            memory_mib: { type: "integer", enum: [256, 512, 1024, 2048, 4096] },
+            confirm: { type: "boolean", const: true },
+          },
+        },
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["project_id", "idempotency_key", "environment", "confirm", "profile"],
+          properties: {
+            project_id: {
+              type: "string",
+              pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+              description: "Project identifier.",
+            },
+            idempotency_key: {
+              type: "string",
+              minLength: 1,
+              maxLength: 128,
+              description: "Identifies one mutation and its canonical request payload.",
+              allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
+            },
+            environment: { type: "string", enum: ["dev", "prod"] },
+            profile: { type: "string", enum: ["standard", "performance"] },
+            memory_mib: { type: "integer", enum: [256, 512, 1024, 2048, 4096] },
+            confirm: { type: "boolean", const: true },
+          },
+        },
+      ],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        idempotency_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          description: "Identifies one mutation and its canonical request payload.",
+          allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
+        },
+        environment: { type: "string", enum: ["dev", "prod"] },
+        profile: { type: "string", enum: ["standard", "performance"] },
+        memory_mib: { type: "integer", enum: [256, 512, 1024, 2048, 4096] },
+        confirm: { type: "boolean", const: true },
+      },
+    },
+    outputSchema: {
+      type: "object",
+      description:
+        "Durable record returned for an accepted asynchronous mutation. Optional reconciliation is a current observation for queued/running work, separate from immutable terminal state. A completed reconciliation attempt alone does not mean the operation succeeded.",
+      additionalProperties: false,
+      required: ["id", "state", "created_at", "updated_at"],
+      properties: {
+        blocking_operation_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description:
+            "The active operation holding this queued operation's project mutation claim.",
+        },
+        deployment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description:
+            "The deployment this operation created (deploy, promotion or rollback), in every state. After a failure, read its diagnostics with deployment logs.",
+        },
+        id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        state: { type: "string", enum: ["queued", "running", "succeeded", "failed", "cancelled"] },
+        created_at: { type: "string", format: "date-time" },
+        updated_at: { type: "string", format: "date-time" },
+        result: { type: "object", additionalProperties: true },
+        error: {
+          type: "object",
+          additionalProperties: false,
+          required: ["code", "message", "retryable", "suggested_action"],
+          properties: {
+            migration: {
+              type: "object",
+              additionalProperties: false,
+              required: ["reason", "file"],
+              description:
+                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+              properties: {
+                reason: {
+                  type: "string",
+                  enum: ["catalog_changed", "execution_failed", "ledger_conflict", "not_admitted"],
+                },
+                file: { oneOf: [{ type: "string", maxLength: 512 }, { type: "null" }] },
+                statement_index: { type: "integer", minimum: 1, maximum: 9007199254740991 },
+                sqlstate: { type: "string", pattern: "^[0-9A-Z]{5}$" },
+              },
+            },
+            code: {
+              type: "string",
+              enum: [
+                "operation_failed",
+                "operation_abandoned",
+                "native_auth_launch_unavailable",
+                "authorization_changed",
+                "source_commit_conflict",
+                "source_snapshot_invalid",
+                "source_upload_expired",
+                "recovery_dispatch_failed",
+                "recovery_job_failed",
+                "recovery_input_expired",
+                "recovery_database_unavailable",
+                "recovery_checksum_mismatch",
+                "recovery_scope_unavailable",
+                "recovery_archive_too_large",
+                "build_not_started",
+                "build_failed",
+                "database_write_rejected",
+                "database_write_unavailable",
+                "database_write_outcome_unknown",
+                "database_compute_failed",
+                "database_compute_plan_changed",
+                "database_compute_rejected",
+                "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
+                "insufficient_organization_credits",
+                "project_budget_exceeded",
+                "paid_plan_required",
+                "runtime_candidate_failed",
+                "runtime_candidate_rejected",
+                "storage_jurisdiction_conflict",
+                "provider_state_absent",
+                "auto_deploy_plan_rejected",
+                "auto_deploy_repository_renamed",
+                "promotion_source_stale",
+                "promotion_target_stale",
+                "project_handle_taken",
+                "managed_source_dispatch_failed",
+              ],
+            },
+            message: { type: "string", minLength: 1, maxLength: 512 },
+            retryable: {
+              type: "boolean",
+              const: false,
+              description:
+                "A terminal operation cannot be retried in place; follow suggested_action.",
+            },
+            suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            detail: {
+              type: "string",
+              minLength: 1,
+              maxLength: 2000,
+              description:
+                "Present only on auto_deploy_plan_rejected when planning the pushed commit returned a typed refusal. It is the same fixed catalog sentence that the planning 409 problem returns as detail, naming the file, the rule and the required change.",
+            },
+          },
+        },
+        progress: {
+          type: "object",
+          additionalProperties: false,
+          description:
+            "Current deployment dependency observation, separate from immutable operation history. Poll the same operation; mail readiness does not mean application activation.",
+          required: [
+            "phase",
+            "project_id",
+            "deployment_id",
+            "observed_at",
+            "next_poll_after_seconds",
+            "suggested_action",
+          ],
+          properties: {
+            mail: {
+              type: "object",
+              additionalProperties: false,
+              required: ["domain", "status", "configured_at", "dns_records"],
+              description:
+                "Current mail verification details, present only while waiting_for_mail. Follow these records without rebuilding the deployment.",
+              properties: {
+                domain: { type: "string", minLength: 1, maxLength: 253 },
+                status: {
+                  type: "string",
+                  enum: [
+                    "configured",
+                    "delegation_required",
+                    "ready",
+                    "verification_pending",
+                    "verification_failed",
+                  ],
+                },
+                configured_at: { type: "string", format: "date-time" },
+                observed_at: { type: "string", format: "date-time" },
+                verification_issue: {
+                  oneOf: [
+                    {
+                      type: "string",
+                      enum: [
+                        "identity_missing",
+                        "identity_verification_failed",
+                        "dkim_verification_failed",
+                        "dkim_records_changed",
+                        "tenant_association_missing",
+                      ],
+                    },
+                    { type: "null" },
+                  ],
+                },
+                next_check_after_seconds: {
+                  oneOf: [{ type: "integer", enum: [60, 3600] }, { type: "null" }],
+                },
+                sending: { type: "string", enum: ["disabled", "pending", "ready", "failed"] },
+                receiving: { type: "string", enum: ["disabled", "pending", "ready", "failed"] },
+                dns_records: {
+                  type: "array",
+                  maxItems: 64,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["type", "name", "value", "status"],
+                    properties: {
+                      type: { type: "string", enum: ["MX", "TXT", "CNAME"] },
+                      name: { type: "string", minLength: 1, maxLength: 253 },
+                      value: { type: "string", minLength: 1, maxLength: 4096 },
+                      status: { type: "string", minLength: 1, maxLength: 64 },
+                      priority: { type: "integer", minimum: 0, maximum: 65535 },
+                    },
+                  },
+                },
+              },
+            },
+            build_completed_at: {
+              type: "string",
+              format: "date-time",
+              description:
+                "Actual successful build completion time when this operation ran a build; omitted for reused artifacts without a current build.",
+            },
+            phase: {
+              type: "string",
+              enum: [
+                "queued",
+                "building",
+                "publishing",
+                "waiting_for_mail",
+                "mail_status_unavailable",
+              ],
+            },
+            project_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            deployment_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+            observed_at: { type: "string", format: "date-time" },
+            next_poll_after_seconds: { type: "integer", const: 60 },
+            suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+          },
+        },
+        reconciliation: {
+          type: "object",
+          additionalProperties: false,
+          required: ["state", "attempt_id", "observed_at", "suggested_action"],
+          properties: {
+            state: { type: "string", enum: ["required", "pending"] },
+            attempt_id: {
+              oneOf: [{ type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" }, { type: "null" }],
+              description:
+                "Active attempt for pending reconciliation; null when a new confirmed reconciliation is required.",
+            },
+            observed_at: { type: "string", format: "date-time" },
+            suggested_action: { type: "string", minLength: 1, maxLength: 500 },
+            code: { type: "string", const: "reconciliation_required" },
+            failing_step: {
+              type: "string",
+              enum: [
+                "provider_verification",
+                "workflow_execution",
+                "dispatch",
+                "workflow_recovery",
+              ],
+            },
+            cause: {
+              type: "string",
+              enum: [
+                "provider_observation_uncertain",
+                "workflow_ended",
+                "delivery_unconfirmed",
+                "unknown",
+              ],
+            },
+            can_reconcile: {
+              type: "boolean",
+              description:
+                "The recorded recovery budget allows one attempt. This does not guarantee recovery will succeed.",
+            },
+          },
+        },
+        work: {
+          type: "object",
+          description:
+            "Current work on an operation status read. Usual duration is an estimate in seconds.",
+          additionalProperties: false,
+          required: ["kind", "step", "age_seconds", "usual_duration_seconds"],
+          properties: {
+            kind: {
+              type: "string",
+              enum: [
+                "project_create",
+                "development_environment_add",
+                "project_handle_change",
+                "deployment",
+                "deployment_promotion",
+                "deployment_rollback",
+                "source_link",
+                "source_initialize",
+                "source_save",
+                "project_delete",
+                "project_data_change",
+                "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -28506,6 +29437,8 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                     "database_compute_plan_changed",
                     "database_compute_rejected",
                     "database_migration_failed",
+                    "database_migrate_failed",
+                    "database_migrate_unavailable",
                     "insufficient_organization_credits",
                     "project_budget_exceeded",
                     "paid_plan_required",
@@ -30954,6 +31887,8 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "database_compute_plan_changed",
                 "database_compute_rejected",
                 "database_migration_failed",
+                "database_migrate_failed",
+                "database_migrate_unavailable",
                 "insufficient_organization_credits",
                 "project_budget_exceeded",
                 "paid_plan_required",
@@ -31142,6 +32077,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "project_delete",
                 "project_data_change",
                 "database_compute_change",
+                "database_migration",
                 "database_write",
                 "project_recovery",
                 "other",
@@ -31388,6 +32324,13 @@ export interface RemoteOperationInputs {
       NonNullable<Parameters<typeof deletePaidProjectDomain>[0]>["paidDomainRequest"]
     >["hostname"];
     confirm: true;
+  };
+  migrateDatabase: {
+    project_id: NonNullable<Parameters<typeof migrateDatabase>[0]>["project_id"];
+    idempotency_key: NonNullable<Parameters<typeof migrateDatabase>[0]>["Idempotency-Key"];
+    environment: NonNullable<Parameters<typeof migrateDatabase>[0]>["environment"];
+    commit_sha: NonNullable<Parameters<typeof migrateDatabase>[0]>["commit_sha"];
+    confirm: NonNullable<Parameters<typeof migrateDatabase>[0]>["confirm"];
   };
   changeDatabaseCompute: {
     project_id: NonNullable<Parameters<typeof changeDatabaseCompute>[0]>["project_id"];
@@ -32010,6 +32953,17 @@ export async function executeRemoteOperation<K extends RemoteOperationId>(
         paidDomainRequest: { hostname: value["hostname"] },
       };
       return deletePaidProjectDomain(parameters, { client });
+    }
+    case "migrateDatabase": {
+      const value = input as RemoteOperationInputs["migrateDatabase"];
+      const parameters: NonNullable<Parameters<typeof migrateDatabase>[0]> = {
+        project_id: value["project_id"],
+        "Idempotency-Key": value["idempotency_key"],
+        environment: value["environment"],
+        commit_sha: value["commit_sha"],
+        confirm: value["confirm"],
+      };
+      return migrateDatabase(parameters, { client });
     }
     case "changeDatabaseCompute": {
       const value = input as RemoteOperationInputs["changeDatabaseCompute"];

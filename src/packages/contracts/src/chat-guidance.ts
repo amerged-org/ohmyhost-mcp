@@ -204,12 +204,53 @@ export const CHAT_MAIN_PATH_INSTRUCTIONS =
   "Preview, Dev site and live site are different: the preview is a private live preview for every plan; the Dev site (Paid only) and the live site are deployments. " +
   "When ready_to_show is true, give the user the preview link and ask whether they would like to see it. Publish with deployment_plan and deployment_create when the user asks to publish, deploy or go live. " +
   "A preview link works for at most 24 hours; if a result carries failure, follow its next_step instead of waiting. " +
+  "The preview shows the app but does not save data: saving works once the app is published (the Dev site on Paid, the live site on Free), after database_migrate has created its tables; never tell the user that the preview saves data. " +
+  "If data.state is needs_database or migrations_pending, ask the user where to apply the database changes (data.options) and call database_migrate only with their answer; data never delays the preview link, and not_required and ready need nothing. " +
   "Results may carry next_step for you and say_to_user for the user. Say it in the user's language. Share IDs, commits, states and codes only on request. ";
 
 export const PREVIEW_OPEN_DESCRIPTION =
-  "Open or create the private live preview for this project and environment and return its link, state, expires_at, failure and ready_to_show. Available on Free and Paid. Source saves update it without a deployment. The link is for the user: hand it over when ready_to_show is true. Private means: keep it out of source files, notes and logs. The link is valid for at most 24 hours from creation; the preview sleeps after 10 minutes without activity and wakes when the link is opened, and preview_open makes a new preview and link after the 24 hours. If the start failed, failure carries a code and next_step: follow it instead of waiting.";
+  "Open or create the private live preview for this project and environment and return its link, state, expires_at, failure, data and ready_to_show. Available on Free and Paid. Source saves update it without a deployment. The link is for the user: hand it over when ready_to_show is true. Private means: keep it out of source files, notes and logs. The link is valid for at most 24 hours from creation; the preview sleeps after 10 minutes without activity and wakes when the link is opened, and preview_open makes a new preview and link after the 24 hours. If the start failed, failure carries a code and next_step: follow it instead of waiting. data says whether the app's database has its tables and never delays ready_to_show. The preview shows the app but does not save data: saving works once the app is published, after database_migrate.";
 export const PREVIEW_GET_DESCRIPTION =
-  "Read the private live preview for this project and environment: its link, state, saved and applied version, expires_at, failure and ready_to_show. The link is for the user: hand it over when ready_to_show is true. Private means: keep it out of source files, notes and logs. The link is valid for at most 24 hours from creation. If the start failed, failure carries a code and next_step: follow it instead of waiting.";
+  "Read the private live preview for this project and environment: its link, state, saved and applied version, expires_at, failure, data and ready_to_show. The link is for the user: hand it over when ready_to_show is true. Private means: keep it out of source files, notes and logs. The link is valid for at most 24 hours from creation. If the start failed, failure carries a code and next_step: follow it instead of waiting. data says whether the app's database has its tables and never delays ready_to_show. The preview shows the app but does not save data: saving works once the app is published, after database_migrate.";
+
+/** The question the user answers before database files are applied; the platform never chooses where. */
+function previewDataGuidance(view: ChatResult): ChatGuidance | null {
+  const data = view["data"];
+  if (typeof data !== "object" || data === null) return null;
+  const { state, options, shares_data_with, pending_files } = data as Record<string, unknown>;
+  if (state !== "needs_database" && state !== "migrations_pending") return null;
+  // A newer saved version is still being applied: the database facts are those of the version it replaces.
+  const applied = view["applied_source"],
+    saved = view["source"];
+  if (
+    typeof applied !== "object" ||
+    applied === null ||
+    typeof saved !== "object" ||
+    saved === null ||
+    (applied as Record<string, unknown>)["sequence"] !==
+      (saved as Record<string, unknown>)["sequence"]
+  )
+    return null;
+  const onlyProd = Array.isArray(options) && options.length === 1;
+  const shared = shares_data_with === "prod";
+  const first = Array.isArray(pending_files) ? pending_files.slice(0, 3).join(", ") : "";
+  const what =
+    state === "needs_database" ? "Your app stores data." : "I saved new database changes.";
+  const say_to_user = onlyProd
+    ? state === "needs_database"
+      ? `${what} I can create its tables in your live database, which is the one your published site will use. Shall I do that?`
+      : `${what} I can apply them to your live database, which is the one your published site uses. Shall I do that?`
+    : `${what} I can ${state === "needs_database" ? "create its tables" : "apply them"} in your Dev database, or in Dev and Prod. Which do you want?${shared ? " Dev and Prod are one database here, so either choice changes both." : ""}`;
+  const source = view["source"];
+  const commit =
+    typeof source === "object" && source !== null
+      ? String((source as Record<string, unknown>)["commit_sha"] ?? "")
+      : "";
+  return {
+    next_step: `The app's database is not ready (${String(state)}${first === "" ? "" : `; files not applied: ${first}`}). Ask the user where to apply the database changes: data.options lists the choices, and a Free workspace or a project without Dev applies to prod. Never choose for the user. After the answer call database_migrate with that environment, the saved commit_sha${commit === "" ? "" : ` ${commit}`}, confirm true and a new idempotency key, once per environment with dev first, read operation_get until it succeeds, then read preview_get again.`,
+    say_to_user,
+  };
+}
 
 export function previewGuidance(view: ChatResult): ChatGuidance | null {
   if (view["source"] === null)
@@ -219,12 +260,24 @@ export function previewGuidance(view: ChatResult): ChatGuidance | null {
     };
   const url = view["url"];
   if (typeof url !== "string" || !Object.hasOwn(view, "source")) return null;
-  if (view["ready_to_show"] === true)
-    return {
+  if (view["ready_to_show"] === true) {
+    const ready = {
       next_step:
         "The preview shows the saved version. Give the user this link exactly as returned and ask whether they want to see it.",
       say_to_user: `Your app is ready as a private preview: ${url} Do you want to see it?`,
     };
+    const data = view["data"];
+    const state =
+      typeof data === "object" && data !== null ? (data as Record<string, unknown>)["state"] : null;
+    if (state !== "needs_database" && state !== "migrations_pending" && state !== "ready")
+      return ready;
+    // The preview shows the app, never its data: the link is given first, and the database question follows it.
+    const question = previewDataGuidance(view);
+    return {
+      next_step: `${ready.next_step} The preview shows the app but does not save data: saving works once the app is published (the Dev site on Paid, the live site on Free), after database_migrate has created its tables. Never say that the preview saves data.${question === null ? "" : ` ${question.next_step}`}`,
+      say_to_user: `${ready.say_to_user} The preview shows your app; saving data works once it is published.${question?.say_to_user === undefined ? "" : ` ${question.say_to_user}`}`,
+    };
+  }
   const failure = view["failure"];
   if (
     typeof failure === "object" &&
@@ -272,7 +325,7 @@ export function projectCreateGuidance(
   if (result["state"] !== "queued" || typeof result["project_id"] !== "string") return null;
   return {
     next_step: starterRequested
-      ? "The project exists and its starter files are being prepared, usually in under a minute. Read source_get until the source is ready, then save the app with source_changes using its current commit and generation. Do not initialize the source again."
+      ? "The project exists and its starter files are being prepared, usually in under a minute. Read source_get until the source is ready, then save the app with source_changes using its current commit and generation. The starter's package.json already lists @ohmyhost/customer-runtime for the database, mail and storage clients: keep that line. Do not initialize the source again."
       : "The project exists. Read operation_get until it succeeds, then read the source binding with source_get. If there is no source, use source_initialize for managed source or source_link for the chosen GitHub repository.",
     say_to_user: "Your project is set up. I am building the first version now.",
   };
@@ -312,6 +365,7 @@ const usualOperationSeconds = {
   project_delete: 300,
   project_data_change: 300,
   database_compute_change: 300,
+  database_migration: 180,
   database_write: 60,
   project_recovery: 600,
   other: 300,

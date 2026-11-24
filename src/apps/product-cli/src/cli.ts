@@ -479,6 +479,9 @@ const HELP_USAGE = Object.freeze({
   "database compute set":
     "ohmyhost database compute set --project ULID --environment dev|prod --memory-mib 256|512|1024|2048|4096 --idempotency-key KEY --yes [--wait] --json\n" +
     "  10/20/40/80/160 credits per active hour, prorated; includes 500 MiB/1/2/4/8 GiB total disk and seven-day backups. Free supports 256 MiB; larger sizes require Paid. Sleep after 300 idle seconds. No separate database CPU, network or connection charge. Smaller disk requires a separate data migration. Transitional --profile standard|performance is accepted only for legacy provider use; never combine it with --memory-mib.",
+  "database migrate":
+    "ohmyhost database migrate --project ULID --environment dev|prod --commit SHA --idempotency-key KEY --yes [--wait] --json\n" +
+    "  Applies the migration files of the saved commit to that environment's database and creates the database when it has none. Ask the user where first: Free applies to prod; with a Dev site choose dev only, or dev and then prod (one call each). Never builds, deploys or publishes.",
   "database compute get":
     "ohmyhost database compute get --project ULID [--environment dev|prod] --json",
   "database write":
@@ -1273,6 +1276,15 @@ export class ProductCli {
         let operation = parseOperation(await api.changeDatabaseCompute(command));
         if (command.wait) operation = await this.waitForOperation(api, operation, signal);
         return success("database compute set", {
+          status: command.wait ? "completed" : "accepted",
+          operation,
+        });
+      }
+      if (command.kind === "database-migrate") {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        let operation = parseOperation(await api.migrateDatabase(command));
+        if (command.wait) operation = await this.waitForOperation(api, operation, signal);
+        return success("database migrate", {
           status: command.wait ? "completed" : "accepted",
           operation,
         });
@@ -4169,6 +4181,7 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
     return "organization mcp-connections revoke";
   if (command.kind === "project-list") return "project list";
   if (command.kind === "database-compute-set") return "database compute set";
+  if (command.kind === "database-migrate") return "database migrate";
   if (command.kind === "database-compute-get") return "database compute get";
   if (command.kind === "project-context") return "project context";
   if (command.kind === "project-notes-set") return "project notes set";

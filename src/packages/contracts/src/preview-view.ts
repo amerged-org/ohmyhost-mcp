@@ -51,6 +51,68 @@ export function previewRetryAfterSeconds(
   return remaining > 0 ? Math.min(remaining, PREVIEW_RETRY_AFTER_SECONDS) : null;
 }
 
+/** What the app's database holds, in the words an assistant asks the user. It informs; it never delays showing the preview. */
+export interface PreviewDataView {
+  readonly state: "not_required" | "needs_database" | "migrations_pending" | "ready";
+  readonly environment: "dev" | "prod";
+  /** Prod when this Dev database is also Prod's; null otherwise. */
+  readonly shares_data_with: "prod" | null;
+  /** The environments sets the user can choose to apply the migration files in, in call order. */
+  readonly options: ("dev" | "prod")[][];
+  /** Saved migration files the environment's database does not hold yet; at most 20. */
+  readonly pending_files: string[];
+}
+
+const DATA_STATES = ["not_required", "needs_database", "migrations_pending", "ready"] as const;
+const PENDING_FILES_SHOWN = 20;
+
+/**
+ * The database facts of one environment, from what the applied source declares and what the database holds.
+ * Null until a source has been applied, and for a source whose database was never recorded (an older runtime). Files
+ * count as applied only when a finished migration job applied exactly the declared names and contents; every other
+ * way of holding the same names (a deployment, an older receipt) is `migrations_pending` until the job runs once
+ * more. Free and a project without Dev apply to Prod; a Paid project with Dev chooses Dev only, or Dev and then Prod.
+ */
+export function previewDataView(input: {
+  readonly environment: "dev" | "prod";
+  readonly appliedDatabase: {
+    readonly enabled: boolean;
+    readonly migrations: readonly string[];
+    readonly filesSha256?: string;
+  } | null;
+  readonly dataMode: "shared" | "isolated";
+  readonly registered: boolean;
+  readonly appliedPaths: readonly string[];
+  readonly filesApplied: boolean;
+  readonly developmentAvailable: boolean;
+}): PreviewDataView | null {
+  if (input.appliedDatabase === null) return null;
+  const held = new Set(input.appliedPaths);
+  const pending = input.registered
+    ? input.appliedDatabase.migrations.filter((path) => !held.has(path))
+    : [...input.appliedDatabase.migrations];
+  const verified =
+    input.appliedDatabase.migrations.length === 0 ||
+    (input.appliedDatabase.filesSha256 !== undefined && input.filesApplied);
+  const state: PreviewDataView["state"] = !input.appliedDatabase.enabled
+    ? "not_required"
+    : !input.registered
+      ? "needs_database"
+      : pending.length > 0 || !verified
+        ? "migrations_pending"
+        : "ready";
+  return {
+    state,
+    environment: input.environment,
+    shares_data_with: input.environment === "dev" && input.dataMode === "shared" ? "prod" : null,
+    options: input.developmentAvailable ? [["dev"], ["dev", "prod"]] : [["prod"]],
+    pending_files:
+      state === "needs_database" || state === "migrations_pending"
+        ? pending.slice(0, PENDING_FILES_SHOWN)
+        : [],
+  };
+}
+
 /** Public preview response, validated before a CLI or agent presents its private URL. */
 export interface PreviewView {
   readonly id: string;
@@ -65,6 +127,8 @@ export interface PreviewView {
   readonly expires_at: string;
   readonly failure: PreviewFailureView | null;
   readonly retry_after_seconds: number | null;
+  /** Null until a source has been applied; then what the app's database needs. */
+  readonly data: PreviewDataView | null;
 }
 
 export function parsePreviewView(
@@ -77,7 +141,7 @@ export function parsePreviewView(
   const ulid = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u;
   if (
     Object.keys(row).sort().join(",") !==
-      "applied_source,environment,expires_at,failure,id,project_id,ready_to_show,retry_after_seconds,source,status,url" ||
+      "applied_source,data,environment,expires_at,failure,id,project_id,ready_to_show,retry_after_seconds,source,status,url" ||
     typeof row["id"] !== "string" ||
     !ulid.test(row["id"]) ||
     typeof row["project_id"] !== "string" ||
@@ -114,7 +178,39 @@ export function parsePreviewView(
       throw new TypeError("Invalid preview response");
   }
   parsePreviewFailure(row["failure"]);
+  parsePreviewData(row["data"]);
   return value as PreviewView;
+}
+
+function parsePreviewData(value: unknown): void {
+  if (value === null) return;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new TypeError("Invalid preview response");
+  const item = value as Record<string, unknown>;
+  const environments = (entry: unknown) => entry === "dev" || entry === "prod";
+  if (
+    Object.keys(item).sort().join(",") !==
+      "environment,options,pending_files,shares_data_with,state" ||
+    !DATA_STATES.includes(item["state"] as (typeof DATA_STATES)[number]) ||
+    !environments(item["environment"]) ||
+    (item["shares_data_with"] !== null && item["shares_data_with"] !== "prod") ||
+    !Array.isArray(item["options"]) ||
+    item["options"].length < 1 ||
+    item["options"].length > 2 ||
+    !item["options"].every(
+      (option) =>
+        Array.isArray(option) &&
+        option.length >= 1 &&
+        option.length <= 2 &&
+        option.every(environments),
+    ) ||
+    !Array.isArray(item["pending_files"]) ||
+    item["pending_files"].length > PENDING_FILES_SHOWN ||
+    !item["pending_files"].every(
+      (path) => typeof path === "string" && path.length > 0 && path.length <= 512,
+    )
+  )
+    throw new TypeError("Invalid preview response");
 }
 
 function parsePreviewFailure(value: unknown): void {

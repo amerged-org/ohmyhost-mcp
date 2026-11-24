@@ -15,6 +15,11 @@
       "types": "./dist/native-auth.d.ts",
       "import": "./dist/native-auth.js"
     },
+    "./database-migrations": {
+      "source": "./src/database-migrations.ts",
+      "types": "./dist/database-migrations.d.ts",
+      "import": "./dist/database-migrations.js"
+    },
     "./database-sizes": {
       "source": "./src/database-sizes.ts",
       "types": "./dist/database-sizes.d.ts",

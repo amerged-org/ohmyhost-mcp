@@ -217,6 +217,12 @@ export interface LocalMcpProductClient {
     projectId: string;
     environment: "dev" | "prod";
   }): Promise<import("@ohmyhost/contracts/database-compute").DatabaseComputeRead>;
+  migrateDatabase(input: {
+    projectId: string;
+    environment: "dev" | "prod";
+    commitSha: string;
+    idempotencyKey: string;
+  }): Promise<import("@ohmyhost/sdk-ts").Operation>;
   getProjectContext(
     projectId: string,
   ): Promise<import("@ohmyhost/contracts/project-context").ProjectContext>;
@@ -769,6 +775,28 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
         ...(input.memory_mib === undefined
           ? { profile: z.enum(["standard", "performance"]).parse(input.profile) }
           : { memoryMiB: input.memory_mib }),
+        idempotencyKey: input.idempotency_key,
+      }),
+    mutationAnnotations(),
+  );
+
+  registerProductTool(
+    server,
+    dependencies,
+    "database_migrate",
+    "Apply the migration files of one saved version to the Dev or Prod database of this project, and create that database first when the environment has none. Call it only after the user said where to apply them: Free and a project without Dev apply to prod; with a Dev site ask whether dev only or dev and prod (call it once per environment, dev first). When Dev and Prod share data it is one database; say so. Files already applied are skipped; an applied file that was edited is refused, so add a new file instead. It never builds, deploys or publishes. The preview shows the app but does not save data: saving works once the app is published. Pass the commit_sha that source_changes returned. A saved version with a noncanonical file name, no migration file or no database in ohmyhost.yaml is refused at once with its reason. The job starts within about a minute of the 202; poll the original operation with operation_get; a failed file is named in error.migration. Dev needs an active Paid workspace; Prod, and a Dev that shares its database with Prod, need publication permission on the connection. A job that ends database_migrate_unavailable applied nothing half: call it again, which starts a new job and skips the applied files.",
+    z.object({
+      project_id: identifier,
+      environment: z.enum(["dev", "prod"]),
+      commit_sha: z.string().regex(/^(?!0{40}$)[0-9a-f]{40}$/u),
+      confirm: z.literal(true),
+      idempotency_key: idempotencyKey,
+    }),
+    (client, input) =>
+      client.migrateDatabase({
+        projectId: input.project_id,
+        environment: input.environment,
+        commitSha: input.commit_sha,
         idempotencyKey: input.idempotency_key,
       }),
     mutationAnnotations(),
@@ -2454,7 +2482,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "source_link",
-    "Link a repository covered by the workspace GitHub connection. Call github_status first and github_connect once if needed. This returns an operation without another browser consent and never starts a build. Wait for that operation before planning a deploy. If repository access is missing, update the installation using the returned settings action, then retry the same project and key. Never ask for an installation ID or provider token. Errors name the account the call ran as (acting_as): resource_not_found means that account cannot see the project (use the login of the account that owns it), github_connection_required means that workspace has no GitHub connection yet, and repository_not_installed means its GitHub App installation does not cover the repository.",
+    "Link a repository covered by the workspace GitHub connection. Call github_status first and github_connect once if needed. This returns an operation without another browser consent and never starts a build. Wait for that operation before planning a deploy. If repository access is missing, update the installation using the returned settings action, then retry the same project and key. Never ask for an installation ID or provider token. A project whose source is managed by ohmyho.st cannot be linked to GitHub (409 source_switch_unsupported): create a new project that starts from the GitHub repository instead. Errors name the account the call ran as (acting_as): resource_not_found means that account cannot see the project (use the login of the account that owns it), github_connection_required means that workspace has no GitHub connection yet, and repository_not_installed means its GitHub App installation does not cover the repository.",
     z.object({
       project_id: identifier,
       repository_owner: identifier,

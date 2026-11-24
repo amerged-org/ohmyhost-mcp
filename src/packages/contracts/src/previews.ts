@@ -110,6 +110,8 @@ export interface PreviewRecord {
   readonly state: PreviewState;
   readonly targetSource: SourceVersion | null;
   readonly appliedSource: SourceVersion | null;
+  /** What the applied source declares for its database; null until a source has been applied. */
+  readonly appliedDatabase: PreviewSourceDatabase | null;
   readonly lastActivityAt: string;
   /** Immutable: creation plus 24 hours. The link stops working here and the next open starts afresh. */
   readonly expiresAt: string;
@@ -118,6 +120,19 @@ export interface PreviewRecord {
   /** Non-null while Dev is entitled; runtime must recheck at this deadline. */
   readonly paidUntil: string | null;
   readonly retirement: "none" | "rotating" | "destroying" | "suspended";
+}
+
+/**
+ * The facts of one environment's database: whether it is registered, which migration files it holds, whether a
+ * migration job applied exactly the files the preview declares (`filesSha256`), and whether the project offers Dev
+ * (a Dev environment of a Paid workspace).
+ */
+export interface PreviewDatabaseState {
+  readonly dataMode: "shared" | "isolated";
+  readonly registered: boolean;
+  readonly appliedPaths: readonly string[];
+  readonly filesApplied: boolean;
+  readonly developmentAvailable: boolean;
 }
 
 /** Returned exclusively to the authorized Control API; never to a guest or a public client. */
@@ -198,6 +213,13 @@ export interface ProductApiPreviewRuntime {
     readonly organizationId: string;
     readonly projectId: string;
   }): Promise<readonly { readonly previewId: string; readonly sequence: number }[]>;
+  /** What the environment's database holds, for the preview's `data`; read only after `get` authorized the scope. */
+  readDatabaseState(input: {
+    readonly organizationId: string;
+    readonly projectId: string;
+    readonly environment: PreviewEnvironment;
+    readonly filesSha256?: string;
+  }): Promise<PreviewDatabaseState>;
   ensure(input: EnsurePreviewInput): Promise<PreviewCustomerRecord>;
   rotate(input: RotatePreviewInput): Promise<PreviewCustomerRecord>;
   confirmRotation(input: PreviewRuntimeFence): Promise<void>;
@@ -281,6 +303,8 @@ export interface ProjectPreviewRuntime {
     input: PreviewRuntimeFence & {
       readonly expectedRowVersion: number;
       readonly source: SourceVersion;
+      /** Core also accepts a runtime that sends none (rollout order): the database state is then unknown. */
+      readonly database: PreviewSourceDatabase;
     },
   ): Promise<PreviewRuntimeRecord>;
   recordBackup(
@@ -554,9 +578,19 @@ export interface PreviewSourceInspection<FrameworkPlan = unknown> {
     sha256: string;
   }>;
 }
+/** Whether a saved version declares a database and the migration files it holds, relative to their folder. */
+export interface PreviewSourceDatabase {
+  readonly enabled: boolean;
+  readonly migrations: readonly string[];
+  /** `migrationFilesSha256` of the listed files; an older runtime sends none, which leaves the database state unknown. */
+  readonly filesSha256?: string;
+}
+/** The most migration files a version may hold; the same bound as a build. */
+export const PREVIEW_DATABASE_MAXIMUM_MIGRATIONS = 128;
 export interface PreviewSourceDelta<FrameworkPlan = unknown> extends PreviewSourcePatch {
   readonly install: PreviewSourceInstall | null;
   readonly inspection: PreviewSourceInspection<FrameworkPlan>;
+  readonly database: PreviewSourceDatabase;
 }
 
 /** What an assistant reads and says for each failure; the code, not text, is what Core stores. */

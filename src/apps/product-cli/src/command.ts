@@ -222,6 +222,15 @@ export type ProductCliCommand =
       readonly credentialStore: "native";
     } & DatabaseComputeSelection)
   | {
+      readonly kind: "database-migrate";
+      readonly projectId: string;
+      readonly environment: "dev" | "prod";
+      readonly commitSha: string;
+      readonly idempotencyKey: string;
+      readonly wait: boolean;
+      readonly credentialStore: "native";
+    }
+  | {
       readonly kind: "database-compute-get";
       readonly projectId: string;
       readonly environment: "dev" | "prod";
@@ -1180,6 +1189,7 @@ export type RecognizedCommandLabel =
   | "project data plan"
   | "project data change"
   | "database compute set"
+  | "database migrate"
   | "database compute get"
   | "project context"
   | "project notes set"
@@ -1451,6 +1461,7 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
       return "project flag set";
     if (value === "database" && values[0] === "compute" && values[1] === "set")
       return "database compute set";
+    if (value === "database" && values[0] === "migrate") return "database migrate";
     if (value === "database" && values[0] === "compute" && values[1] === "get")
       return "database compute get";
     if (value === "database" && values[0] === "write") return "database write";
@@ -2753,6 +2764,32 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       projectId: options["--project"],
       environment: options["--environment"],
       ...selection,
+      idempotencyKey: options["--idempotency-key"],
+      wait,
+      credentialStore,
+    };
+  }
+  if (first === "database" && values[0] === "migrate") {
+    values.shift();
+    if (!yes || follow || stdin || revoke) throw new InvalidCommandError();
+    const options = parseOptionalOptions(values, [
+      "--project",
+      "--environment",
+      "--commit",
+      "--idempotency-key",
+    ]);
+    if (
+      !options["--project"] ||
+      !options["--idempotency-key"] ||
+      (options["--environment"] !== "dev" && options["--environment"] !== "prod") ||
+      !/^(?!0{40}$)[0-9a-f]{40}$/u.test(options["--commit"] ?? "")
+    )
+      throw new InvalidCommandError();
+    return {
+      kind: "database-migrate",
+      projectId: options["--project"],
+      environment: options["--environment"],
+      commitSha: options["--commit"] as string,
       idempotencyKey: options["--idempotency-key"],
       wait,
       credentialStore,

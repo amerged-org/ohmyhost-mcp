@@ -27,6 +27,16 @@ export const PROBLEM_POLICY = {
       "Read the project's current source and generation, reconcile any source switch, then prepare a new request.",
     title: "Source binding changed",
   },
+  source_switch_unsupported: {
+    side: "not_set_up",
+    next_step:
+      "Use source_get to read the current binding. Continue saving managed versions on this project, or ask the owner to approve a separate GitHub-backed project if GitHub source is required.",
+    status: 409,
+    retryable: false,
+    action:
+      "Read the project's current source. Continue saving managed versions on this project, or have the owner approve a separate GitHub-backed project if GitHub source is required.",
+    title: "Source switch to GitHub is unsupported",
+  },
   source_commit_conflict: {
     side: "yours",
     next_step:
@@ -1111,7 +1121,51 @@ export const PROBLEM_POLICY = {
     retryable: true,
     title: "Project change is still running",
     action:
-      "Another change to this project, such as a database write, a compute change or a data change, has not finished. Read the project with 'ohmyhost project status --project ULID --json', wait until it completes, then repeat the request with a new idempotency key. A deletion is also refused while a SQL export of the project is being captured, for up to about ten minutes ('ohmyhost export get').",
+      "Another change to this project, such as a database write, a compute change, a database migration or a data change, has not finished. Read the project with 'ohmyhost project status --project ULID --json', wait until it completes, then repeat the request with a new idempotency key. A deletion is also refused while a SQL export of the project is being captured, for up to about ten minutes ('ohmyhost export get').",
+  },
+  database_migrate_no_files: {
+    side: "yours",
+    next_step:
+      "Read ohmyhost.yaml and the folder named in database.migrations with source_files. Declare database.enabled and add at least one YYYYMMDDHHMMSS_name.sql file, save with source_changes, then call database_migrate with the new commit_sha.",
+    status: 409,
+    retryable: false,
+    title: "No database migration files",
+    action:
+      "The saved version declares no database or its migrations folder holds no file. Set database.enabled: true and database.migrations in ohmyhost.yaml, add migration files named YYYYMMDDHHMMSS_name.sql, save or push the corrected version, then request the migration again for its commit.",
+  },
+  database_migrate_files_invalid: {
+    side: "yours",
+    next_step:
+      "Use source_files on the folder named in database.migrations. Each migration must be a non-empty UTF-8 file of at most 256 KiB without a byte-order mark, NUL or carriage-return line endings, and the folder holds at most 128 files. Fix them, save with source_changes, then call database_migrate with the new commit_sha.",
+    status: 409,
+    retryable: false,
+    title: "Database migration files invalid",
+    action:
+      "A migration file in the saved version is empty, larger than 256 KiB, not UTF-8 text, starts with a byte-order mark, contains NUL or carriage-return line endings, or the folder holds more than 128 files. Correct the files, save or push the corrected version, then request the migration again for its commit.",
+  },
+  database_migrate_paid_required: {
+    side: "not_set_up",
+    next_step:
+      "Dev is a Paid environment. Apply the migration files to Prod with environment prod, or read organization_account_get and start billing_checkout_create only if the user asks to upgrade.",
+    say_to_user:
+      "The Dev database needs a Paid workspace. This workspace can apply the migration files to Prod only.",
+    status: 409,
+    retryable: false,
+    title: "Dev database needs Paid",
+    action:
+      "A Free workspace has no Dev database. Call database_migrate with environment prod and the same commit_sha, or ask the organization Owner to activate Paid through billing checkout and then migrate Dev. The saved version and its files are unchanged.",
+  },
+  database_migrate_publication_required: {
+    side: "not_set_up",
+    next_step:
+      "This connection may not change live data. Read connection_status, then ask the user to reconnect with publication permission before calling database_migrate again; a Dev environment with its own database needs no publication permission.",
+    say_to_user:
+      "This connection may not publish, and this migration would change the live database.",
+    status: 409,
+    retryable: false,
+    title: "Publication permission required",
+    action:
+      "Prod, and a Dev environment that shares its database with Prod, change live data, which needs publication permission on this connection. Reconnect the client with publication permission, or have a user with that permission migrate. Nothing was applied.",
   },
   auto_deploy_source_unavailable: {
     side: "not_set_up",

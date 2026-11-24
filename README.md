@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.79; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.80; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.79 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.80 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -56,6 +56,7 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `database_compute_get`: Read current managed database memory, total storage, region and observed state without running SQL or waking the database.
 - `database_compute_set`: Choose fixed database RAM: 256, 512, 1024, 2048 or 4096 MiB.
 - `database_execution_usage_get`: Read metered database execution usage: schedule runs and webhook attempts per UTC hour or day window.
+- `database_migrate`: Apply the migration files of one saved version to the Dev or Prod database of this project, and create that database first when the environment has none.
 - `database_query`: Read one owner-authorized Dev or Prod database query (at most 100 rows, five-second timeout).
 - `database_schedule_delete`: Remove one database schedule so it never runs again.
 - `database_schedule_list`: List this project's database schedules of one Dev or Prod environment (dev when omitted), with their cadence, statements, timeout and next run.
@@ -145,8 +146,8 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `organization_use`: Bind a saved login that has no organization yet to one workspace, so later calls act inside it.
 - `powered_by_flag_get`: Read whether the production site shows the opt-in "Powered by ohmyho.st" flag.
 - `powered_by_flag_set`: Owner only, ask the human first: show or hide a small "Powered by ohmyho.st" flag on the right edge of the production site.
-- `preview_get`: Read the private live preview for this project and environment: its link, state, saved and applied version, expires_at, failure and ready_to_show.
-- `preview_open`: Open or create the private live preview for this project and environment and return its link, state, expires_at, failure and ready_to_show.
+- `preview_get`: Read the private live preview for this project and environment: its link, state, saved and applied version, expires_at, failure, data and ready_to_show.
+- `preview_open`: Open or create the private live preview for this project and environment and return its link, state, expires_at, failure, data and ready_to_show.
 - `preview_rotate`: Rotate the preview URL and close old connections; the preview keeps its 24-hour deadline.
 - `preview_stop`: Stop the preview and remove backups while preserving its URL until its 24-hour deadline.
 - `profile_list`: List the saved ohmyho.st logins on this computer: each has a name, a user and an organization, never a token.
@@ -215,7 +216,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.79 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.80 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

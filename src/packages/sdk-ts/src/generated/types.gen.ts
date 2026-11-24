@@ -22,7 +22,7 @@ export type Preview = {
    */
   applied_source: PreviewSource;
   /**
-   * True when the preview is ready and its applied version has the same sequence as the saved version.
+   * True when the preview is ready and its applied version has the same sequence as the saved version. The database never delays it; the preview shows the app, and saving data works once the app is published.
    */
   ready_to_show: boolean;
   /**
@@ -37,6 +37,30 @@ export type Preview = {
    * Seconds before another start attempt is made after a failure that a retry can change, or null.
    */
   retry_after_seconds: null | number;
+  /**
+   * What the app's database holds, for information only (it never delays ready_to_show), or null until a version has been applied and its database recorded.
+   */
+  data: PreviewData;
+};
+
+export type PreviewData = null | {
+  /**
+   * not_required (the app declares no database), needs_database (declared, the environment has none), migrations_pending (a saved migration file is not applied there, or no finished migration job confirms the applied names and contents) or ready.
+   */
+  state: "not_required" | "needs_database" | "migrations_pending" | "ready";
+  environment: "dev" | "prod";
+  /**
+   * prod when this Dev database is also Prod's, otherwise null.
+   */
+  shares_data_with: null | "prod";
+  /**
+   * The environment sets the user may choose to apply the files in (Dev needs a Paid workspace and a Dev site, otherwise prod only); with more than one environment, call database_migrate once per environment, dev first.
+   */
+  options: Array<Array<"dev" | "prod">>;
+  /**
+   * Saved migration files the environment's database does not hold yet.
+   */
+  pending_files: Array<string>;
 };
 
 export type PreviewFailure = null | {
@@ -2169,6 +2193,7 @@ export type ProblemDetails = {
     | "development_environment_exists"
     | "development_environment_missing"
     | "source_generation_conflict"
+    | "source_switch_unsupported"
     | "source_commit_conflict"
     | "source_upload_conflict"
     | "source_upload_expired"
@@ -2181,6 +2206,10 @@ export type ProblemDetails = {
     | "source_syntax_error"
     | "repository_configuration_missing"
     | "migration_filename_noncanonical"
+    | "database_migrate_no_files"
+    | "database_migrate_files_invalid"
+    | "database_migrate_paid_required"
+    | "database_migrate_publication_required"
     | "environment_secret_mutation_blocked"
     | "workers_runtime_incompatible"
     | "project_handle_invalid"
@@ -2347,6 +2376,7 @@ export type OperationWork = {
     | "project_delete"
     | "project_data_change"
     | "database_compute_change"
+    | "database_migration"
     | "database_write"
     | "project_recovery"
     | "other";
@@ -2567,6 +2597,8 @@ export type OperationFailure = {
     | "database_compute_plan_changed"
     | "database_compute_rejected"
     | "database_migration_failed"
+    | "database_migrate_failed"
+    | "database_migrate_unavailable"
     | "insufficient_organization_credits"
     | "project_budget_exceeded"
     | "paid_plan_required"
@@ -10548,6 +10580,77 @@ export type StreamDeploymentLogsResponses = {
 
 export type StreamDeploymentLogsResponse =
   StreamDeploymentLogsResponses[keyof StreamDeploymentLogsResponses];
+
+export type MigrateDatabaseData = {
+  body: {
+    environment: "dev" | "prod";
+    /**
+     * The saved version whose migration files are applied.
+     */
+    commit_sha: string;
+    confirm: true;
+  };
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/database/migrations";
+};
+
+export type MigrateDatabaseErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  403: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type MigrateDatabaseError = MigrateDatabaseErrors[keyof MigrateDatabaseErrors];
+
+export type MigrateDatabaseResponses = {
+  /**
+   * The mutation was accepted for asynchronous processing.
+   */
+  202: Operation;
+};
+
+export type MigrateDatabaseResponse = MigrateDatabaseResponses[keyof MigrateDatabaseResponses];
 
 export type GetDatabaseComputeData = {
   body?: never;

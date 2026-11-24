@@ -293,6 +293,8 @@ import type {
   ManagedSourceRestoreRequest,
   ManagedSourceSwitchRequest,
   ManagedSourceUploadRequest,
+  MigrateDatabaseErrors,
+  MigrateDatabaseResponses,
   NativeAuthConfigurationUpdate,
   NativeAuthProviderUpdateWritable,
   NativeAuthUserCreate,
@@ -5250,7 +5252,7 @@ export const planProjectDeletion = <ThrowOnError extends boolean = true>(
 /**
  * Link a GitHub source repository
  *
- * Uses the workspace GitHub connection to admit a source-link operation without another browser authorization or a build. The caller must have current sources:link permission and the connected installation must cover the repository. If the workspace is not connected, run github connect first; if repository access is missing, update the installation through its settings URL. Repeat identical arguments and key after uncertainty.
+ * Uses the workspace GitHub connection to admit a source-link operation without another browser authorization or a build. The caller must have current sources:link permission and the connected installation must cover the repository. If the workspace is not connected, run github connect first; if repository access is missing, update the installation through its settings URL. A project bound to managed source returns 409 source_switch_unsupported once the link reaches Core. Repeat identical arguments and key after uncertainty.
  */
 export const linkProjectSource = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -6724,6 +6726,62 @@ export const streamDeploymentLogs = <ThrowOnError extends boolean = true>(
     url: "/v1/projects/{project_id}/deployments/{deployment_id}/logs/events",
     ...options,
     ...params,
+  });
+};
+
+/**
+ * Apply the saved migration files to a database
+ *
+ * Requires deployment access to the project and explicit confirmation of where the tables are created. Reads the migration files of the saved commit, creates the environment's database when it has none exactly as the first deployment would, and applies the files that the database ledger does not hold, expand-only and in order. It never builds, deploys or publishes. Dev and Prod change together when the project shares one database between them. Dev needs an active Paid workspace, and Prod or a Dev that shares its database with Prod needs publication permission on an MCP connection. A project change that is still running, or a deployment that is queued, refuses the request. The response is an operation that starts within about a minute; poll it until it succeeds or names the failed file in error.migration. One attempt runs per job; if it ends unavailable, repeat the request.
+ */
+export const migrateDatabase = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment: "dev" | "prod";
+    commit_sha: string;
+    confirm: true;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<MigrateDatabaseResponses, MigrateDatabaseErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "body", key: "environment" },
+          { in: "body", key: "commit_sha" },
+          { in: "body", key: "confirm" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    MigrateDatabaseResponses,
+    MigrateDatabaseErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/database/migrations",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
   });
 };
 

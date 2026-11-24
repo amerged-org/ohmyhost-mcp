@@ -76,6 +76,7 @@ import {
   setProjectNotes,
   getDatabaseCompute,
   changeDatabaseCompute,
+  migrateDatabase,
   createClient,
   createProjectExport,
   getProjectExport,
@@ -369,6 +370,23 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
             : { memory_mib: input.memoryMiB }),
           confirm: true,
         },
+        "Idempotency-Key": input.idempotencyKey,
+      },
+      { client: this.#client },
+    );
+  }
+  public async migrateDatabase(input: {
+    projectId: string;
+    environment: "dev" | "prod";
+    commitSha: string;
+    idempotencyKey: string;
+  }) {
+    return migrateDatabase(
+      {
+        project_id: input.projectId,
+        environment: input.environment,
+        commit_sha: input.commitSha,
+        confirm: true,
         "Idempotency-Key": input.idempotencyKey,
       },
       { client: this.#client },
