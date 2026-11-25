@@ -792,14 +792,27 @@ function assertWebhookFields(value: Record<string, unknown>): void {
 }
 
 function parseHttpsUrl(value: unknown): string {
-  if (!isHttpsUrl(value)) throw new TypeError("Invalid database webhook url");
+  if (!isHttpsUrl(value, true)) throw new TypeError("Invalid database webhook url");
   return value;
 }
 
-function isHttpsUrl(value: unknown): value is string {
+function isHttpsUrl(value: unknown, publicDestination = false): value is string {
   if (typeof value !== "string" || value.length > DATABASE_WEBHOOK_URL_MAX_LENGTH) return false;
   try {
-    return new URL(value).protocol === "https:";
+    const url = new URL(value);
+    if (url.protocol !== "https:") return false;
+    // Existing webhooks must remain visible so customers can remove an obsolete destination.
+    if (!publicDestination) return true;
+    const host = url.hostname.replace(/\.$/u, "");
+    return (
+      /^https:\/\/[^/?#\\\s@]+(?=[/?#]|$)/iu.test(value) &&
+      url.port === "" &&
+      host.length <= 253 &&
+      /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(
+        host,
+      ) &&
+      !/(?:^|\.)(?:local|internal|localhost|workers\.dev|ohmyho\.st)$/u.test(host)
+    );
   } catch {
     return false;
   }

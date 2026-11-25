@@ -73,9 +73,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "e3b994d04ab3f97174c28f77921f16c763ea6dc839bcd883e6a730ed18bfd927";
+  "6fcd04d11cec23746bec6faa3574fd947e64943cd267e3c080981411c90cc26e";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.81";
+export const remoteMcpReleaseVersion = "0.1.82";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -16512,7 +16512,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     method: "GET",
     path: "/v1/projects/{project_id}/deployments/{deployment_id}/logs",
     summary: "List normalized deployment diagnostics",
-    description: "List normalized deployment diagnostics",
+    description:
+      "CPU_LIMIT_EXCEEDED records a matching Cloudflare Tail CPU outcome. The gateway returns HTTP 503 for a dispatch resource limit. RUNTIME_RESOURCE_LIMIT_EXCEEDED reports a possible CPU or memory limit in the deployment log. Either code can include a known literal path without a query string.",
     disposition: "named",
     toolNames: ["deployment_logs"],
     parameters: [

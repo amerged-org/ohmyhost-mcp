@@ -32,12 +32,38 @@ export function buildEgressContext(
   });
 }
 
-/** The error a Worker raises when an invocation exceeds the CPU limit above. */
-export function isCpuLimitError(error: unknown): boolean {
-  return error instanceof Error && error.message.includes("CPU time limit");
+export const RUNTIME_LIMIT_DIAGNOSTIC_CODES = [
+  "CPU_LIMIT_EXCEEDED",
+  "RUNTIME_RESOURCE_LIMIT_EXCEEDED",
+] as const;
+// Application paths can contain tokens or PII. Retain only known literal routes.
+export const RUNTIME_LIMIT_DIAGNOSTIC_ROUTES = [
+  "/",
+  "/api/auth/change-password",
+  "/api/auth/reset-password",
+  "/api/auth/sign-in/email",
+  "/api/auth/sign-up/email",
+] as const;
+
+export function isRuntimeLimitDiagnosticRoute(
+  route: unknown,
+): route is (typeof RUNTIME_LIMIT_DIAGNOSTIC_ROUTES)[number] {
+  return RUNTIME_LIMIT_DIAGNOSTIC_ROUTES.some((literal) => literal === route);
 }
 
-/** What a visitor and the deploy health verdict are told when that limit stops an invocation. */
-export function cpuLimitMessage(): string {
-  return `Runtime limit exceeded: this request used more than ${WFP_DISPATCH_LIMITS.cpuMs} ms of CPU time. This is not a rate limit; reduce the work per request.`;
+export function dispatchRuntimeLimit(error: unknown) {
+  // Dynamic dispatch can relay application exceptions. These messages only support the
+  // generic fallback. CPU attribution requires a provider outcome such as exceededCpu.
+  if (
+    !(error instanceof Error) ||
+    !/^(?:Worker exceeded resource limits|Worker exceeded (?:the )?CPU time limit|CPU time limit exceeded)\.?$/u.test(
+      error.message,
+    )
+  )
+    return null;
+  return {
+    code: "RUNTIME_RESOURCE_LIMIT_EXCEEDED",
+    status: 503,
+    message: "Runtime resource limit exceeded: the Worker may have run out of CPU time or memory.",
+  } as const;
 }

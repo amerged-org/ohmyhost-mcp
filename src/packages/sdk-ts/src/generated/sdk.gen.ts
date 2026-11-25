@@ -6637,6 +6637,8 @@ export const getDeployment = <ThrowOnError extends boolean = true>(
 
 /**
  * List normalized deployment diagnostics
+ *
+ * CPU_LIMIT_EXCEEDED records a matching Cloudflare Tail CPU outcome. The gateway returns HTTP 503 for a dispatch resource limit. RUNTIME_RESOURCE_LIMIT_EXCEEDED reports a possible CPU or memory limit in the deployment log. Either code can include a known literal path without a query string.
  */
 export const getDeploymentLogs = <ThrowOnError extends boolean = true>(
   parameters: {
