@@ -2,6 +2,7 @@
 import type { Client as OhMyHostClient } from "./client/index.js";
 import {
   applyPaidProjectDomain,
+  cancelContainerJobRun,
   changeDatabaseCompute,
   changeProjectHandle,
   configureBillingRecharge,
@@ -11,6 +12,8 @@ import {
   createBillingCheckout,
   createBillingPortal,
   createCloudflareDnsAuthorization,
+  createContainerJobDownload,
+  createContainerJobUpload,
   createProjectDataChange,
   createProjectDatabaseTable,
   createProjectDatabaseWatch,
@@ -27,6 +30,8 @@ import {
   getBillingCheckout,
   getBillingRecharge,
   getCloudflareDnsAuthorizationStatus,
+  getContainerJobRun,
+  getContainerJobVersion,
   getDatabaseCompute,
   getFeedback,
   getManagedMailDomain,
@@ -54,7 +59,9 @@ import {
   planPaidProjectDomain,
   planProjectDataChange,
   planProjectDeletion,
+  publishContainerJobVersion,
   queryProjectDatabase,
+  quoteContainerJobRun,
   replayProjectDatabaseWebhookDelivery,
   retryManagedMailMessage,
   revokeOrganizationMcpConnection,
@@ -67,15 +74,16 @@ import {
   setProjectDevAccessMode,
   setProjectNotes,
   setProjectPoweredByFlag,
+  startContainerJobRun,
   submitFeedback,
   testProjectDatabaseWebhook,
   verifyManagedMailWebhook,
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "8ad0d2c951347bb0ea88b2d670656a3c47686a564ff5a21744d920300a6a95ab";
+  "e15aa91ca539355fc0540c518d89b171744c4633cd0fdf8dd328289f65f6097a";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.83";
+export const remoteMcpReleaseVersion = "0.1.84";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -108,6 +116,885 @@ export interface RemoteMcpToolDefinition extends RemoteMcpWorkflowTool {
   outputSchema?: unknown;
 }
 export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
+  {
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "project_id",
+        "environment_id",
+        "idempotency_key",
+        "name",
+        "source_revision",
+        "context_path",
+        "dockerfile",
+        "entrypoint",
+        "max_runtime_seconds",
+        "max_build_credit_micros",
+      ],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        idempotency_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          description: "Identifies one mutation and its canonical request payload.",
+          allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
+        },
+        name: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+        source_revision: { type: "string", pattern: "^(?!0{40})[0-9a-f]{40}$" },
+        context_path: {
+          type: "string",
+          minLength: 1,
+          maxLength: 256,
+          description: "Relative path within the selected source revision.",
+          pattern:
+            "^(?:\\.|(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+)*)$",
+        },
+        dockerfile: {
+          type: "string",
+          minLength: 1,
+          maxLength: 256,
+          description: "Relative path within the selected source revision.",
+          pattern: "^(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+)*$",
+        },
+        entrypoint: {
+          type: "array",
+          items: { type: "string", minLength: 1, maxLength: 256, pattern: "^[^\\u0000]+$" },
+          minItems: 1,
+          maxItems: 32,
+        },
+        max_runtime_seconds: { type: "integer", minimum: 1, maximum: 60 },
+        max_build_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+      },
+    },
+    operationId: "publishContainerJobVersion",
+    method: "POST",
+    path: "/v1/projects/{project_id}/environments/{environment_id}/job-definitions/{name}/versions",
+    summary: "Publish a finite job version",
+    description:
+      "Publish one project job from its immutable saved source revision. Supply its build context, Dockerfile, argv and maximum accepted build charge in microcredits. Returns a queued build. Reuse the idempotency key only for this request.",
+    disposition: "named",
+    toolNames: ["container_job_version_publish"],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "source_revision",
+              "context_path",
+              "dockerfile",
+              "entrypoint",
+              "max_runtime_seconds",
+              "max_build_credit_micros",
+            ],
+            properties: {
+              source_revision: { type: "string", pattern: "^(?!0{40})[0-9a-f]{40}$" },
+              context_path: {
+                type: "string",
+                minLength: 1,
+                maxLength: 256,
+                description: "Relative path within the selected source revision.",
+                pattern:
+                  "^(?:\\.|(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+)*)$",
+              },
+              dockerfile: {
+                type: "string",
+                minLength: 1,
+                maxLength: 256,
+                description: "Relative path within the selected source revision.",
+                pattern:
+                  "^(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+)*$",
+              },
+              entrypoint: {
+                type: "array",
+                items: { type: "string", minLength: 1, maxLength: 256, pattern: "^[^\\u0000]+$" },
+                minItems: 1,
+                maxItems: 32,
+              },
+              max_runtime_seconds: { type: "integer", minimum: 1, maximum: 60 },
+              max_build_credit_micros: {
+                type: "string",
+                pattern: "^(0|[1-9][0-9]{0,15})$",
+                description: "Integer microcredits. One credit equals 1000000 microcredits.",
+              },
+            },
+          },
+        },
+      },
+    },
+    parameters: [
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "environment_id",
+        in: "path",
+        description: "Environment identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "Idempotency-Key",
+        in: "header",
+        description: "Identifies one mutation and its canonical request payload.",
+        required: true,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "name",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["version_id", "name", "state", "max_build_credit_micros"],
+      properties: {
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        name: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+        state: { type: "string", enum: ["queued"] },
+        max_build_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        name: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      required: ["project_id", "environment_id", "name", "version_id"],
+      additionalProperties: false,
+    },
+    operationId: "getContainerJobVersion",
+    method: "GET",
+    path: "/v1/projects/{project_id}/environments/{environment_id}/job-definitions/{name}/versions/{version_id}",
+    summary: "Read a finite job version",
+    description:
+      "Read this project's job version and build status. A ready version can be quoted for execution.",
+    disposition: "named",
+    toolNames: ["container_job_version_get"],
+    parameters: [
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "environment_id",
+        in: "path",
+        description: "Environment identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "name",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+      },
+      {
+        name: "version_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "version_id",
+        "name",
+        "source_revision",
+        "max_runtime_seconds",
+        "region",
+        "state",
+        "charged_micros",
+      ],
+      properties: {
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        name: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+        source_revision: { type: "string", pattern: "^(?!0{40})[0-9a-f]{40}$" },
+        max_runtime_seconds: { type: "integer", minimum: 1, maximum: 60 },
+        region: { type: "string", enum: ["eu", "us"] },
+        state: { type: "string", enum: ["queued", "building", "ready", "failed"] },
+        charged_micros: {
+          anyOf: [
+            {
+              type: "string",
+              pattern: "^(0|[1-9][0-9]{0,15})$",
+              description: "Integer microcredits. One credit equals 1000000 microcredits.",
+            },
+            { type: "null" },
+          ],
+        },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["project_id", "environment_id", "version_id", "input_refs", "max_runtime_seconds"],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        input_refs: {
+          type: "array",
+          items: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+          maxItems: 16,
+        },
+        parameters_ref: {
+          anyOf: [{ type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" }, { type: "null" }],
+        },
+        max_runtime_seconds: { type: "integer", minimum: 1, maximum: 60 },
+      },
+    },
+    operationId: "quoteContainerJobRun",
+    method: "POST",
+    path: "/v1/projects/{project_id}/environments/{environment_id}/job-quotes",
+    summary: "Quote a finite job run",
+    description:
+      "Return the expiring maximum run charge in microcredits for a ready version, ordered private file IDs and optional parameters file. Quoting is free.",
+    disposition: "named",
+    toolNames: ["container_job_quote"],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["version_id", "input_refs", "max_runtime_seconds"],
+            properties: {
+              version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+              input_refs: {
+                type: "array",
+                items: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+                maxItems: 16,
+              },
+              parameters_ref: {
+                anyOf: [{ type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" }, { type: "null" }],
+              },
+              max_runtime_seconds: { type: "integer", minimum: 1, maximum: 60 },
+            },
+          },
+        },
+      },
+    },
+    parameters: [
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "environment_id",
+        in: "path",
+        description: "Environment identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["quote_id", "version_id", "rate_card_id", "max_credit_micros", "expires_at"],
+      properties: {
+        quote_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        rate_card_id: { type: "string" },
+        max_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+        expires_at: { type: "string", format: "date-time" },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "project_id",
+        "environment_id",
+        "idempotency_key",
+        "quote_id",
+        "max_credit_micros",
+      ],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        idempotency_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          description: "Identifies one mutation and its canonical request payload.",
+          allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
+        },
+        quote_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        max_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+      },
+    },
+    operationId: "startContainerJobRun",
+    method: "POST",
+    path: "/v1/projects/{project_id}/environments/{environment_id}/job-runs",
+    summary: "Start a finite job run",
+    description:
+      "Accept a previously quoted job, reserve up to the specified microcredits and queue its isolated container. A retry with the same idempotency key returns the original acceptance.",
+    disposition: "named",
+    toolNames: ["container_job_start"],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["quote_id", "max_credit_micros"],
+            properties: {
+              quote_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+              max_credit_micros: {
+                type: "string",
+                pattern: "^(0|[1-9][0-9]{0,15})$",
+                description: "Integer microcredits. One credit equals 1000000 microcredits.",
+              },
+            },
+          },
+        },
+      },
+    },
+    parameters: [
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "environment_id",
+        in: "path",
+        description: "Environment identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "Idempotency-Key",
+        in: "header",
+        description: "Identifies one mutation and its canonical request payload.",
+        required: true,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["run_id", "state", "max_credit_micros", "status_url", "next_poll_after_seconds"],
+      properties: {
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        state: { type: "string", enum: ["queued"] },
+        max_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+        status_url: { type: "string" },
+        next_poll_after_seconds: { type: "integer", minimum: 1 },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      required: ["project_id", "environment_id", "run_id"],
+      additionalProperties: false,
+    },
+    operationId: "getContainerJobRun",
+    method: "GET",
+    path: "/v1/projects/{project_id}/environments/{environment_id}/job-runs/{run_id}",
+    summary: "Read a finite job run",
+    description:
+      "Read the job state, confirmed cost and ordered output file IDs. Poll at the returned interval. Output IDs become available on success.",
+    disposition: "named",
+    toolNames: ["container_job_get"],
+    parameters: [
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "environment_id",
+        in: "path",
+        description: "Environment identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "run_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "run_id",
+        "version_id",
+        "state",
+        "created_at",
+        "started_at",
+        "finished_at",
+        "cancelled_at",
+        "max_credit_micros",
+        "charged_micros",
+        "outputs",
+        "next_poll_after_seconds",
+      ],
+      properties: {
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        state: {
+          type: "string",
+          enum: [
+            "queued",
+            "starting",
+            "running",
+            "cancelling",
+            "succeeded",
+            "cancelled",
+            "failed",
+            "timed_out",
+          ],
+        },
+        created_at: { type: "string", format: "date-time" },
+        started_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        finished_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        cancelled_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        max_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+        charged_micros: {
+          anyOf: [
+            {
+              type: "string",
+              pattern: "^(0|[1-9][0-9]{0,15})$",
+              description: "Integer microcredits. One credit equals 1000000 microcredits.",
+            },
+            { type: "null" },
+          ],
+        },
+        outputs: {
+          type: "array",
+          items: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+          maxItems: 16,
+        },
+        next_poll_after_seconds: { anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }] },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      required: ["project_id", "environment_id", "run_id"],
+      additionalProperties: false,
+    },
+    operationId: "cancelContainerJobRun",
+    method: "POST",
+    path: "/v1/projects/{project_id}/environments/{environment_id}/job-runs/{run_id}/cancel",
+    summary: "Cancel a finite job run",
+    description:
+      "Request cancellation of exactly one run. A queued job incurs no run cost. A running job settles measured duration up to its cap. Poll for confirmation.",
+    disposition: "named",
+    toolNames: ["container_job_cancel"],
+    parameters: [
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "environment_id",
+        in: "path",
+        description: "Environment identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "run_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "run_id",
+        "version_id",
+        "state",
+        "created_at",
+        "started_at",
+        "finished_at",
+        "cancelled_at",
+        "max_credit_micros",
+        "charged_micros",
+        "outputs",
+        "next_poll_after_seconds",
+      ],
+      properties: {
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        state: {
+          type: "string",
+          enum: [
+            "queued",
+            "starting",
+            "running",
+            "cancelling",
+            "succeeded",
+            "cancelled",
+            "failed",
+            "timed_out",
+          ],
+        },
+        created_at: { type: "string", format: "date-time" },
+        started_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        finished_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        cancelled_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        max_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+        charged_micros: {
+          anyOf: [
+            {
+              type: "string",
+              pattern: "^(0|[1-9][0-9]{0,15})$",
+              description: "Integer microcredits. One credit equals 1000000 microcredits.",
+            },
+            { type: "null" },
+          ],
+        },
+        outputs: {
+          type: "array",
+          items: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+          maxItems: 16,
+        },
+        next_poll_after_seconds: { anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }] },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["project_id", "environment_id", "kind", "size_bytes", "media_type"],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        kind: { type: "string", enum: ["input", "parameters"] },
+        size_bytes: { type: "integer", minimum: 0, maximum: 67108864 },
+        media_type: {
+          type: "string",
+          pattern: "^[a-z0-9][a-z0-9.+-]{0,63}/[a-z0-9][a-z0-9.+-]{0,63}$",
+          description:
+            "Lowercase MIME type. Parameters files require application/json and are limited to 65536 bytes.",
+        },
+      },
+    },
+    operationId: "createContainerJobUpload",
+    method: "POST",
+    path: "/v1/projects/{project_id}/environments/{environment_id}/job-inputs",
+    summary: "Request a private job input upload",
+    description:
+      "Create a short-lived PUT grant for one bounded private input or parameters file. Upload the exact bytes with the declared Content-Type. The file ID is then available for a quote.",
+    disposition: "named",
+    toolNames: ["container_job_input_upload"],
+    requestBody: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["kind", "size_bytes", "media_type"],
+            properties: {
+              kind: { type: "string", enum: ["input", "parameters"] },
+              size_bytes: { type: "integer", minimum: 0, maximum: 67108864 },
+              media_type: {
+                type: "string",
+                pattern: "^[a-z0-9][a-z0-9.+-]{0,63}/[a-z0-9][a-z0-9.+-]{0,63}$",
+                description:
+                  "Lowercase MIME type. Parameters files require application/json and are limited to 65536 bytes.",
+              },
+            },
+          },
+        },
+      },
+    },
+    parameters: [
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "environment_id",
+        in: "path",
+        description: "Environment identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["file_id", "url", "method", "expires_at"],
+      properties: {
+        file_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        url: { type: "string", format: "uri" },
+        method: { type: "string", enum: ["PUT"] },
+        expires_at: { type: "string", format: "date-time" },
+      },
+    },
+  },
+  {
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        file_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      required: ["project_id", "environment_id", "run_id", "file_id"],
+      additionalProperties: false,
+    },
+    operationId: "createContainerJobDownload",
+    method: "POST",
+    path: "/v1/projects/{project_id}/environments/{environment_id}/job-runs/{run_id}/outputs/{file_id}/download",
+    summary: "Request a private job result download",
+    description:
+      "Get a short-lived GET grant for one committed output of a successful run. Anyone holding this temporary URL can download that file until its expiry.",
+    disposition: "named",
+    toolNames: ["container_job_output_download"],
+    parameters: [
+      {
+        name: "project_id",
+        in: "path",
+        description: "Project identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "environment_id",
+        in: "path",
+        description: "Environment identifier.",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "X-Request-Id",
+        in: "header",
+        description: "Optional caller-provided correlation identifier.",
+        required: false,
+        schema: { type: "string", minLength: 1, maxLength: 128 },
+      },
+      {
+        name: "run_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      {
+        name: "file_id",
+        in: "path",
+        required: true,
+        schema: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+    ],
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["url", "method", "expires_at"],
+      properties: {
+        url: { type: "string", format: "uri" },
+        method: { type: "string", enum: ["GET"] },
+        expires_at: { type: "string", format: "date-time" },
+      },
+    },
+  },
   {
     inputSchema: {
       type: "object",
@@ -25120,6 +26007,553 @@ export const remoteMcpWorkflowTools: readonly RemoteMcpWorkflowTool[] = [
 ];
 export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
   {
+    name: "container_job_version_publish",
+    title: "Publish a finite job version",
+    description:
+      "Publish one project job from its immutable saved source revision. Supply its build context, Dockerfile, argv and maximum accepted build charge in microcredits. Returns a queued build. Reuse the idempotency key only for this request.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    operationId: "publishContainerJobVersion",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "project_id",
+        "environment_id",
+        "idempotency_key",
+        "name",
+        "source_revision",
+        "context_path",
+        "dockerfile",
+        "entrypoint",
+        "max_runtime_seconds",
+        "max_build_credit_micros",
+      ],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        idempotency_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          description: "Identifies one mutation and its canonical request payload.",
+          allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
+        },
+        name: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+        source_revision: { type: "string", pattern: "^(?!0{40})[0-9a-f]{40}$" },
+        context_path: {
+          type: "string",
+          minLength: 1,
+          maxLength: 256,
+          description: "Relative path within the selected source revision.",
+          pattern:
+            "^(?:\\.|(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+)*)$",
+        },
+        dockerfile: {
+          type: "string",
+          minLength: 1,
+          maxLength: 256,
+          description: "Relative path within the selected source revision.",
+          pattern: "^(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9_.-]+)*$",
+        },
+        entrypoint: {
+          type: "array",
+          items: { type: "string", minLength: 1, maxLength: 256, pattern: "^[^\\u0000]+$" },
+          minItems: 1,
+          maxItems: 32,
+        },
+        max_runtime_seconds: { type: "integer", minimum: 1, maximum: 60 },
+        max_build_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+      },
+    },
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["version_id", "name", "state", "max_build_credit_micros"],
+      properties: {
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        name: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+        state: { type: "string", enum: ["queued"] },
+        max_build_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+      },
+    },
+  },
+  {
+    name: "container_job_version_get",
+    title: "Read a finite job version",
+    description:
+      "Read this project's job version and build status. A ready version can be quoted for execution.",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    operationId: "getContainerJobVersion",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        name: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      required: ["project_id", "environment_id", "name", "version_id"],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "version_id",
+        "name",
+        "source_revision",
+        "max_runtime_seconds",
+        "region",
+        "state",
+        "charged_micros",
+      ],
+      properties: {
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        name: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$" },
+        source_revision: { type: "string", pattern: "^(?!0{40})[0-9a-f]{40}$" },
+        max_runtime_seconds: { type: "integer", minimum: 1, maximum: 60 },
+        region: { type: "string", enum: ["eu", "us"] },
+        state: { type: "string", enum: ["queued", "building", "ready", "failed"] },
+        charged_micros: {
+          anyOf: [
+            {
+              type: "string",
+              pattern: "^(0|[1-9][0-9]{0,15})$",
+              description: "Integer microcredits. One credit equals 1000000 microcredits.",
+            },
+            { type: "null" },
+          ],
+        },
+      },
+    },
+  },
+  {
+    name: "container_job_quote",
+    title: "Quote a finite job run",
+    description:
+      "Return the expiring maximum run charge in microcredits for a ready version, ordered private file IDs and optional parameters file. Quoting is free.",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    operationId: "quoteContainerJobRun",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["project_id", "environment_id", "version_id", "input_refs", "max_runtime_seconds"],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        input_refs: {
+          type: "array",
+          items: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+          maxItems: 16,
+        },
+        parameters_ref: {
+          anyOf: [{ type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" }, { type: "null" }],
+        },
+        max_runtime_seconds: { type: "integer", minimum: 1, maximum: 60 },
+      },
+    },
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["quote_id", "version_id", "rate_card_id", "max_credit_micros", "expires_at"],
+      properties: {
+        quote_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        rate_card_id: { type: "string" },
+        max_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+        expires_at: { type: "string", format: "date-time" },
+      },
+    },
+  },
+  {
+    name: "container_job_start",
+    title: "Start a finite job run",
+    description:
+      "Accept a previously quoted job, reserve up to the specified microcredits and queue its isolated container. A retry with the same idempotency key returns the original acceptance.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    operationId: "startContainerJobRun",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "project_id",
+        "environment_id",
+        "idempotency_key",
+        "quote_id",
+        "max_credit_micros",
+      ],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        idempotency_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 128,
+          description: "Identifies one mutation and its canonical request payload.",
+          allOf: [{ type: "string", pattern: "^[!-~](?:[ -~]*[!-~])?$" }],
+        },
+        quote_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        max_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+      },
+    },
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["run_id", "state", "max_credit_micros", "status_url", "next_poll_after_seconds"],
+      properties: {
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        state: { type: "string", enum: ["queued"] },
+        max_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+        status_url: { type: "string" },
+        next_poll_after_seconds: { type: "integer", minimum: 1 },
+      },
+    },
+  },
+  {
+    name: "container_job_get",
+    title: "Read a finite job run",
+    description:
+      "Read the job state, confirmed cost and ordered output file IDs. Poll at the returned interval. Output IDs become available on success.",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    operationId: "getContainerJobRun",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      required: ["project_id", "environment_id", "run_id"],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "run_id",
+        "version_id",
+        "state",
+        "created_at",
+        "started_at",
+        "finished_at",
+        "cancelled_at",
+        "max_credit_micros",
+        "charged_micros",
+        "outputs",
+        "next_poll_after_seconds",
+      ],
+      properties: {
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        state: {
+          type: "string",
+          enum: [
+            "queued",
+            "starting",
+            "running",
+            "cancelling",
+            "succeeded",
+            "cancelled",
+            "failed",
+            "timed_out",
+          ],
+        },
+        created_at: { type: "string", format: "date-time" },
+        started_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        finished_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        cancelled_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        max_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+        charged_micros: {
+          anyOf: [
+            {
+              type: "string",
+              pattern: "^(0|[1-9][0-9]{0,15})$",
+              description: "Integer microcredits. One credit equals 1000000 microcredits.",
+            },
+            { type: "null" },
+          ],
+        },
+        outputs: {
+          type: "array",
+          items: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+          maxItems: 16,
+        },
+        next_poll_after_seconds: { anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }] },
+      },
+    },
+  },
+  {
+    name: "container_job_cancel",
+    title: "Cancel a finite job run",
+    description:
+      "Request cancellation of exactly one run. A queued job incurs no run cost. A running job settles measured duration up to its cap. Poll for confirmation.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    operationId: "cancelContainerJobRun",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      required: ["project_id", "environment_id", "run_id"],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "run_id",
+        "version_id",
+        "state",
+        "created_at",
+        "started_at",
+        "finished_at",
+        "cancelled_at",
+        "max_credit_micros",
+        "charged_micros",
+        "outputs",
+        "next_poll_after_seconds",
+      ],
+      properties: {
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        version_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        state: {
+          type: "string",
+          enum: [
+            "queued",
+            "starting",
+            "running",
+            "cancelling",
+            "succeeded",
+            "cancelled",
+            "failed",
+            "timed_out",
+          ],
+        },
+        created_at: { type: "string", format: "date-time" },
+        started_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        finished_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        cancelled_at: { anyOf: [{ type: "string", format: "date-time" }, { type: "null" }] },
+        max_credit_micros: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]{0,15})$",
+          description: "Integer microcredits. One credit equals 1000000 microcredits.",
+        },
+        charged_micros: {
+          anyOf: [
+            {
+              type: "string",
+              pattern: "^(0|[1-9][0-9]{0,15})$",
+              description: "Integer microcredits. One credit equals 1000000 microcredits.",
+            },
+            { type: "null" },
+          ],
+        },
+        outputs: {
+          type: "array",
+          items: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+          maxItems: 16,
+        },
+        next_poll_after_seconds: { anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }] },
+      },
+    },
+  },
+  {
+    name: "container_job_input_upload",
+    title: "Request a private job input upload",
+    description:
+      "Create a short-lived PUT grant for one bounded private input or parameters file. Upload the exact bytes with the declared Content-Type. The file ID is then available for a quote.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    operationId: "createContainerJobUpload",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["project_id", "environment_id", "kind", "size_bytes", "media_type"],
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        kind: { type: "string", enum: ["input", "parameters"] },
+        size_bytes: { type: "integer", minimum: 0, maximum: 67108864 },
+        media_type: {
+          type: "string",
+          pattern: "^[a-z0-9][a-z0-9.+-]{0,63}/[a-z0-9][a-z0-9.+-]{0,63}$",
+          description:
+            "Lowercase MIME type. Parameters files require application/json and are limited to 65536 bytes.",
+        },
+      },
+    },
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["file_id", "url", "method", "expires_at"],
+      properties: {
+        file_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        url: { type: "string", format: "uri" },
+        method: { type: "string", enum: ["PUT"] },
+        expires_at: { type: "string", format: "date-time" },
+      },
+    },
+  },
+  {
+    name: "container_job_output_download",
+    title: "Request a private job result download",
+    description:
+      "Get a short-lived GET grant for one committed output of a successful run. Anyone holding this temporary URL can download that file until its expiry.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    operationId: "createContainerJobDownload",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Project identifier.",
+        },
+        environment_id: {
+          type: "string",
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$",
+          description: "Environment identifier.",
+        },
+        run_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+        file_id: { type: "string", pattern: "^[0-9A-HJKMNP-TV-Z]{26}$" },
+      },
+      required: ["project_id", "environment_id", "run_id", "file_id"],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["url", "method", "expires_at"],
+      properties: {
+        url: { type: "string", format: "uri" },
+        method: { type: "string", enum: ["GET"] },
+        expires_at: { type: "string", format: "date-time" },
+      },
+    },
+  },
+  {
     name: "integration_connection_providers",
     title: "Check connection provider availability",
     description:
@@ -32265,6 +33699,94 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
   },
 ];
 export interface RemoteOperationInputs {
+  publishContainerJobVersion: {
+    project_id: NonNullable<Parameters<typeof publishContainerJobVersion>[0]>["project_id"];
+    environment_id: NonNullable<Parameters<typeof publishContainerJobVersion>[0]>["environment_id"];
+    idempotency_key: NonNullable<
+      Parameters<typeof publishContainerJobVersion>[0]
+    >["Idempotency-Key"];
+    name: NonNullable<Parameters<typeof publishContainerJobVersion>[0]>["name"];
+    source_revision: NonNullable<
+      NonNullable<Parameters<typeof publishContainerJobVersion>[0]>["jobPublishRequest"]
+    >["source_revision"];
+    context_path: NonNullable<
+      NonNullable<Parameters<typeof publishContainerJobVersion>[0]>["jobPublishRequest"]
+    >["context_path"];
+    dockerfile: NonNullable<
+      NonNullable<Parameters<typeof publishContainerJobVersion>[0]>["jobPublishRequest"]
+    >["dockerfile"];
+    entrypoint: NonNullable<
+      NonNullable<Parameters<typeof publishContainerJobVersion>[0]>["jobPublishRequest"]
+    >["entrypoint"];
+    max_runtime_seconds: NonNullable<
+      NonNullable<Parameters<typeof publishContainerJobVersion>[0]>["jobPublishRequest"]
+    >["max_runtime_seconds"];
+    max_build_credit_micros: NonNullable<
+      NonNullable<Parameters<typeof publishContainerJobVersion>[0]>["jobPublishRequest"]
+    >["max_build_credit_micros"];
+  };
+  getContainerJobVersion: {
+    project_id: NonNullable<Parameters<typeof getContainerJobVersion>[0]>["project_id"];
+    environment_id: NonNullable<Parameters<typeof getContainerJobVersion>[0]>["environment_id"];
+    name: NonNullable<Parameters<typeof getContainerJobVersion>[0]>["name"];
+    version_id: NonNullable<Parameters<typeof getContainerJobVersion>[0]>["version_id"];
+  };
+  quoteContainerJobRun: {
+    project_id: NonNullable<Parameters<typeof quoteContainerJobRun>[0]>["project_id"];
+    environment_id: NonNullable<Parameters<typeof quoteContainerJobRun>[0]>["environment_id"];
+    version_id: NonNullable<
+      NonNullable<Parameters<typeof quoteContainerJobRun>[0]>["jobQuoteRequest"]
+    >["version_id"];
+    input_refs: NonNullable<
+      NonNullable<Parameters<typeof quoteContainerJobRun>[0]>["jobQuoteRequest"]
+    >["input_refs"];
+    parameters_ref?: NonNullable<
+      NonNullable<Parameters<typeof quoteContainerJobRun>[0]>["jobQuoteRequest"]
+    >["parameters_ref"];
+    max_runtime_seconds: NonNullable<
+      NonNullable<Parameters<typeof quoteContainerJobRun>[0]>["jobQuoteRequest"]
+    >["max_runtime_seconds"];
+  };
+  startContainerJobRun: {
+    project_id: NonNullable<Parameters<typeof startContainerJobRun>[0]>["project_id"];
+    environment_id: NonNullable<Parameters<typeof startContainerJobRun>[0]>["environment_id"];
+    idempotency_key: NonNullable<Parameters<typeof startContainerJobRun>[0]>["Idempotency-Key"];
+    quote_id: NonNullable<
+      NonNullable<Parameters<typeof startContainerJobRun>[0]>["jobStartRequest"]
+    >["quote_id"];
+    max_credit_micros: NonNullable<
+      NonNullable<Parameters<typeof startContainerJobRun>[0]>["jobStartRequest"]
+    >["max_credit_micros"];
+  };
+  getContainerJobRun: {
+    project_id: NonNullable<Parameters<typeof getContainerJobRun>[0]>["project_id"];
+    environment_id: NonNullable<Parameters<typeof getContainerJobRun>[0]>["environment_id"];
+    run_id: NonNullable<Parameters<typeof getContainerJobRun>[0]>["run_id"];
+  };
+  cancelContainerJobRun: {
+    project_id: NonNullable<Parameters<typeof cancelContainerJobRun>[0]>["project_id"];
+    environment_id: NonNullable<Parameters<typeof cancelContainerJobRun>[0]>["environment_id"];
+    run_id: NonNullable<Parameters<typeof cancelContainerJobRun>[0]>["run_id"];
+  };
+  createContainerJobUpload: {
+    project_id: NonNullable<Parameters<typeof createContainerJobUpload>[0]>["project_id"];
+    environment_id: NonNullable<Parameters<typeof createContainerJobUpload>[0]>["environment_id"];
+    kind: NonNullable<
+      NonNullable<Parameters<typeof createContainerJobUpload>[0]>["jobUploadRequest"]
+    >["kind"];
+    size_bytes: NonNullable<
+      NonNullable<Parameters<typeof createContainerJobUpload>[0]>["jobUploadRequest"]
+    >["size_bytes"];
+    media_type: NonNullable<
+      NonNullable<Parameters<typeof createContainerJobUpload>[0]>["jobUploadRequest"]
+    >["media_type"];
+  };
+  createContainerJobDownload: {
+    project_id: NonNullable<Parameters<typeof createContainerJobDownload>[0]>["project_id"];
+    environment_id: NonNullable<Parameters<typeof createContainerJobDownload>[0]>["environment_id"];
+    run_id: NonNullable<Parameters<typeof createContainerJobDownload>[0]>["run_id"];
+    file_id: NonNullable<Parameters<typeof createContainerJobDownload>[0]>["file_id"];
+  };
   listConnectionProviders: {
     organization_id: NonNullable<Parameters<typeof listConnectionProviders>[0]>["organization_id"];
   };
@@ -32807,6 +34329,104 @@ export async function executeRemoteOperation<K extends RemoteOperationId>(
   input: RemoteOperationInputs[K],
 ): Promise<unknown> {
   switch (operationId) {
+    case "publishContainerJobVersion": {
+      const value = input as RemoteOperationInputs["publishContainerJobVersion"];
+      const parameters: NonNullable<Parameters<typeof publishContainerJobVersion>[0]> = {
+        project_id: value["project_id"],
+        environment_id: value["environment_id"],
+        "Idempotency-Key": value["idempotency_key"],
+        name: value["name"],
+        jobPublishRequest: {
+          source_revision: value["source_revision"],
+          context_path: value["context_path"],
+          dockerfile: value["dockerfile"],
+          entrypoint: value["entrypoint"],
+          max_runtime_seconds: value["max_runtime_seconds"],
+          max_build_credit_micros: value["max_build_credit_micros"],
+        },
+      };
+      return publishContainerJobVersion(parameters, { client });
+    }
+    case "getContainerJobVersion": {
+      const value = input as RemoteOperationInputs["getContainerJobVersion"];
+      const parameters: NonNullable<Parameters<typeof getContainerJobVersion>[0]> = {
+        project_id: value["project_id"],
+        environment_id: value["environment_id"],
+        name: value["name"],
+        version_id: value["version_id"],
+      };
+      return getContainerJobVersion(parameters, { client });
+    }
+    case "quoteContainerJobRun": {
+      const value = input as RemoteOperationInputs["quoteContainerJobRun"];
+      const parameters: NonNullable<Parameters<typeof quoteContainerJobRun>[0]> = {
+        project_id: value["project_id"],
+        environment_id: value["environment_id"],
+        jobQuoteRequest: {
+          version_id: value["version_id"],
+          input_refs: value["input_refs"],
+          ...(value["parameters_ref"] === undefined
+            ? {}
+            : { parameters_ref: value["parameters_ref"] }),
+          max_runtime_seconds: value["max_runtime_seconds"],
+        },
+      };
+      return quoteContainerJobRun(parameters, { client });
+    }
+    case "startContainerJobRun": {
+      const value = input as RemoteOperationInputs["startContainerJobRun"];
+      const parameters: NonNullable<Parameters<typeof startContainerJobRun>[0]> = {
+        project_id: value["project_id"],
+        environment_id: value["environment_id"],
+        "Idempotency-Key": value["idempotency_key"],
+        jobStartRequest: {
+          quote_id: value["quote_id"],
+          max_credit_micros: value["max_credit_micros"],
+        },
+      };
+      return startContainerJobRun(parameters, { client });
+    }
+    case "getContainerJobRun": {
+      const value = input as RemoteOperationInputs["getContainerJobRun"];
+      const parameters: NonNullable<Parameters<typeof getContainerJobRun>[0]> = {
+        project_id: value["project_id"],
+        environment_id: value["environment_id"],
+        run_id: value["run_id"],
+      };
+      return getContainerJobRun(parameters, { client });
+    }
+    case "cancelContainerJobRun": {
+      const value = input as RemoteOperationInputs["cancelContainerJobRun"];
+      const parameters: NonNullable<Parameters<typeof cancelContainerJobRun>[0]> = {
+        project_id: value["project_id"],
+        environment_id: value["environment_id"],
+        run_id: value["run_id"],
+      };
+      return cancelContainerJobRun(parameters, { client });
+    }
+    case "createContainerJobUpload": {
+      const value = input as RemoteOperationInputs["createContainerJobUpload"];
+      const parameters: NonNullable<Parameters<typeof createContainerJobUpload>[0]> = {
+        project_id: value["project_id"],
+        environment_id: value["environment_id"],
+        jobUploadRequest: {
+          kind: value["kind"],
+          size_bytes: value["size_bytes"],
+          media_type: value["media_type"],
+        },
+      };
+      return createContainerJobUpload(parameters, { client });
+    }
+    case "createContainerJobDownload": {
+      const value = input as RemoteOperationInputs["createContainerJobDownload"];
+      const parameters: NonNullable<Parameters<typeof createContainerJobDownload>[0]> = {
+        project_id: value["project_id"],
+        environment_id: value["environment_id"],
+        run_id: value["run_id"],
+        file_id: value["file_id"],
+      };
+      return createContainerJobDownload(parameters, { client });
+    }
     case "listConnectionProviders": {
       const value = input as RemoteOperationInputs["listConnectionProviders"];
       const parameters: NonNullable<Parameters<typeof listConnectionProviders>[0]> = {

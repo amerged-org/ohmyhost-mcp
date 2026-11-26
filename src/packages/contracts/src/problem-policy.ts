@@ -7,6 +7,15 @@ export interface ProblemChatGuidance {
 }
 
 export const PROBLEM_POLICY = {
+  job_request_conflict: {
+    side: "yours",
+    status: 409,
+    retryable: false,
+    title: "Job request conflicts with current state",
+    action: "Read the job version and create a fresh quote before starting.",
+    next_step:
+      "Read container_job_version_get to confirm the version is ready. Use container_job_quote with the intended file IDs and runtime limit before starting again.",
+  },
   preview_version_conflict: {
     side: "yours",
     next_step:

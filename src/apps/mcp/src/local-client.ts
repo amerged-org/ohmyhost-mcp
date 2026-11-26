@@ -1,3 +1,4 @@
+import { executeContainerJob, type ContainerJobOperationId } from "@ohmyhost/sdk-ts";
 import { executeConnectionCommand, type ConnectionCommand } from "@ohmyhost/product-cli";
 import { randomUUID } from "node:crypto";
 import { parsePreviewView } from "@ohmyhost/contracts";
@@ -1341,6 +1342,9 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
     return executeManagedMail(this.#client, input);
   }
 
+  public containerJob(operation: ContainerJobOperationId, input: Record<string, unknown>) {
+    return executeContainerJob(this.#client, operation, input);
+  }
   public nativeAuth(input: NativeAuthCommand) {
     return executeNativeAuth(this.#client, input);
   }

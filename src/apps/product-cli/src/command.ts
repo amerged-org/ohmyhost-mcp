@@ -1,3 +1,4 @@
+import { containerJobOperations, type ContainerJobOperationId } from "@ohmyhost/sdk-ts";
 import { isUserSecretName } from "@ohmyhost/contracts/secret-names";
 import {
   parseMakeCredentialSelections,
@@ -92,6 +93,12 @@ export type SourceCliCommand =
       readonly credentialStore: "native";
     };
 export type ProductCliCommand =
+  | {
+      readonly kind: "container-job";
+      readonly operation: ContainerJobOperationId;
+      readonly input: Record<string, unknown>;
+      readonly credentialStore: "native";
+    }
   | SourceCliCommand
   | {
       readonly kind: "native-auth";
@@ -1188,6 +1195,7 @@ function parseSourceCommand(values: string[], wait: boolean): SourceCliCommand {
 }
 
 export type RecognizedCommandLabel =
+  | "job"
   | "auth"
   | "source inspect"
   | "source status"
@@ -1628,6 +1636,50 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
   const follow = removeFlag(values, "--follow");
   const stdin = removeFlag(values, "--stdin");
   const first = values.shift();
+  if (first === "job") {
+    if (dryRun || revoke || yes || wait || follow || stdin) throw new InvalidCommandError();
+    const action = values.shift();
+    if (!action || !Object.hasOwn(containerJobOperations, action)) throw new InvalidCommandError();
+    const opts = parseOptionalOptions(values, [
+      "--project",
+      "--environment",
+      "--input",
+      "--idempotency-key",
+    ] as const);
+    const project = opts["--project"],
+      env = opts["--environment"];
+    if (!project || !env || ![project, env].every((id) => /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/.test(id)))
+      throw new InvalidCommandError();
+    let fields: unknown;
+    try {
+      fields = JSON.parse(opts["--input"] ?? "{}");
+    } catch {
+      throw new InvalidCommandError();
+    }
+    if (
+      typeof fields !== "object" ||
+      fields === null ||
+      Array.isArray(fields) ||
+      ["project_id", "environment_id", "idempotency_key"].some((k) =>
+        Object.hasOwn(fields as object, k),
+      )
+    )
+      throw new InvalidCommandError();
+    const key = opts["--idempotency-key"];
+    if ((action === "publish" || action === "start") !== Boolean(key))
+      throw new InvalidCommandError();
+    return {
+      kind: "container-job",
+      operation: containerJobOperations[action as keyof typeof containerJobOperations],
+      input: {
+        ...fields,
+        project_id: project,
+        environment_id: env,
+        ...(key ? { idempotency_key: key } : {}),
+      },
+      credentialStore,
+    };
+  }
   if (first === "auth") {
     if (dryRun || revoke || yes || wait || follow) throw new InvalidCommandError();
     const area = values.shift();

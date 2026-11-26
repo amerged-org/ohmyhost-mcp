@@ -24,6 +24,8 @@ import type {
   AuthorizeWorkspaceMailDomainDnsResponses,
   BeginConnectionErrors,
   BeginConnectionResponses,
+  CancelContainerJobRunErrors,
+  CancelContainerJobRunResponses,
   ChangeDatabaseComputeErrors,
   ChangeDatabaseComputeResponses,
   ChangeManagedSourceErrors,
@@ -58,6 +60,10 @@ import type {
   CreateCloudflareDnsAuthorizationErrors,
   CreateCloudflareDnsAuthorizationRequest,
   CreateCloudflareDnsAuthorizationResponses,
+  CreateContainerJobDownloadErrors,
+  CreateContainerJobDownloadResponses,
+  CreateContainerJobUploadErrors,
+  CreateContainerJobUploadResponses,
   CreateDeploymentErrors,
   CreateDeploymentRequest,
   CreateDeploymentResponses,
@@ -152,6 +158,10 @@ import type {
   GetCloudflareDnsAuthorizationStatusResponses,
   GetConnectionRequestErrors,
   GetConnectionRequestResponses,
+  GetContainerJobRunErrors,
+  GetContainerJobRunResponses,
+  GetContainerJobVersionErrors,
+  GetContainerJobVersionResponses,
   GetCurrentIdentityErrors,
   GetCurrentIdentityResponses,
   GetDatabaseComputeErrors,
@@ -236,6 +246,10 @@ import type {
   ImportConnectionResponses,
   InitializeManagedSourceErrors,
   InitializeManagedSourceResponses,
+  JobPublishRequest,
+  JobQuoteRequest,
+  JobStartRequest,
+  JobUploadRequest,
   LinkProjectSourceErrors,
   LinkProjectSourceRequest,
   LinkProjectSourceResponses,
@@ -323,6 +337,8 @@ import type {
   ProjectMailDomainBindingRequest,
   PromoteDeploymentErrors,
   PromoteDeploymentResponses,
+  PublishContainerJobVersionErrors,
+  PublishContainerJobVersionResponses,
   PutEnvironmentSecretErrors,
   PutEnvironmentSecretRequest,
   PutEnvironmentSecretResponses,
@@ -332,6 +348,8 @@ import type {
   PutProjectMailDomainBindingResponses,
   QueryProjectDatabaseErrors,
   QueryProjectDatabaseResponses,
+  QuoteContainerJobRunErrors,
+  QuoteContainerJobRunResponses,
   ReactivateNativeAuthUserErrors,
   ReactivateNativeAuthUserResponses,
   ReconcileOperationErrors,
@@ -396,6 +414,8 @@ import type {
   SetProjectPoweredByFlagErrors,
   SetProjectPoweredByFlagResponses,
   SharedMailDnsAuthorizationRequest,
+  StartContainerJobRunErrors,
+  StartContainerJobRunResponses,
   StopProjectPreviewErrors,
   StopProjectPreviewResponses,
   StreamDeploymentLogsErrors,
@@ -444,6 +464,447 @@ export type Options<
    * used to access values that aren't defined as part of the SDK function.
    */
   meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
+};
+
+/**
+ * Publish a finite job version
+ *
+ * Publish one project job from its immutable saved source revision. Supply its build context, Dockerfile, argv and maximum accepted build charge in microcredits. Returns a queued build. Reuse the idempotency key only for this request.
+ */
+export const publishContainerJobVersion = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    name: string;
+    jobPublishRequest: JobPublishRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  PublishContainerJobVersionResponses,
+  PublishContainerJobVersionErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "name" },
+          { key: "jobPublishRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    PublishContainerJobVersionResponses,
+    PublishContainerJobVersionErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/job-definitions/{name}/versions",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read a finite job version
+ *
+ * Read this project's job version and build status. A ready version can be quoted for execution.
+ */
+export const getContainerJobVersion = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    name: string;
+    version_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  GetContainerJobVersionResponses,
+  GetContainerJobVersionErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "name" },
+          { in: "path", key: "version_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetContainerJobVersionResponses,
+    GetContainerJobVersionErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/job-definitions/{name}/versions/{version_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Quote a finite job run
+ *
+ * Return the expiring maximum run charge in microcredits for a ready version, ordered private file IDs and optional parameters file. Quoting is free.
+ */
+export const quoteContainerJobRun = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    jobQuoteRequest: JobQuoteRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  QuoteContainerJobRunResponses,
+  QuoteContainerJobRunErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { key: "jobQuoteRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    QuoteContainerJobRunResponses,
+    QuoteContainerJobRunErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/job-quotes",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Start a finite job run
+ *
+ * Accept a previously quoted job, reserve up to the specified microcredits and queue its isolated container. A retry with the same idempotency key returns the original acceptance.
+ */
+export const startContainerJobRun = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    "Idempotency-Key": string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    jobStartRequest: JobStartRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  StartContainerJobRunResponses,
+  StartContainerJobRunErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "headers", key: "Idempotency-Key" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { key: "jobStartRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    StartContainerJobRunResponses,
+    StartContainerJobRunErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/job-runs",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Read a finite job run
+ *
+ * Read the job state, confirmed cost and ordered output file IDs. Poll at the returned interval. Output IDs become available on success.
+ */
+export const getContainerJobRun = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    run_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<GetContainerJobRunResponses, GetContainerJobRunErrors, ThrowOnError, "data"> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "run_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).get<
+    GetContainerJobRunResponses,
+    GetContainerJobRunErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/job-runs/{run_id}",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Cancel a finite job run
+ *
+ * Request cancellation of exactly one run. A queued job incurs no run cost. A running job settles measured duration up to its cap. Poll for confirmation.
+ */
+export const cancelContainerJobRun = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    run_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CancelContainerJobRunResponses,
+  CancelContainerJobRunErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "run_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CancelContainerJobRunResponses,
+    CancelContainerJobRunErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/job-runs/{run_id}/cancel",
+    ...options,
+    ...params,
+  });
+};
+
+/**
+ * Request a private job input upload
+ *
+ * Create a short-lived PUT grant for one bounded private input or parameters file. Upload the exact bytes with the declared Content-Type. The file ID is then available for a quote.
+ */
+export const createContainerJobUpload = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    jobUploadRequest: JobUploadRequest;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateContainerJobUploadResponses,
+  CreateContainerJobUploadErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { key: "jobUploadRequest", map: "body" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateContainerJobUploadResponses,
+    CreateContainerJobUploadErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/job-inputs",
+    ...options,
+    ...params,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+      ...params.headers,
+    },
+  });
+};
+
+/**
+ * Request a private job result download
+ *
+ * Get a short-lived GET grant for one committed output of a successful run. Anyone holding this temporary URL can download that file until its expiry.
+ */
+export const createContainerJobDownload = <ThrowOnError extends boolean = true>(
+  parameters: {
+    "X-Request-Id"?: string;
+    project_id: Ulid;
+    environment_id: Ulid;
+    run_id: Ulid;
+    file_id: Ulid;
+  },
+  options?: Options<never, ThrowOnError>,
+): RequestResult<
+  CreateContainerJobDownloadResponses,
+  CreateContainerJobDownloadErrors,
+  ThrowOnError,
+  "data"
+> => {
+  const params = buildClientParams(
+    [parameters],
+    [
+      {
+        args: [
+          { in: "headers", key: "X-Request-Id" },
+          { in: "path", key: "project_id" },
+          { in: "path", key: "environment_id" },
+          { in: "path", key: "run_id" },
+          { in: "path", key: "file_id" },
+        ],
+      },
+    ],
+  );
+  return (options?.client ?? client).post<
+    CreateContainerJobDownloadResponses,
+    CreateContainerJobDownloadErrors,
+    ThrowOnError,
+    "data"
+  >({
+    responseStyle: "data",
+    security: [
+      {
+        key: "BearerAuth",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/projects/{project_id}/environments/{environment_id}/job-runs/{run_id}/outputs/{file_id}/download",
+    ...options,
+    ...params,
+  });
 };
 
 /**

@@ -369,6 +369,7 @@ type CustomerCommandLabel = Exclude<CommandLabel, "unknown" | "help" | "version"
 
 const CLI_VERSION = cliPackage.version;
 const HELP_USAGE = Object.freeze({
+  job: "ohmyhost job publish|version|quote|start|get|cancel|upload|download --project ULID --environment ULID --input JSON [--idempotency-key KEY] --json. Supply REST fields including resource IDs in --input. Publish and start require an idempotency key. Only transfer file bytes to the returned short-lived URL.",
   init: "ohmyhost init [--directory PATH] [--root PATH] [--project SLUG] [--region us|eu] [--dry-run] --json (preserve existing storage jurisdiction; for new storage pass the project's region, us when omitted)",
   login:
     "ohmyhost login [--organization ULID] [--user USER_ID] [--profile-name NAME] --json (adds one saved login; nothing is saved unless the browser signed in as that user and organization)",
@@ -1511,6 +1512,11 @@ export class ProductCli {
       if (command.kind === "secret-list") return await this.listEnvironmentSecrets(command, signal);
       if (command.kind === "function-runs") return await this.listFunctionRuns(command, signal);
       if (command.kind === "secret-set") return await this.putEnvironmentSecret(command, signal);
+      if (command.kind === "container-job") {
+        const api = await this.authenticatedApi(command.credentialStore, signal);
+        if (!api.containerJob) throw new Error("Container jobs unavailable");
+        return success("job", { job: await api.containerJob(command.operation, command.input) });
+      }
       if (command.kind === "secret-form-create")
         return await this.createSecretForm(command, signal);
       if (command.kind === "secret-form-status") return await this.readSecretForm(command, signal);
@@ -4306,6 +4312,7 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "function-runs") return "function runs";
   if (command.kind === "secret-set") return "secret set";
   if (command.kind === "secret-delete") return "secret delete";
+  if (command.kind === "container-job") return "job";
   if (command.kind === "secret-form-create") return "secret form create";
   if (command.kind === "secret-form-status") return "secret form status";
   if (command.kind === "native-auth") return "auth";

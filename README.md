@@ -1,10 +1,10 @@
-<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.83; the next release replaces any edit. -->
+<!-- Generated from the npm registry tarball of @amerged/ohmyhost-mcp@0.1.84; the next release replaces any edit. -->
 
 # ohmyho.st MCP server
 
 The local MCP server of [ohmyho.st](https://ohmyho.st), hosting that a coding agent operates. It runs over stdio next to Codex, Claude Code, Cursor, Hermes or OpenClaw and lets the agent deploy the user's GitHub apps and manage their databases, domains, mail, usage and budgets with the access the user grants. It is also how the agent reaches ohmyho.st support.
 
-Version 0.1.83 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
+Version 0.1.84 · [npm](https://www.npmjs.com/package/@amerged/ohmyhost-mcp) · Node.js 22 or newer · [release.json](release.json)
 
 This repository mirrors the source published in the npm package `@amerged/ohmyhost-mcp`. Every release replaces it from the registry tarball, so pull requests are not merged here; report a problem through your agent (see Support below).
 
@@ -50,6 +50,14 @@ Keep tokens out of shared or committed MCP configuration; the public configurati
 - `billing_portal_create`: Owner-only: return a short-lived Stripe portal URL to the human for invoices, payment methods or cancellation at period end.
 - `billing_recharge_configure`: Owner-only: enable or disable automatic off-session payments.
 - `billing_recharge_get`: Owner-only.
+- `container_job_cancel`: Request cancellation of exactly one run.
+- `container_job_get`: Read the job state, confirmed cost and ordered output file IDs.
+- `container_job_input_upload`: Create a short-lived PUT grant for one bounded private input or parameters file.
+- `container_job_output_download`: Get a short-lived GET grant for one committed output of a successful run.
+- `container_job_quote`: Return the expiring maximum run charge in microcredits for a ready version, ordered private file IDs and optional parameters file.
+- `container_job_start`: Accept a previously quoted job, reserve up to the specified microcredits and queue its isolated container.
+- `container_job_version_get`: Read this project's job version and build status.
+- `container_job_version_publish`: Publish one project job from its immutable saved source revision.
 - `database_access_create`: Issue a time-bound PostgreSQL credential for this project's own Dev or Prod database.
 - `database_access_list`: List this project's issued database credentials with their state (active, expired or revoked).
 - `database_access_revoke`: Revoke one issued database credential immediately: open sessions end and its PostgreSQL role is removed.
@@ -218,7 +226,7 @@ The full descriptions and input schemas are in the [tool catalog](https://ohmyho
 
 ## What is here
 
-`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.83 dist.integrity` equals `npm.integrity` in `release.json`.
+`src/` holds the TypeScript and JavaScript source of the server and the client code it bundles: `apps/mcp`, the command-line client `apps/product-cli`, the generated REST client `packages/sdk-ts`, `packages/contracts`, `packages/workos-auth-contracts` and the Skills in `packages/agent-skills`, and the loopback PostgreSQL transport `packages/postgres-bridge` with its own `LICENSE` and `NOTICE`. `package.json`, `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md` are the package's own. The built `dist/` bundle and the package README are not copied; `release.json` lists their SHA-256 digests, so this repository plus those files is the published tarball. `npm view @amerged/ohmyhost-mcp@0.1.84 dist.integrity` equals `npm.integrity` in `release.json`.
 
 ## Licence
 

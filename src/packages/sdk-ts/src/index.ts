@@ -10,3 +10,4 @@ export * from "./managed-mail.js";
 export * from "./managed-mail-attachment.js";
 
 export * from "./shared-mail.js";
+export * from "./container-jobs.js";

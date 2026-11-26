@@ -1,3 +1,8 @@
+import {
+  containerJobTools,
+  isContainerJobOperation,
+  type ContainerJobOperationId,
+} from "@ohmyhost/sdk-ts";
 import { MCP_CONNECTION_ID_PATTERN } from "@ohmyhost/contracts/organization-mcp-connections";
 import { parseMakeCredentialSelections } from "@ohmyhost/contracts/connection-management";
 import { isUserSecretName, USER_SECRET_NAME_PATTERN } from "@ohmyhost/contracts/secret-names";
@@ -166,6 +171,10 @@ interface DatabaseScheduleSetInput extends DatabaseScheduleTarget {
 }
 
 export interface LocalMcpProductClient {
+  containerJob?(
+    operation: ContainerJobOperationId,
+    input: Record<string, unknown>,
+  ): Promise<unknown>;
   connection?(command: import("@ohmyhost/product-cli").ConnectionCommand): Promise<unknown>;
   preview?(
     action: "get" | "open" | "stop" | "rotate",
@@ -740,6 +749,24 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     },
   );
   registerManagedSourceTools(server, dependencies);
+  for (const definition of containerJobTools) {
+    const schema = z.fromJSONSchema(definition.inputSchema);
+    const operation = definition.operationId;
+    if (!(schema instanceof z.ZodObject) || !isContainerJobOperation(operation))
+      throw new TypeError("Invalid job tool contract");
+    registerProductTool(
+      server,
+      dependencies,
+      definition.name,
+      definition.description,
+      schema,
+      (client, input) => {
+        if (!client.containerJob) throw new Error("Container jobs unavailable");
+        return client.containerJob(operation, input);
+      },
+      definition.annotations,
+    );
+  }
   registerProductTool(
     server,
     dependencies,

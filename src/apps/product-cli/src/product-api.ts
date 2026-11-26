@@ -1,3 +1,4 @@
+import { executeContainerJob, type ContainerJobOperationId } from "@ohmyhost/sdk-ts";
 import { parseConnectionResponse } from "@ohmyhost/contracts/connection-management";
 import {
   beginConnection,
@@ -330,6 +331,10 @@ export type ConnectionCommand = Extract<
   }
 >;
 export interface ProductApi {
+  containerJob?(
+    operation: ContainerJobOperationId,
+    input: Record<string, unknown>,
+  ): Promise<unknown>;
   connection?(command: ConnectionCommand): Promise<unknown>;
   preview?(
     action: "get" | "open" | "stop" | "rotate",
@@ -2278,6 +2283,9 @@ export class GeneratedSdkProductApi implements ProductApi {
     return executeManagedMail(this.#client, input);
   }
 
+  public containerJob(operation: ContainerJobOperationId, input: Record<string, unknown>) {
+    return executeContainerJob(this.#client, operation, input);
+  }
   public nativeAuth(input: NativeAuthCommand) {
     return executeNativeAuth(this.#client, input);
   }

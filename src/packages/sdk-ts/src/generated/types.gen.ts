@@ -4,6 +4,128 @@ export type ClientOptions = {
   baseUrl: "https://app.ohmyho.st" | "https://dev.app.ohmyho.st" | (string & {});
 };
 
+export type JobPublishRequest = {
+  source_revision: string;
+  /**
+   * Relative path within the selected source revision.
+   */
+  context_path: string;
+  /**
+   * Relative path within the selected source revision.
+   */
+  dockerfile: string;
+  entrypoint: Array<string>;
+  max_runtime_seconds: number;
+  /**
+   * Integer microcredits. One credit equals 1000000 microcredits.
+   */
+  max_build_credit_micros: string;
+};
+
+export type JobVersionAccepted = {
+  version_id: Ulid;
+  name: string;
+  state: "queued";
+  /**
+   * Integer microcredits. One credit equals 1000000 microcredits.
+   */
+  max_build_credit_micros: string;
+};
+
+export type JobVersionView = {
+  version_id: Ulid;
+  name: string;
+  source_revision: string;
+  max_runtime_seconds: number;
+  region: "eu" | "us";
+  state: "queued" | "building" | "ready" | "failed";
+  charged_micros: string | null;
+};
+
+export type JobQuoteRequest = {
+  version_id: Ulid;
+  input_refs: Array<Ulid>;
+  parameters_ref?: Ulid | null;
+  max_runtime_seconds: number;
+};
+
+export type JobQuoteView = {
+  quote_id: Ulid;
+  version_id: Ulid;
+  rate_card_id: string;
+  /**
+   * Integer microcredits. One credit equals 1000000 microcredits.
+   */
+  max_credit_micros: string;
+  expires_at: string;
+};
+
+export type JobStartRequest = {
+  quote_id: Ulid;
+  /**
+   * Integer microcredits. One credit equals 1000000 microcredits.
+   */
+  max_credit_micros: string;
+};
+
+export type JobRunAccepted = {
+  run_id: Ulid;
+  state: "queued";
+  /**
+   * Integer microcredits. One credit equals 1000000 microcredits.
+   */
+  max_credit_micros: string;
+  status_url: string;
+  next_poll_after_seconds: number;
+};
+
+export type JobRunView = {
+  run_id: Ulid;
+  version_id: Ulid;
+  state:
+    | "queued"
+    | "starting"
+    | "running"
+    | "cancelling"
+    | "succeeded"
+    | "cancelled"
+    | "failed"
+    | "timed_out";
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  cancelled_at: string | null;
+  /**
+   * Integer microcredits. One credit equals 1000000 microcredits.
+   */
+  max_credit_micros: string;
+  charged_micros: string | null;
+  outputs: Array<Ulid>;
+  next_poll_after_seconds: number | null;
+};
+
+export type JobUploadRequest = {
+  kind: "input" | "parameters";
+  size_bytes: number;
+  /**
+   * Lowercase MIME type. Parameters files require application/json and are limited to 65536 bytes.
+   */
+  media_type: string;
+};
+
+export type JobUploadGrant = {
+  file_id: Ulid;
+  url: string;
+  method: "PUT";
+  expires_at: string;
+};
+
+export type JobDownloadGrant = {
+  url: string;
+  method: "GET";
+  expires_at: string;
+};
+
 export type Preview = {
   id: Ulid;
   project_id: Ulid;
@@ -2210,6 +2332,7 @@ export type ProblemDetails = {
     | "source_scope_unavailable"
     | "source_snapshot_invalid"
     | "source_snapshot_too_large"
+    | "job_request_conflict"
     | "preview_version_conflict"
     | "production_deployment_required"
     | "framework_conversion_required"
@@ -2912,6 +3035,580 @@ export type ProjectFilter = Ulid;
  * Restricts the page to one visible operation.
  */
 export type OperationFilter = Ulid;
+
+export type PublishContainerJobVersionData = {
+  body: JobPublishRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    name: string;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/job-definitions/{name}/versions";
+};
+
+export type PublishContainerJobVersionErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type PublishContainerJobVersionError =
+  PublishContainerJobVersionErrors[keyof PublishContainerJobVersionErrors];
+
+export type PublishContainerJobVersionResponses = {
+  /**
+   * Publish a finite job version.
+   */
+  202: JobVersionAccepted;
+};
+
+export type PublishContainerJobVersionResponse =
+  PublishContainerJobVersionResponses[keyof PublishContainerJobVersionResponses];
+
+export type GetContainerJobVersionData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    name: string;
+    version_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/job-definitions/{name}/versions/{version_id}";
+};
+
+export type GetContainerJobVersionErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetContainerJobVersionError =
+  GetContainerJobVersionErrors[keyof GetContainerJobVersionErrors];
+
+export type GetContainerJobVersionResponses = {
+  /**
+   * Read a finite job version.
+   */
+  200: JobVersionView;
+};
+
+export type GetContainerJobVersionResponse =
+  GetContainerJobVersionResponses[keyof GetContainerJobVersionResponses];
+
+export type QuoteContainerJobRunData = {
+  body: JobQuoteRequest;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/job-quotes";
+};
+
+export type QuoteContainerJobRunErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type QuoteContainerJobRunError =
+  QuoteContainerJobRunErrors[keyof QuoteContainerJobRunErrors];
+
+export type QuoteContainerJobRunResponses = {
+  /**
+   * Quote a finite job run.
+   */
+  200: JobQuoteView;
+};
+
+export type QuoteContainerJobRunResponse =
+  QuoteContainerJobRunResponses[keyof QuoteContainerJobRunResponses];
+
+export type StartContainerJobRunData = {
+  body: JobStartRequest;
+  headers: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+    /**
+     * Identifies one mutation and its canonical request payload.
+     */
+    "Idempotency-Key": string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/job-runs";
+};
+
+export type StartContainerJobRunErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type StartContainerJobRunError =
+  StartContainerJobRunErrors[keyof StartContainerJobRunErrors];
+
+export type StartContainerJobRunResponses = {
+  /**
+   * Start a finite job run.
+   */
+  202: JobRunAccepted;
+};
+
+export type StartContainerJobRunResponse =
+  StartContainerJobRunResponses[keyof StartContainerJobRunResponses];
+
+export type GetContainerJobRunData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    run_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/job-runs/{run_id}";
+};
+
+export type GetContainerJobRunErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type GetContainerJobRunError = GetContainerJobRunErrors[keyof GetContainerJobRunErrors];
+
+export type GetContainerJobRunResponses = {
+  /**
+   * Read a finite job run.
+   */
+  200: JobRunView;
+};
+
+export type GetContainerJobRunResponse =
+  GetContainerJobRunResponses[keyof GetContainerJobRunResponses];
+
+export type CancelContainerJobRunData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    run_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/job-runs/{run_id}/cancel";
+};
+
+export type CancelContainerJobRunErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CancelContainerJobRunError =
+  CancelContainerJobRunErrors[keyof CancelContainerJobRunErrors];
+
+export type CancelContainerJobRunResponses = {
+  /**
+   * Cancel a finite job run.
+   */
+  200: JobRunView;
+};
+
+export type CancelContainerJobRunResponse =
+  CancelContainerJobRunResponses[keyof CancelContainerJobRunResponses];
+
+export type CreateContainerJobUploadData = {
+  body: JobUploadRequest;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/job-inputs";
+};
+
+export type CreateContainerJobUploadErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateContainerJobUploadError =
+  CreateContainerJobUploadErrors[keyof CreateContainerJobUploadErrors];
+
+export type CreateContainerJobUploadResponses = {
+  /**
+   * Request a private job input upload.
+   */
+  201: JobUploadGrant;
+};
+
+export type CreateContainerJobUploadResponse =
+  CreateContainerJobUploadResponses[keyof CreateContainerJobUploadResponses];
+
+export type CreateContainerJobDownloadData = {
+  body?: never;
+  headers?: {
+    /**
+     * Optional caller-provided correlation identifier.
+     */
+    "X-Request-Id"?: string;
+  };
+  path: {
+    /**
+     * Project identifier.
+     */
+    project_id: Ulid;
+    /**
+     * Environment identifier.
+     */
+    environment_id: Ulid;
+    run_id: Ulid;
+    file_id: Ulid;
+  };
+  query?: never;
+  url: "/v1/projects/{project_id}/environments/{environment_id}/job-runs/{run_id}/outputs/{file_id}/download";
+};
+
+export type CreateContainerJobDownloadErrors = {
+  /**
+   * The request failed.
+   */
+  400: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  401: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  402: ProblemDetails;
+  /**
+   * The resource does not exist or is not visible to the authenticated principal.
+   */
+  404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  413: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  429: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  503: ProblemDetails;
+};
+
+export type CreateContainerJobDownloadError =
+  CreateContainerJobDownloadErrors[keyof CreateContainerJobDownloadErrors];
+
+export type CreateContainerJobDownloadResponses = {
+  /**
+   * Request a private job result download.
+   */
+  200: JobDownloadGrant;
+};
+
+export type CreateContainerJobDownloadResponse =
+  CreateContainerJobDownloadResponses[keyof CreateContainerJobDownloadResponses];
 
 export type StopProjectPreviewData = {
   body?: never;
