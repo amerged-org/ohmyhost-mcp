@@ -3743,7 +3743,7 @@ export function createLocalOhmyhostMcpServer(dependencies: LocalOhmyhostMcpDepen
     server,
     dependencies,
     "delete_execute",
-    "Permanently delete the selected project and its Dev and Prod resources, including deployments, databases, files, schedules, SQL exports, managed code history and project-owned routes, mail and DNS. Both addresses stop working. if_match guards the resource revision and confirmation_token binds the exact deletion. An unchanged request with the same idempotency key identifies the original deletion. Returns an asynchronous operation.",
+    "Execute a planned deletion for one selected project using its if_match revision and ten-minute confirmation_token, removing its Dev and Prod deployments, databases, files, schedules, SQL exports, managed code history and project-owned routes, mail and DNS. Both addresses stop working. An unchanged request with the same idempotency key identifies the original deletion. Returns an asynchronous operation.",
     z.object({
       project_id: identifier,
       if_match: identifier,

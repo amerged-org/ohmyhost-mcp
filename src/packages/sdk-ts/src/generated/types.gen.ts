@@ -2286,6 +2286,14 @@ export type ProjectStatus = {
   head_deployment: Deployment | null;
   dev_url: string | null;
   prod_url: string | null;
+  /**
+   * Deterministic Dev gateway address this project will receive once deployed, or null when the project has no Dev environment.
+   */
+  expected_dev_url?: string | null;
+  /**
+   * Deterministic Prod gateway address this project will receive once deployed.
+   */
+  expected_prod_url?: string | null;
   latest_operation: Operation | null;
   cleanup_state: "not_started" | "pending" | "completed" | "reconciliation_required";
 };

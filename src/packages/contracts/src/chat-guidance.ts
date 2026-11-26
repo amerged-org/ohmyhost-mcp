@@ -206,7 +206,8 @@ export const CHAT_MAIN_PATH_INSTRUCTIONS =
   "A preview link works for at most 24 hours; if a result carries failure, follow its next_step instead of waiting. " +
   "The preview shows the app but does not save data: saving works once the app is published (the Dev site on Paid, the live site on Free), after database_migrate has created its tables; never tell the user that the preview saves data. " +
   "If data.state is needs_database or migrations_pending, ask the user where to apply the database changes (data.options) and call database_migrate only with their answer; data never delays the preview link, and not_required and ready need nothing. " +
-  "Results may carry next_step for you and say_to_user for the user. Say it in the user's language. Share IDs, commits, states and codes only on request. ";
+  "Results may carry next_step for you and say_to_user for the user. Say it in the user's language. Share IDs, commits, states and codes only on request. " +
+  "Public source for platform behavior and managed PostgreSQL (PGCF): https://github.com/amerged-org/ohmyhost and https://github.com/amerged-org/cloudflare-postgres. ";
 
 export const PREVIEW_OPEN_DESCRIPTION =
   "Open or create a private live preview for the specified project and environment. Available on Free and Paid. Source saves update the preview without a deployment. Returns its private link, state, expires_at, failure, data and ready_to_show. The link lasts at most 24 hours, and opening a preview after expiry creates a new link. The preview sleeps after ten idle minutes and wakes when the link is opened. Database readiness is reported independently of ready_to_show. Preview does not persist application data.";

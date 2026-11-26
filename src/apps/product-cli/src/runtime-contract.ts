@@ -852,6 +852,8 @@ export const parseProjectStatus = (value: unknown): Readonly<Record<string, unkn
     "head_deployment",
     "dev_url",
     "prod_url",
+    "expected_dev_url",
+    "expected_prod_url",
     "latest_operation",
     "cleanup_state",
     "custom_domains",
@@ -876,6 +878,18 @@ export const parseProjectStatus = (value: unknown): Readonly<Record<string, unkn
       ![`https://${handle}.dev.check.omh.st`, `https://${handle}.check.omh.st`].includes(
         String(input["prod_url"]),
       )) ||
+    (input["expected_dev_url"] !== undefined &&
+      input["expected_dev_url"] !== null &&
+      (typeof input["expected_dev_url"] !== "string" ||
+        ![`https://dev-${handle}.dev.check.omh.st`, `https://dev-${handle}.check.omh.st`].includes(
+          input["expected_dev_url"],
+        ))) ||
+    (input["expected_prod_url"] !== undefined &&
+      input["expected_prod_url"] !== null &&
+      (typeof input["expected_prod_url"] !== "string" ||
+        ![`https://${handle}.dev.check.omh.st`, `https://${handle}.check.omh.st`].includes(
+          input["expected_prod_url"],
+        ))) ||
     (input["cleanup_state"] !== "not_started" &&
       input["cleanup_state"] !== "pending" &&
       input["cleanup_state"] !== "completed" &&

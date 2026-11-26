@@ -8,12 +8,12 @@
     "source": "github"
   },
   "websiteUrl": "https://docs.ohmyho.st/agents/mcp",
-  "version": "0.1.84",
+  "version": "0.1.85",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@amerged/ohmyhost-mcp",
-      "version": "0.1.84",
+      "version": "0.1.85",
       "transport": {
         "type": "stdio"
       },

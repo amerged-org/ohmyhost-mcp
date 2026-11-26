@@ -45,7 +45,9 @@ import {
   type TokenRevoker,
 } from "./cli.js";
 import {
+  defaultRequestTimeoutMs,
   extractProfileName,
+  extractTimeoutSeconds,
   InvalidCommandError,
   parseProductCliCommand,
   recognizedCommandLabel,
@@ -602,10 +604,13 @@ export const runProductionCli = async (
   };
   let args: readonly string[];
   let profileName: string | undefined;
+  let timeoutSeconds: number | undefined;
   try {
     const extracted = extractProfileName(argv);
-    args = extracted.argv;
+    const extractedTimeout = extractTimeoutSeconds(extracted.argv);
+    args = extractedTimeout.argv;
     profileName = extracted.profileName;
+    timeoutSeconds = extractedTimeout.timeoutSeconds;
   } catch {
     return written(invalidCommandFailure(argv, environment));
   }
@@ -705,6 +710,16 @@ export const runProductionCli = async (
           "invalid_command",
           false,
           "ohmyhost init runs offline and uses no login: remove --profile-name and run it again.",
+        ),
+      );
+    if (timeoutSeconds !== undefined)
+      return written(
+        errorDocument(
+          "init",
+          2,
+          "invalid_command",
+          false,
+          "ohmyhost init runs offline and sends no network requests: remove --timeout and run it again.",
         ),
       );
     return runOfflineInit(command, io, diagnostics);
@@ -829,11 +844,13 @@ export const runProductionCli = async (
     },
     bound,
   );
+  const requestTimeoutMs =
+    timeoutSeconds === undefined ? defaultRequestTimeoutMs(command.kind) : timeoutSeconds * 1000;
   const transport = new FetchWorkosPublicTransport(signal, REQUEST_TIMEOUT_MS);
   const now = (): Date => new Date();
   const refresher = new PublicWorkosTokenRefresher(environment);
   const boundedFetch = (parentSignal: AbortSignal = signal): typeof globalThis.fetch =>
-    createBoundedFetch(fetch, parentSignal, REQUEST_TIMEOUT_MS, MAX_PUBLIC_RESPONSE_BYTES);
+    createBoundedFetch(fetch, parentSignal, requestTimeoutMs, MAX_PUBLIC_RESPONSE_BYTES);
   let profile: LocalProfile | undefined;
   try {
     if (apiToken !== undefined) {
@@ -915,6 +932,7 @@ export const runProductionCli = async (
       signal,
       platform.commandPrefix,
       profile,
+      requestTimeoutMs,
     );
     if (result.exitCode === 1)
       diagnostics.record({
@@ -1043,6 +1061,7 @@ export const runProductionCli = async (
     now,
     waitUntil,
     lifecycleTimeoutMs: REQUEST_TIMEOUT_MS,
+    requestTimeoutMs,
     createCorrelationId: randomUUID,
     diagnosticSink: diagnostics,
     operationEventSink: { write: (value) => io.writeStdout(value) },
@@ -1116,6 +1135,7 @@ const compositionFailure = (
   signal: AbortSignal,
   commandPrefix: string,
   profile: LocalProfile | undefined,
+  requestTimeoutMs = REQUEST_TIMEOUT_MS,
 ): CliResult => {
   if (error instanceof ProfileSelectionError)
     return errorDocument(command, error.exitCode, error.code, false, error.suggestedAction);
@@ -1151,7 +1171,7 @@ const compositionFailure = (
           true,
           refreshFailedAction(commandPrefix, profile, error.record),
         );
-  return classifyCliFailure(command, error, signal);
+  return classifyCliFailure(command, error, signal, requestTimeoutMs);
 };
 
 const runOfflineInit = async (

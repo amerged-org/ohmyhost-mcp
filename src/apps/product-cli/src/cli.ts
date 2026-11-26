@@ -323,6 +323,7 @@ export interface ProductCliDependencies {
   readonly now: () => Date;
   readonly waitUntil: (instant: Date, signal: AbortSignal) => Promise<void>;
   readonly lifecycleTimeoutMs: number;
+  readonly requestTimeoutMs?: number;
   readonly createCorrelationId: () => string;
   readonly diagnosticSink: DiagnosticSink;
   readonly operationEventSink?: { write(value: string): void };
@@ -691,9 +692,13 @@ export const cliMetadataResult = (kind: "help" | "version", topic?: string): Cli
     ? success("help", {
         status: "succeeded",
         cli_version: CLI_VERSION,
-        usage: "ohmyhost <command> [options] [--profile-name NAME] --json",
+        usage: "ohmyhost <command> [options] [--profile-name NAME] [--timeout SECONDS] --json",
         environment:
           "OHMYHOST_ENVIRONMENT=development|production (default: production); OHMYHOST_PROFILE=NAME binds this process to one saved login",
+        source_repositories: {
+          platform: "https://github.com/amerged-org/ohmyhost",
+          postgres: "https://github.com/amerged-org/cloudflare-postgres",
+        },
         commands: helpEntries(topic),
       })
     : success("version", { status: "succeeded", cli_version: CLI_VERSION });
@@ -779,8 +784,8 @@ export const credentialStoreUnavailableAction = (error?: unknown): string =>
 const responseContractAction = (command: string, keyed = true): string =>
   `The ohmyho.st API answered in a form this client version does not accept, usually because the client is older than the service. Compare 'ohmyhost --version' with https://ohmyho.st/client-release.json; if it is older, install the published CLI and MCP and reload MCP. Then ${retryAdvice(command, keyed)}. If the current version answers this too, report it with feedback submit (kind bug, error code response_contract_invalid).`;
 
-const requestTimeoutAction = (command: string, keyed = true): string =>
-  `The ohmyho.st API did not answer within 30 seconds; ${retryAdvice(command, keyed)}.`;
+const requestTimeoutAction = (command: string, keyed = true, timeoutMs = 30_000): string =>
+  `The ohmyho.st API did not answer within ${String(Math.max(1, Math.round(timeoutMs / 1000)))} seconds; ${retryAdvice(command, keyed)}. Pass --timeout SECONDS (up to 300) for slow operations.`;
 
 const LOGOUT_UNCONFIRMED_ACTION =
   "The saved login was removed from this computer, but ohmyho.st did not confirm that its session ended. Running logout again cannot retry this, because the login is gone; do not sign in again just to revoke it. Tell the customer the session end was not confirmed.";
@@ -1589,6 +1594,7 @@ export class ProductCli {
         this.context(),
         // A mutation parsed without its optional --idempotency-key has no key to repeat with.
         !("idempotencyKey" in command && command.idempotencyKey === null),
+        this.dependencies.requestTimeoutMs,
       );
     }
   }
@@ -3757,7 +3763,8 @@ export const classifyCliFailure = (
   command: RecognizedCommandLabel,
   error: unknown,
   signal: AbortSignal,
-): CliResult => classifyFailure(command, error, signal);
+  timeoutMs = 30_000,
+): CliResult => classifyFailure(command, error, signal, undefined, true, timeoutMs);
 
 const classifyFailure = (
   command: CommandLabel,
@@ -3765,6 +3772,7 @@ const classifyFailure = (
   signal: AbortSignal,
   actingAs?: Readonly<Record<string, unknown>>,
   keyed = true,
+  timeoutMs = 30_000,
 ): CliResult => {
   if (error instanceof LocalSourcePublicationError)
     return failure(
@@ -3787,12 +3795,24 @@ const classifyFailure = (
     );
   }
   if (isTimeout(error)) {
-    return failure(command, 8, "request_timeout", true, requestTimeoutAction(command, keyed));
+    return failure(
+      command,
+      8,
+      "request_timeout",
+      true,
+      requestTimeoutAction(command, keyed, timeoutMs),
+    );
   }
   // A retryable request_timeout is a token refresh that timed out inside this command; the logout
   // timeout is not retryable and keeps its own advice.
   if (error instanceof ProductCliFailure && error.code === "request_timeout" && error.retryable) {
-    return failure(command, 8, "request_timeout", true, requestTimeoutAction(command, keyed));
+    return failure(
+      command,
+      8,
+      "request_timeout",
+      true,
+      requestTimeoutAction(command, keyed, 30_000),
+    );
   }
   if (error instanceof ProductCliFailure) {
     return failure(

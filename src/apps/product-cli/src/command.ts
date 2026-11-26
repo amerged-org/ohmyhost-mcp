@@ -1015,6 +1015,36 @@ export const extractProfileName = (
   return { argv: [...argv.slice(0, index), ...argv.slice(index + 2)], profileName: value };
 };
 
+/**
+ * Remove the global HTTP request timeout override (`--timeout SECONDS`, 5..300) from argv.
+ */
+export const extractTimeoutSeconds = (
+  argv: readonly string[],
+): { readonly argv: readonly string[]; readonly timeoutSeconds?: number } => {
+  const index = argv.indexOf("--timeout");
+  if (index < 0) return { argv };
+  const raw = argv[index + 1];
+  if (raw === undefined || !/^\d+$/u.test(raw) || argv.indexOf("--timeout", index + 1) >= 0)
+    throw new InvalidCommandError();
+  const timeoutSeconds = Number(raw);
+  if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 5 || timeoutSeconds > 300)
+    throw new InvalidCommandError();
+  return { argv: [...argv.slice(0, index), ...argv.slice(index + 2)], timeoutSeconds };
+};
+
+const LONG_REQUEST_COMMANDS: ReadonlySet<ProductCliCommand["kind"]> = new Set([
+  "plan",
+  "source-publish",
+  "source-complete",
+  "database-migrate",
+  "database-compute-set",
+  "project-data-change",
+]);
+
+/** Default per-request timeout in ms; slow inspection/finalization commands get 90 seconds. */
+export const defaultRequestTimeoutMs = (kind: ProductCliCommand["kind"]): number =>
+  LONG_REQUEST_COMMANDS.has(kind) ? 90_000 : 30_000;
+
 export class InvalidCommandError extends Error {
   public constructor() {
     super("The command arguments are invalid.");
@@ -1371,7 +1401,7 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
   if (values.includes("--version")) return "version";
   while (values.length > 0) {
     const value = values.shift();
-    if (value === "--profile-name") {
+    if (value === "--profile-name" || value === "--timeout") {
       values.shift();
       continue;
     }

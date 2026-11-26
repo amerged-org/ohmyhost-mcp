@@ -81,9 +81,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "e15aa91ca539355fc0540c518d89b171744c4633cd0fdf8dd328289f65f6097a";
+  "d6b121e5815e026156a7ff78b3176eb80e529d817507839e45cc2e6301fd4c39";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.84";
+export const remoteMcpReleaseVersion = "0.1.85";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -10836,6 +10836,30 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           ],
         },
         prod_url: {
+          oneOf: [
+            {
+              type: "string",
+              format: "uri",
+              pattern: "^https://[a-z0-9]+(?:-[a-z0-9]+){0,4}\\.(?:dev\\.)?check\\.omh\\.st$",
+            },
+            { type: "null" },
+          ],
+        },
+        expected_dev_url: {
+          description:
+            "Deterministic Dev gateway address this project will receive once deployed, or null when the project has no Dev environment.",
+          oneOf: [
+            {
+              type: "string",
+              format: "uri",
+              pattern: "^https://dev-[a-z0-9]+(?:-[a-z0-9]+){0,4}\\.(?:dev\\.)?check\\.omh\\.st$",
+            },
+            { type: "null" },
+          ],
+        },
+        expected_prod_url: {
+          description:
+            "Deterministic Prod gateway address this project will receive once deployed.",
           oneOf: [
             {
               type: "string",
@@ -28148,7 +28172,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "delete_execute",
     title: "Delete a project",
     description:
-      "Permanently delete the selected project and its Dev and Prod resources, including deployments, databases, files, schedules, SQL exports, managed code history and project-owned routes, mail and DNS. Both addresses stop working. if_match guards the resource revision and confirmation_token binds the exact deletion. An unchanged request with the same idempotency key identifies the original deletion. Returns an asynchronous operation.",
+      "Execute a planned deletion for one selected project using its if_match revision and ten-minute confirmation_token, removing its Dev and Prod deployments, databases, files, schedules, SQL exports, managed code history and project-owned routes, mail and DNS. Both addresses stop working. An unchanged request with the same idempotency key identifies the original deletion. Returns an asynchronous operation.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
