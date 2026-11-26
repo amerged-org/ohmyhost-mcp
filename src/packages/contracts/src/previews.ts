@@ -593,6 +593,9 @@ export interface PreviewSourceDelta<FrameworkPlan = unknown> extends PreviewSour
   readonly database: PreviewSourceDatabase;
 }
 
+const PREVIEW_STALE_LOCKFILE =
+  "This app's lockfile no longer matches package.json. ohmyho.st updates lockfiles only for pnpm apps.";
+
 /** What an assistant reads and says for each failure; the code, not text, is what Core stores. */
 const PREVIEW_FAILURE_COPY: Readonly<
   Record<
@@ -659,8 +662,20 @@ const PREVIEW_FAILURE_COPY: Readonly<
   startup_install_failed: {
     retryable: true,
     say_to_user: "Your app's dependencies could not be installed. I am checking them.",
-    next_step: () =>
-      "The dependency install failed. A lockfile or dependency problem is the likely cause: read package.json and the lockfile and fix them, then save with source_changes and call preview_open. If they are fine, a registry may have been unavailable: call preview_open again in a few seconds.",
+    next_step: (detail) => {
+      switch (detail?.rule) {
+        case "lockfile_outdated":
+          return `${PREVIEW_STALE_LOCKFILE} Run this app's package manager locally and commit the updated lockfile.`;
+        case "lockfile_update_refused":
+          return "The pnpm lockfile update could not preserve the saved dependency pins. Run pnpm locally and commit the refreshed lockfile, or revert the dependency change.";
+        case "lockfile_update_failed":
+          return "The pnpm lockfile update failed. Check the package names and versions you added, save any correction with source_changes, and call preview_open again. The Dev deployment logs can name the failing package.";
+        case "timeout":
+          return "The preview dependency install ran out of time. Call preview_open again. If it repeats, check the Dev deployment logs for dependency install errors.";
+        default:
+          return "The dependency install failed. Call preview_open again if the registry was temporarily unavailable. Check the Dev deployment logs for the package manager's error.";
+      }
+    },
   },
   startup_server_not_ready: {
     retryable: true,
@@ -725,7 +740,9 @@ export function previewFailureNeedsNewSource(code: PreviewFailureCode): boolean 
 export function previewFailureRetryable(code: PreviewFailureCode): boolean {
   return PREVIEW_FAILURE_COPY[code].retryable;
 }
-export function previewFailureSay(code: string): string | null {
+export function previewFailureSay(code: string, detail?: PreviewFailureDetail): string | null {
+  if (code === "startup_install_failed" && detail?.rule === "lockfile_outdated")
+    return PREVIEW_STALE_LOCKFILE;
   return Object.hasOwn(PREVIEW_FAILURE_COPY, code)
     ? PREVIEW_FAILURE_COPY[code as PreviewFailureCode].say_to_user
     : null;

@@ -149,6 +149,17 @@ export const PROBLEM_POLICY = {
       "Read 'ohmyhost github status --organization ULID --json', open connection.settings_url and add this repository to the installation. Then repeat the original source link and key.",
     title: "Repository access required",
   },
+  database_not_set_up: {
+    side: "not_set_up",
+    next_step:
+      "Explain that the selected environment has no database. For a read request, stop without changing source or data, applying migrations or deploying. When the user requests setup, follow Apply saved database changes in the deploy Skill: explain the shared-data effect and wait for their environment choice before calling database_migrate. Deploy only on request. Retry the agreed action in its original environment once the database is ready.",
+    say_to_user: "This part of your app needs a database. The selected site does not have one yet.",
+    status: 409,
+    retryable: false,
+    action:
+      "For read requests, do not change source or data. For requested setup, choose where to apply the saved migrations first. Shared Dev and Prod use one database. Publishing a database-enabled app is a separate action.",
+    title: "Database not set up",
+  },
   database_write_pending: {
     side: "ours",
     next_step:
@@ -336,7 +347,7 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "List only existing column names exactly as written, names are case-sensitive. Delete the watch before a migration drops a published column, because the write would fail.",
+      "List only existing column names exactly as written, names are case-sensitive. A migration can add a column and cannot drop one, so a listed column stays; to publish another column, create the watch again with the full new list, which replaces its trigger.",
     title: "Watched column does not exist",
   },
   database_watch_events_unavailable: {
@@ -372,11 +383,11 @@ export const PROBLEM_POLICY = {
   database_table_limit: {
     side: "yours",
     next_step:
-      "Use database_query to check for a suitable existing table. Ask before planning any migration to remove a table.",
+      "Use database_query to check for a suitable existing table, and tell the user that this database cannot take another one.",
     status: 409,
     retryable: false,
     action:
-      "This database already holds the maximum number of tables in its public schema, so no table can be added. Use an existing table, or remove a table you no longer need through a deployed migration, then create the table again.",
+      "This database already holds the maximum number of tables in its public schema, so no table can be added. Use an existing table, for example by adding a nullable column to it through a migration; a migration cannot drop a table.",
     title: "Database table limit reached",
   },
   project_notes_conflict: {
@@ -505,7 +516,7 @@ export const PROBLEM_POLICY = {
     status: 409,
     retryable: false,
     action:
-      "Delete a database you no longer need, or the project whose database it is, then deploy again. The limit counts the organization's live databases.",
+      "Delete a project you no longer need, then deploy again. The limit counts the organization's live databases.",
     title: "Database limit reached",
   },
   project_rename_blocked: {
@@ -886,12 +897,12 @@ export const PROBLEM_POLICY = {
   reconciliation_required: {
     side: "ours",
     next_step:
-      "If can_reconcile is true, call operation_reconcile once with the original write’s idempotency key. If reconciliation_required comes back a second time, stop and call feedback_submit with the operation ID. Tell the user the work got stuck on ohmyho.st’s side.",
+      "If can_reconcile is true, explain the recovery and ask the user to confirm one attempt. Once they confirm, use operation_reconcile with the original write’s idempotency key. If reconciliation_required comes back a second time, stop and call feedback_submit with the operation ID. Tell the user the work got stuck on ohmyho.st’s side.",
     say_to_user: "This got stuck on ohmyho.st’s side.",
     status: 409,
     retryable: false,
     action:
-      "Read the original operation’s recovery facts before making one reconciliation attempt.",
+      "Read the original operation’s recovery facts and confirm one attempt with the original write’s idempotency key.",
     title: "Recovery required",
   },
   reconciliation_exhausted: {
@@ -927,6 +938,55 @@ export const PROBLEM_POLICY = {
     title: "Service unavailable",
     restAction:
       "The service could not complete or confirm this request; it may already have taken effect. Wait, then repeat exactly the same request with the same idempotency key, waiting longer each time; never switch to a new key. If 'ohmyhost plan' keeps failing, check that the commit is saved in the project's selected source and that 'ohmyhost init --dry-run --json' at that commit reports no blockers. If it still fails, report the request_id through feedback.",
+  },
+  deployment_source_not_ready: {
+    side: "not_set_up",
+    next_step:
+      "Use source_get to check the project's source. Finish pending preparation or link the intended source, then plan its commit.",
+    status: 409,
+    retryable: false,
+    action:
+      "Read source_get or 'ohmyhost project status' and finish preparing the project's source. If it already shows ready, report this request_id through feedback.",
+    title: "Deployment source not ready",
+  },
+  deployment_source_changed: {
+    side: "yours",
+    next_step: "Read source_get and plan the intended commit from the current source.",
+    status: 409,
+    retryable: false,
+    action:
+      "Read source_get or 'ohmyhost project status', then plan the intended commit from the current source.",
+    title: "Deployment source changed",
+  },
+  github_source_access_denied: {
+    side: "yours",
+    next_step:
+      "Read github_status and check the GitHub App installation's repository access. Verify the pushed commit and re-link if the repository or installation changed.",
+    status: 409,
+    retryable: false,
+    action:
+      "Use GitHub status to check that the ohmyho.st GitHub App can read this repository. Verify the commit was pushed and re-link the repository if its name or installation changed, then plan again.",
+    title: "GitHub source access denied",
+  },
+  source_archive_too_large: {
+    side: "yours",
+    next_step:
+      "Remove excess files or generated output, or reduce large files. Push a smaller commit and call deployment_plan with its SHA.",
+    status: 409,
+    retryable: false,
+    action:
+      "Remove excess files or generated output, or reduce large files. Push a smaller commit and plan its SHA. Inspection checks the whole archive: up to 25,000,000 compressed bytes, 100 MiB expanded, 20,000 entries, 5 MiB per file, 16 MiB of retained configuration inputs and 32 MiB of retained source and JSON bodies.",
+    title: "Source archive too large",
+  },
+  source_archive_unsupported: {
+    side: "yours",
+    next_step:
+      "Replace symbolic links or unsupported paths with regular files and directories. Push the corrected commit and call deployment_plan with its SHA.",
+    status: 409,
+    retryable: false,
+    action:
+      "Check the repository archive for symbolic links or unsupported paths. Replace them with regular files and directories, push the corrected commit and plan it. If the archive looks valid, report this request_id through feedback.",
+    title: "Source archive unsupported",
   },
   source_commit_not_found: {
     side: "yours",

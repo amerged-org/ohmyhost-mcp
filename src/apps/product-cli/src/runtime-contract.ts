@@ -30,7 +30,12 @@ import type {
   OrganizationMcpConnectionRevocation,
   ProjectCreditBudget,
 } from "@ohmyhost/sdk-ts";
-import { isSaasCnameTarget, type SaasCnameTarget } from "@ohmyhost/contracts/platform-origins";
+import {
+  isCloudflareDnsConfirmationUrl,
+  isCloudflareProviderAuthorizationUrl,
+  isSaasCnameTarget,
+  type SaasCnameTarget,
+} from "@ohmyhost/contracts/platform-origins";
 import {
   publicOperationFailure,
   parseMigrationFailureDiagnostic,
@@ -246,6 +251,7 @@ export interface PublicCloudflareDnsAuthorization {
   readonly authorization_id: string;
   readonly authorization_url: string;
   readonly expires_at: string;
+  readonly verification_code?: string;
 }
 
 export interface PublicCloudflareDnsAuthorizationStatus {
@@ -264,7 +270,12 @@ export interface PublicCloudflareDnsAuthorizationStatus {
 export const parseCloudflareDnsAuthorization = (
   value: unknown,
 ): PublicCloudflareDnsAuthorization => {
-  const input = exactRecord(value, ["authorization_id", "authorization_url", "expires_at"]);
+  const input = exactRecord(value, [
+    "authorization_id",
+    "authorization_url",
+    "expires_at",
+    "verification_code",
+  ]);
   const authorizationUrl = input["authorization_url"];
   if (
     !isUlid(input["authorization_id"]) ||
@@ -279,18 +290,14 @@ export const parseCloudflareDnsAuthorization = (
   } catch {
     throw new ResponseContractError();
   }
+  const verificationCode = input["verification_code"];
+  const forwarded = isCloudflareDnsConfirmationUrl(url, input["authorization_id"]);
   if (
-    url.protocol !== "https:" ||
-    url.username !== "" ||
-    url.password !== "" ||
-    url.hostname !== "dash.cloudflare.com" ||
-    url.pathname !== "/oauth2/auth" ||
-    url.hash !== "" ||
-    !url.searchParams.has("client_id") ||
-    !url.searchParams.has("state")
-  ) {
+    forwarded
+      ? typeof verificationCode !== "string" || !/^[0-9A-F]{6}$/u.test(verificationCode)
+      : verificationCode !== undefined || !isCloudflareProviderAuthorizationUrl(url)
+  )
     throw new ResponseContractError();
-  }
   return input as unknown as PublicCloudflareDnsAuthorization;
 };
 
@@ -1652,8 +1659,7 @@ function parseOperationFailure(value: unknown): PublicOperationFailure {
     !boundedString(input["suggested_action"], 1, 500) ||
     (detail !== undefined && framework === null) ||
     (input["migration"] !== undefined &&
-      (input["code"] !== "database_migration_failed" ||
-        migration === null ||
+      (migration === null ||
         normalize(input["migration"] as Record<string, unknown>) !==
           normalize(migration as unknown as Record<string, unknown>)))
   )

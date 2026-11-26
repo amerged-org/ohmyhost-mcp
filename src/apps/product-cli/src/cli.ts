@@ -599,6 +599,10 @@ const HELP_USAGE = Object.freeze({
   auth: "ohmyhost auth config get|set --project ULID --environment ULID [--revision N --enabled true|false --signup-policy open|invite-only --application-name NAME --idempotency-key KEY] [--canonical-origin URL|primary] [--allowed-redirect-paths JSON_ARRAY --reset-password-path PATH --invitation-path PATH]; auth provider get|set --project ULID --environment ULID --provider google|github [--revision N --enabled true|false --client-id ID --idempotency-key KEY --stdin]; auth users list --project ULID --environment ULID [--limit N --cursor CURSOR --search TEXT]; auth user create|get|delete|invite|suspend|reactivate|revoke-sessions --project ULID --environment ULID [--email EMAIL | --user UUID] [--idempotency-key KEY]. Provider secrets are read only from stdin; use --json.",
   "secret delete":
     "ohmyhost secret delete NAME --project ULID --environment ENVIRONMENT_ULID --idempotency-key KEY [--wait] --json",
+  "secret form create":
+    "ohmyhost secret form create --project ULID --environment ENVIRONMENT_ULID --names NAME[,NAME] --json (for a customer who has no terminal: creates a protected form of one to ten distinct secret names and prints request_id, url and expires_at; the url is a capability valid for one hour and single use, so give it only to the customer, as the last line of the reply, and keep it out of files and notes; the customer types the values in the form and they never reach the agent or this command; needs secrets:write; a revoked token, an ended session or a lost permission ends the link, and 'ohmyhost logout' does not; read the outcome with 'ohmyhost secret form status'; a customer at a terminal uses 'secret set' with standard input instead)",
+  "secret form status":
+    "ohmyhost secret form status REQUEST_ID --project ULID --environment ENVIRONMENT_ULID --json (state pending, expired, saved or incomplete; once the form was submitted or expired it lists each name as saved, failed or unconfirmed; values are never returned; only the user who created the form reads it)",
   "mail workspace list": "ohmyhost mail workspace list --organization ULID --json",
   "mail workspace create":
     "ohmyhost mail workspace create --organization ULID --domain DOMAIN --sending true --idempotency-key KEY --json",
@@ -728,9 +732,11 @@ export const invalidCommandAction = (argv: readonly string[], commandPrefix: str
  * The retry step after an ambiguous failure, as a clause that follows "Then" or a semicolon. A
  * command that takes --idempotency-key repeats its change with that key. A mutation without a key
  * (--yes but no key) may already have applied its change, so its state is read first. Any other
- * command only reads or signs in; it keeps the general advice.
+ * command keeps the general advice, except secret form create, which needs its answer for a status read.
  */
 const retryAdvice = (command: string, keyed = true): string => {
+  if (command === "secret form create")
+    return "if you still need a form, run the command again to get a new link. Any original link expires after one hour";
   const usage = Object.hasOwn(HELP_USAGE, command)
     ? HELP_USAGE[command as CustomerCommandLabel]
     : "";
@@ -1505,6 +1511,9 @@ export class ProductCli {
       if (command.kind === "secret-list") return await this.listEnvironmentSecrets(command, signal);
       if (command.kind === "function-runs") return await this.listFunctionRuns(command, signal);
       if (command.kind === "secret-set") return await this.putEnvironmentSecret(command, signal);
+      if (command.kind === "secret-form-create")
+        return await this.createSecretForm(command, signal);
+      if (command.kind === "secret-form-status") return await this.readSecretForm(command, signal);
       if (command.kind === "native-auth") {
         const api = await this.authenticatedApi(command.credentialStore, signal);
         if (!api.nativeAuth) throw new Error("Native Auth unavailable");
@@ -3053,6 +3062,12 @@ export class ProductCli {
     return success("domain cloudflare authorize", {
       status: "authorization_required",
       authorization,
+      ...(authorization.verification_code === undefined
+        ? {}
+        : {
+            next_action:
+              "Send the link privately and tell the DNS admin this code through a channel they trust.",
+          }),
     });
   }
 
@@ -3385,6 +3400,43 @@ export class ProductCli {
     } finally {
       valueBytes.fill(0);
     }
+  }
+
+  private async createSecretForm(
+    command: Extract<ProductCliCommand, { kind: "secret-form-create" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const form = await api.createSecretInputRequest({
+      projectId: command.projectId,
+      environmentId: command.environmentId,
+      names: command.names,
+    });
+    // The url is a capability for the person who types the values; only that field is printed.
+    return success("secret form create", {
+      status: "created",
+      request_id: form.request_id,
+      url: form.url,
+      expires_at: form.expires_at,
+    });
+  }
+
+  private async readSecretForm(
+    command: Extract<ProductCliCommand, { kind: "secret-form-status" }>,
+    signal: AbortSignal,
+  ): Promise<CliResult> {
+    const api = await this.authenticatedApi(command.credentialStore, signal);
+    const form = await api.getSecretInputRequest({
+      projectId: command.projectId,
+      environmentId: command.environmentId,
+      requestId: command.requestId,
+    });
+    return success("secret form status", {
+      status: form.state,
+      request_id: form.request_id,
+      expires_at: form.expires_at,
+      ...(form.secrets === undefined ? {} : { secrets: form.secrets }),
+    });
   }
 
   private async deleteEnvironmentSecret(
@@ -3958,26 +4010,30 @@ const webhookCreateRequest = async (
   },
   privateHeaders = false,
 ) => {
+  const body = { url: command.url, event_types: command.eventTypes };
+  let request: ReturnType<typeof parseDatabaseWebhookCreateRequest>;
+  try {
+    request = parseDatabaseWebhookCreateRequest(body);
+  } catch {
+    throw new ProductCliFailure(
+      2,
+      "invalid_request",
+      false,
+      "Use a valid HTTPS receiver URL and one to sixteen distinct supported event patterns. Nothing was sent.",
+    );
+  }
+  if (command.headersFile === null) return request;
+
   const headersFailure = () =>
     new ProductCliFailure(2, "headers_file_invalid", false, HEADERS_FILE_INVALID_ACTION);
-  const headers =
-    command.headersFile === null
-      ? undefined
-      : await readBoundedUtf8File(command.headersFile, 8_192, headersFailure, privateHeaders).then(
-          (text: string): unknown => {
-            try {
-              return JSON.parse(text) as unknown;
-            } catch {
-              throw headersFailure();
-            }
-          },
-        );
+  const text = await readBoundedUtf8File(
+    command.headersFile,
+    8_192,
+    headersFailure,
+    privateHeaders,
+  );
   try {
-    return parseDatabaseWebhookCreateRequest({
-      url: command.url,
-      event_types: command.eventTypes,
-      headers,
-    });
+    return parseDatabaseWebhookCreateRequest({ ...body, headers: JSON.parse(text) as unknown });
   } catch {
     throw headersFailure();
   }
@@ -4086,7 +4142,7 @@ const psqlUnavailable = (): CliResult =>
     9,
     "psql_unavailable",
     false,
-    "Install the PostgreSQL client (psql) and make it available on PATH, or run 'ohmyhost database access create' and connect with your own SQL client.",
+    "Install the PostgreSQL client (psql), make it available on PATH and run 'ohmyhost database psql' again. Only psql can connect to the database; no other SQL client has an address to reach it.",
   );
 
 const success = (command: CommandLabel, body: Readonly<Record<string, unknown>>): CliResult => ({
@@ -4250,6 +4306,8 @@ const parsedCommandName = (command: ProductCliCommand): CommandLabel => {
   if (command.kind === "function-runs") return "function runs";
   if (command.kind === "secret-set") return "secret set";
   if (command.kind === "secret-delete") return "secret delete";
+  if (command.kind === "secret-form-create") return "secret form create";
+  if (command.kind === "secret-form-status") return "secret form status";
   if (command.kind === "native-auth") return "auth";
   if (command.kind === "shared-mail" || command.kind === "managed-mail") return command.label;
   if (command.kind === "profile-list") return "profile list";

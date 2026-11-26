@@ -107,6 +107,7 @@ import {
   submitFeedback,
   getFeedback,
   createOrganization,
+  createSecretInputRequest,
   deleteEnvironmentSecret,
   deleteProject,
   getCurrentIdentity,
@@ -117,6 +118,7 @@ import {
   getProject,
   getProjectSource,
   getProjectStatus,
+  getSecretInputRequest,
   linkProjectSource,
   connectGithubOrganization,
   getGithubOrganizationConnection,
@@ -1027,15 +1029,21 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
   public async createDatabaseWebhook(
     input: Parameters<LocalMcpProductClient["createDatabaseWebhook"]>[0],
   ) {
+    // Header values are read from an owner-private file, like the activation's, never from an argument.
+    const request = await readPrivateWebhookCreateRequest({
+      url: input.url,
+      eventTypes: input.eventTypes,
+      headersFile: input.headersFile ?? null,
+    });
     const value = await createProjectDatabaseWebhook(
       {
         project_id: input.projectId,
         environment: input.environment,
         "Idempotency-Key": input.idempotencyKey,
         databaseWebhookCreateRequest: {
-          url: input.url,
-          event_types: [...input.eventTypes],
-          headers: { ...input.headers },
+          ...request,
+          event_types: [...request.event_types],
+          headers: { ...request.headers },
         },
       },
       { client: this.#client },
@@ -1602,6 +1610,32 @@ export class GeneratedSdkLocalMcpClient implements LocalMcpProductClient {
         project_id: input.projectId,
         environment_id: input.environmentId,
         secret_name: input.name,
+      },
+      { client: this.#client },
+    );
+  }
+
+  public createSecretInputRequest(
+    input: Parameters<LocalMcpProductClient["createSecretInputRequest"]>[0],
+  ) {
+    return createSecretInputRequest(
+      {
+        project_id: input.projectId,
+        environment_id: input.environmentId,
+        createSecretInputRequest: { names: [...input.names] },
+      },
+      { client: this.#client },
+    );
+  }
+
+  public getSecretInputRequest(
+    input: Parameters<LocalMcpProductClient["getSecretInputRequest"]>[0],
+  ) {
+    return getSecretInputRequest(
+      {
+        project_id: input.projectId,
+        environment_id: input.environmentId,
+        request_id: input.requestId,
       },
       { client: this.#client },
     );

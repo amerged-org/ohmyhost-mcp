@@ -3629,7 +3629,7 @@ export const completeGithubSourceAuthorization = <ThrowOnError extends boolean =
 /**
  * Complete one Cloudflare DNS authorization
  *
- * Successful callbacks require code and state and complete one previously authenticated project authorization, only in a browser signed in to the portal as the user who started it; without that session the callback answers a confirmation problem and consumes nothing. Provider rejection instead supplies error and optional error_description, error_uri and state; it returns a static actionable problem without completing authorization or reflecting provider input. Success and error parameters cannot be combined. This callback grants no general unauthenticated product access.
+ * Successful callbacks require code and state. A project DNS authorization completes in the same browser that confirmed the ohmyho.st handoff, with no ohmyho.st sign-in required. The exchange uses S256 PKCE. A missing or invalid browser confirmation consumes nothing. The project callback explains whether to reopen the same link, request a new link, or revoke the Cloudflare authorization after a failed cleanup. Separate application identity and workspace sender authorizations require the initiating user's portal session. Provider rejection instead supplies error and optional error_description, error_uri and state; it returns a static actionable problem without completing authorization or reflecting provider input. Success and error parameters cannot be combined. This callback grants no general unauthenticated product access.
  */
 export const completeCloudflareDnsAuthorization = <ThrowOnError extends boolean = true>(
   parameters?: {
@@ -6024,7 +6024,7 @@ export const configureProjectSourceAutoDeploy = <ThrowOnError extends boolean = 
 /**
  * Start project-scoped Cloudflare DNS authorization
  *
- * Creates or replays one short-lived authorization URL for the customer Cloudflare zone bound to the project's Paid domain. Pending requests replay the original handoff. Expired or consumed requests return cloudflare_authorization_closed (409); read current DNS authorization status and reuse a valid matching grant, or request a fresh authorization with a new key. No provider credential is returned.
+ * Creates or replays one private 24-hour ohmyho.st confirmation link for the exact customer Cloudflare zone bound to the project's proven Paid hostname or declared mail sender. The requester needs a verified ohmyho.st account email. Send the link privately and tell the DNS administrator the verification code through a channel they trust. The admin checks the verified requester and code, then approves at Cloudflare in the same browser without an ohmyho.st session. Pending requests replay the original handoff. Expired or consumed requests return cloudflare_authorization_closed (409); read current DNS authorization status and reuse a valid matching grant, or request a fresh authorization with a new key. No provider credential is returned.
  */
 export const createCloudflareDnsAuthorization = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -6129,7 +6129,7 @@ export const getCloudflareDnsAuthorizationStatus = <ThrowOnError extends boolean
 /**
  * Move a project to a chosen address
  *
- * Starts a durable operation that re-publishes the project's Dev and Prod gateways at the chosen address and stores it only once both serve it. The previous address stops answering and returns to the pool for any project to claim. Ask GET /v1/project-handles/{handle} first; a taken, unusable or unchanged address is refused before any gateway moves, and a project with an operation in flight is refused until it finishes.
+ * Starts a durable operation that re-publishes the project's Dev and Prod gateways at the chosen address and stores it only once both serve it. The previous address stops answering and is held for 30 days against other organizations; the same organization may take it back at once. Ask GET /v1/project-handles/{handle} first; a taken, unusable or unchanged address is refused before any gateway moves, and a project with an operation in flight is refused until it finishes.
  */
 export const changeProjectHandle = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -6391,7 +6391,7 @@ export const getPaidProjectDomain = <ThrowOnError extends boolean = true>(
 /**
  * Apply one Paid customer-owned hostname
  *
- * Requires Paid access (a Stripe period or a grant) or, for a Free workspace, a project that currently shows the powered-by flag, and no expired credit-exhaustion grace. Returns paid_plan_required otherwise, or insufficient_organization_credits after seven days with no available credits, without provider mutation. Top-ups lift a credit-exhaustion block but never start or extend Paid access. Without an active Prod deployment, apply declares the hostname as awaiting_deployment, enabling Cloudflare consent without provider resources, DNS changes or domain charges. After a successful Prod deployment, replay the same hostname and idempotency key to activate it. A key already used for this connection returns idempotency_key_reused (409) when its request changed or its connection has since ended. The same member's fresh key for this hostname's live connection is answered with that connection as it stands and provisions nothing; only the original key activates an awaiting_deployment connection. A fresh key for another hostname, or for a connection another member configured, answers domain_already_configured (409); the project's one connection must be deleted first to replace it. A connection still being deleted answers domain_deleting (409) until its deletion finishes.
+ * Requires Paid access (a Stripe period or a grant) or, for a Free workspace, a project that currently shows the powered-by flag, and no expired credit-exhaustion grace. Returns paid_plan_required otherwise, or insufficient_organization_credits after seven days with no available credits, without provider mutation. Top-ups lift a credit-exhaustion block but never start or extend Paid access. Without an active Prod deployment, apply declares the hostname as awaiting_deployment, enabling Cloudflare consent without provider resources, DNS changes or domain charges. DNS authorization and publishing the live site are separate customer decisions. Ask before starting a Prod deployment. Once Prod is healthy, replay the same hostname and idempotency key to activate it. A key already used for this connection returns idempotency_key_reused (409) when its request changed or its connection has since ended. The same member's fresh key for this hostname's live connection is answered with that connection as it stands and provisions nothing; only the original key activates an awaiting_deployment connection. A fresh key for another hostname, or for a connection another member configured, answers domain_already_configured (409); the project's one connection must be deleted first to replace it. A connection still being deleted answers domain_deleting (409) until its deletion finishes.
  */
 export const applyPaidProjectDomain = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -6448,7 +6448,7 @@ export const applyPaidProjectDomain = <ThrowOnError extends boolean = true>(
 /**
  * Plan a deployment
  *
- * Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. Native Auth requires rollout approval for this workspace and project; a missing approval returns 409 native_auth_launch_unavailable before a build is reserved. A commit the platform does not admit answers 409 with a nonretryable problem code. For framework_conversion_required, detail names the rule when the refusal is typed. An invalid ohmyhost.yaml includes configuration_diagnostic and, when its framework and package manager are identified, valid_example. For source_syntax_error, detail names the file and its one-based line and column without including a source excerpt.
+ * Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. Native Auth requires rollout approval for this workspace and project; a missing approval returns 409 native_auth_launch_unavailable before a build is reserved. A source refusal returns a nonretryable 409 with suggested_action. A missing or changed planning source returns deployment_source_not_ready or deployment_source_changed. GitHub installation access can be refused with github_source_access_denied. An archive exceeding inspection limits returns source_archive_too_large. Unsupported tar structure returns source_archive_unsupported. Temporary provider failures, incomplete or corrupt gzip downloads, and an exceeded 27-second server planning deadline return a retryable 503. For framework_conversion_required, detail names the rule when the refusal is typed. An invalid ohmyhost.yaml includes configuration_diagnostic and, when its framework and package manager are identified, valid_example. For source_syntax_error, detail names the file and its one-based line and column without including a source excerpt.
  */
 export const planDeployment = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -6897,7 +6897,7 @@ export const changeDatabaseCompute = <ThrowOnError extends boolean = true>(
 /**
  * Execute one bounded database write in Dev or Prod
  *
- * Owner-authorized INSERT, UPDATE or DELETE through the restricted runtime role, including ordinary upsert. Environment is mandatory. One direct statement and transaction, five-second timeout and at most 1000 directly affected rows; customer triggers and cascades may affect more rows. Rows are not returned. The durable Idempotency-Key receipt persists until project deletion. Same-key retries observe the original execution attempt; unknown outcomes never automatically execute again. Inspect target data before deliberately choosing a new key. Schema changes use GitHub migrations. Database compute is metered normally and existing credit grace and Stop budgets apply. Application row-level security policies remain effective for writes.
+ * Owner-authorized INSERT, UPDATE or DELETE through the restricted runtime role, including ordinary upsert. Environment is mandatory. One direct statement and transaction, five-second timeout and at most 1000 directly affected rows; customer triggers and cascades may affect more rows. Rows are not returned. The durable Idempotency-Key receipt persists until project deletion. Same-key retries observe the original execution attempt; unknown outcomes never automatically execute again. Inspect target data before deliberately choosing a new key. Schema changes use GitHub migrations. Database compute is metered normally and existing credit grace and Stop budgets apply. Application row-level security policies remain effective for writes. A confirmed missing database returns database_not_set_up (409). A temporary database setup lookup failure returns retryable service_unavailable (503).
  */
 export const writeProjectDatabase = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -6954,7 +6954,7 @@ export const writeProjectDatabase = <ThrowOnError extends boolean = true>(
 /**
  * Run one bounded read-only Dev or Prod database query
  *
- * Executes one SELECT through the project's least-privilege read-only role. Application row-level security policies apply and may filter rows; a complete SQL archive uses the separate authorized export workflow. Connection credentials are never returned.
+ * Executes one SELECT through the project's least-privilege read-only role. Application row-level security policies apply and may filter rows; a complete SQL archive uses the separate authorized export workflow. Connection credentials are never returned. A confirmed missing database returns database_not_set_up (409). The read request authorizes no setup. A temporary database setup lookup failure returns retryable service_unavailable (503).
  */
 export const queryProjectDatabase = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -7166,7 +7166,7 @@ export const revokeProjectDatabaseAccess = <ThrowOnError extends boolean = true>
 /**
  * Create a table in the project's database
  *
- * Creates one ordinary table in the public schema of one environment's database, with the columns and the primary key the request names. Repeating an identical request answers the existing table with 200; a table of the same name with another definition is refused with database_table_conflict (409). The request wakes a sleeping database. A reached Stop budget refuses with project_budget_exceeded (402). At most 100 tables exist per database.
+ * Creates one ordinary table in the public schema of one environment's database, with the columns and the primary key the request names. Repeating an identical request answers the existing table with 200; a table of the same name with another definition is refused with database_table_conflict (409). The request wakes a sleeping database. A reached Stop budget refuses with project_budget_exceeded (402). At most 100 tables exist per database. A confirmed missing database returns database_not_set_up (409). A temporary database setup lookup failure returns retryable service_unavailable (503).
  */
 export const createProjectDatabaseTable = <ThrowOnError extends boolean = true>(
   parameters: {
@@ -8886,7 +8886,7 @@ export const getSecretInputRequest = <ThrowOnError extends boolean = true>(
 };
 
 /**
- * Get an operation
+ * Get an operation and its last recorded provider verification step
  */
 export const getOperation = <ThrowOnError extends boolean = true>(
   parameters: {

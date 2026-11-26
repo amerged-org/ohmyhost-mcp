@@ -172,6 +172,7 @@ import {
   disconnectGithubOrganization,
   listOrganizationMcpConnections,
   revokeOrganizationMcpConnection,
+  createSecretInputRequest,
   deleteEnvironmentSecret,
   deleteProject,
   deletePaidProjectDomain,
@@ -183,6 +184,7 @@ import {
   listDeployments,
   getProjectSourceAutoDeploy,
   getProjectStatus,
+  getSecretInputRequest,
   getPaidProjectDomain,
   getDeploymentLogs,
   linkProjectSource,
@@ -238,6 +240,8 @@ import {
   type EnvironmentSecretPage,
   type FunctionRunPage,
   type DeleteEnvironmentSecretResult,
+  type SecretInputRequest,
+  type SecretInputRequestStatus,
   type OhMyHostClient,
   type ProviderReconciliationAttempt,
   type CurrentIdentity,
@@ -754,6 +758,17 @@ export interface ProductApi {
     readonly name: string;
     readonly idempotencyKey: string;
   }): Promise<DeleteEnvironmentSecretResult>;
+  /** The link is a capability for the person who types the values; the values never reach this client. */
+  createSecretInputRequest(input: {
+    readonly projectId: string;
+    readonly environmentId: string;
+    readonly names: readonly string[];
+  }): Promise<SecretInputRequest>;
+  getSecretInputRequest(input: {
+    readonly projectId: string;
+    readonly environmentId: string;
+    readonly requestId: string;
+  }): Promise<SecretInputRequestStatus>;
   sharedMail?(input: SharedMailCommand): Promise<unknown>;
   managedMail?(input: ManagedMailCommand): Promise<unknown>;
 }
@@ -2220,6 +2235,36 @@ export class GeneratedSdkProductApi implements ProductApi {
         project_id: input.projectId,
         environment_id: input.environmentId,
         secret_name: input.name,
+      },
+      { client: this.#client },
+    );
+  }
+
+  public async createSecretInputRequest(input: {
+    readonly projectId: string;
+    readonly environmentId: string;
+    readonly names: readonly string[];
+  }): Promise<SecretInputRequest> {
+    return createSecretInputRequest(
+      {
+        project_id: input.projectId,
+        environment_id: input.environmentId,
+        createSecretInputRequest: { names: [...input.names] },
+      },
+      { client: this.#client },
+    );
+  }
+
+  public async getSecretInputRequest(input: {
+    readonly projectId: string;
+    readonly environmentId: string;
+    readonly requestId: string;
+  }): Promise<SecretInputRequestStatus> {
+    return getSecretInputRequest(
+      {
+        project_id: input.projectId,
+        environment_id: input.environmentId,
+        request_id: input.requestId,
       },
       { client: this.#client },
     );

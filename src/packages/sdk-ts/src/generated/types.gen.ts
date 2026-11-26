@@ -770,12 +770,16 @@ export type CreateCloudflareDnsAuthorizationRequest = {
 };
 
 /**
- * Short-lived credential-free redirect information for one Cloudflare OAuth authorization.
+ * Private browser link for one Cloudflare OAuth authorization. Project DNS uses an ohmyho.st confirmation link. Application identity and workspace sender DNS use direct Cloudflare links with the initiating portal session.
  */
 export type CloudflareDnsAuthorization = {
   authorization_id: Ulid;
   authorization_url: string;
   expires_at: string;
+  /**
+   * Present for project confirmation links. Tell the DNS admin this code through a channel they trust.
+   */
+  verification_code?: string;
 };
 
 /**
@@ -1258,6 +1262,9 @@ export type DeploymentDiagnostic = {
   code: string;
   message: string;
   exception_class?: string;
+  /**
+   * The diagnostic may identify a file without a line or column. Unavailable coordinates are omitted.
+   */
   file?: string;
   line?: number;
   column?: number;
@@ -1266,7 +1273,7 @@ export type DeploymentDiagnostic = {
   trace_id?: string;
   duration_ms?: number;
   /**
-   * The customer's own output with control characters removed before storage: on BUILD_FAILED the tail of the install/build output (newest lines last), on HEALTH_CHECK_FAILED the head of the body the health check was answered with (at most 4096 characters, never a header). A running application holds its environment's secrets and this answer is not scanned for them, so, like a query of the project's database, a HEALTH_CHECK_FAILED excerpt is returned only to an owner of the project; never answer a health check with a secret.
+   * Diagnostic output with control characters removed before storage. On BUILD_FAILED this is the tail of the install/build log (newest lines last), which may include a platform packaging diagnostic. On HEALTH_CHECK_FAILED this is the head of the body the health check was answered with (at most 4096 characters, never a header). A running application holds its environment's secrets and this answer is not scanned for them, so, like a query of the project's database, a HEALTH_CHECK_FAILED excerpt is returned only to an owner of the project; never answer a health check with a secret.
    */
   excerpt?: string;
   /**
@@ -1308,6 +1315,9 @@ export type ProjectDatabaseWriteReceipt = {
 
 export type ProjectDatabaseQueryRequest = {
   environment: "dev" | "prod";
+  /**
+   * One SELECT or WITH statement in any letter case, at most 4,096 bytes, without a trailing semicolon, because it runs as a subquery.
+   */
   statement: string;
   parameters: Array<string | number | boolean | null>;
 };
@@ -2240,6 +2250,7 @@ export type ProblemDetails = {
     | "database_watch_conflict"
     | "database_table_conflict"
     | "database_table_limit"
+    | "database_not_set_up"
     | "compute_change_pending"
     | "compute_change_conflict"
     | "billing_purchase_conflict"
@@ -2261,6 +2272,11 @@ export type ProblemDetails = {
     | "reconciliation_required"
     | "service_unavailable"
     | "source_commit_not_found"
+    | "deployment_source_not_ready"
+    | "deployment_source_changed"
+    | "github_source_access_denied"
+    | "source_archive_too_large"
+    | "source_archive_unsupported"
     | "domain_hostname_taken"
     | "domain_ownership_required"
     | "domain_dns_conflict"
@@ -2380,6 +2396,9 @@ export type OperationWork = {
     | "database_write"
     | "project_recovery"
     | "other";
+  /**
+   * During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.
+   */
   step: string;
   age_seconds: number;
   usual_duration_seconds: number;
@@ -2572,6 +2591,9 @@ export type ProjectExportArchive = {
 };
 
 export type OperationFailure = {
+  /**
+   * Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.
+   */
   migration?: MigrationFailureDiagnostic;
   code:
     | "operation_failed"
@@ -6803,7 +6825,7 @@ export type CompleteCloudflareDnsAuthorizationErrors = {
    */
   400: ProblemDetails;
   /**
-   * The request failed.
+   * The authorization could not complete. Follow the recovery instructions.
    */
   409: ProblemDetails;
   /**
@@ -9733,7 +9755,7 @@ export type CreateCloudflareDnsAuthorizationError =
 
 export type CreateCloudflareDnsAuthorizationResponses = {
   /**
-   * A short-lived Cloudflare authorization URL.
+   * A private 24-hour ohmyho.st confirmation link and verification code for the DNS administrator.
    */
   201: CloudflareDnsAuthorization;
 };
@@ -10883,6 +10905,10 @@ export type QueryProjectDatabaseErrors = {
    * The resource does not exist or is not visible to the authenticated principal.
    */
   404: ProblemDetails;
+  /**
+   * The request failed.
+   */
+  409: ProblemDetails;
   /**
    * The request failed.
    */
@@ -13331,7 +13357,7 @@ export type GetOperationError = GetOperationErrors[keyof GetOperationErrors];
 
 export type GetOperationResponses = {
   /**
-   * The durable operation and its current work, including wait and recovery guidance.
+   * The durable operation and its current work. During provider verification, work.step identifies the last recorded check when available, and reconciliation.observed_at dates the observation.
    */
   200: Operation;
 };

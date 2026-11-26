@@ -73,9 +73,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "6fcd04d11cec23746bec6faa3574fd947e64943cd267e3c080981411c90cc26e";
+  "8ad0d2c951347bb0ea88b2d670656a3c47686a564ff5a21744d920300a6a95ab";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.82";
+export const remoteMcpReleaseVersion = "0.1.83";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -3738,7 +3738,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     outputSchema: {
       type: "object",
       description:
-        "Short-lived credential-free redirect information for one Cloudflare OAuth authorization.",
+        "Private browser link for one Cloudflare OAuth authorization. Project DNS uses an ohmyho.st confirmation link. Application identity and workspace sender DNS use direct Cloudflare links with the initiating portal session.",
       additionalProperties: false,
       required: ["authorization_id", "authorization_url", "expires_at"],
       properties: {
@@ -3748,9 +3748,16 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           format: "uri",
           minLength: 20,
           maxLength: 4096,
-          pattern: "^https://dash\\.cloudflare\\.com/oauth2/auth\\?",
+          pattern:
+            "^https://(?:(?:dev\\.)?app\\.ohmyho\\.st/v1/cloudflare/oauth/authorize\\?request=f1\\.[0-7][0-9A-HJKMNP-TV-Z]{25}\\.[A-Za-z0-9_-]{43}$|dash\\.cloudflare\\.com/oauth2/auth\\?)",
         },
         expires_at: { type: "string", format: "date-time" },
+        verification_code: {
+          type: "string",
+          pattern: "^[0-9A-F]{6}$",
+          description:
+            "Present for project confirmation links. Tell the DNS admin this code through a channel they trust.",
+        },
       },
     },
   },
@@ -4876,7 +4883,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     outputSchema: {
       type: "object",
       description:
-        "Short-lived credential-free redirect information for one Cloudflare OAuth authorization.",
+        "Private browser link for one Cloudflare OAuth authorization. Project DNS uses an ohmyho.st confirmation link. Application identity and workspace sender DNS use direct Cloudflare links with the initiating portal session.",
       additionalProperties: false,
       required: ["authorization_id", "authorization_url", "expires_at"],
       properties: {
@@ -4886,9 +4893,16 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           format: "uri",
           minLength: 20,
           maxLength: 4096,
-          pattern: "^https://dash\\.cloudflare\\.com/oauth2/auth\\?",
+          pattern:
+            "^https://(?:(?:dev\\.)?app\\.ohmyho\\.st/v1/cloudflare/oauth/authorize\\?request=f1\\.[0-7][0-9A-HJKMNP-TV-Z]{25}\\.[A-Za-z0-9_-]{43}$|dash\\.cloudflare\\.com/oauth2/auth\\?)",
         },
         expires_at: { type: "string", format: "date-time" },
+        verification_code: {
+          type: "string",
+          pattern: "^[0-9A-F]{6}$",
+          description:
+            "Present for project confirmation links. Tell the DNS admin this code through a channel they trust.",
+        },
       },
     },
   },
@@ -6650,7 +6664,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/cloudflare/oauth/callback",
     summary: "Complete one Cloudflare DNS authorization",
     description:
-      "Successful callbacks require code and state and complete one previously authenticated project authorization, only in a browser signed in to the portal as the user who started it; without that session the callback answers a confirmation problem and consumes nothing. Provider rejection instead supplies error and optional error_description, error_uri and state; it returns a static actionable problem without completing authorization or reflecting provider input. Success and error parameters cannot be combined. This callback grants no general unauthenticated product access.",
+      "Successful callbacks require code and state. A project DNS authorization completes in the same browser that confirmed the ohmyho.st handoff, with no ohmyho.st sign-in required. The exchange uses S256 PKCE. A missing or invalid browser confirmation consumes nothing. The project callback explains whether to reopen the same link, request a new link, or revoke the Cloudflare authorization after a failed cleanup. Separate application identity and workspace sender authorizations require the initiating user's portal session. Provider rejection instead supplies error and optional error_description, error_uri and state; it returns a static actionable problem without completing authorization or reflecting provider input. Success and error parameters cannot be combined. This callback grants no general unauthenticated product access.",
     disposition: "excluded",
     toolNames: [],
     reason: "Browser OAuth callback; use the existing protected DNS authorization workflow.",
@@ -7745,7 +7759,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -7978,7 +7992,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -8064,7 +8083,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                   additionalProperties: false,
                   required: ["reason", "file"],
                   description:
-                    "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                    "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
                   properties: {
                     reason: {
                       type: "string",
@@ -8904,7 +8923,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -9137,7 +9156,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -9386,7 +9410,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -9619,7 +9643,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -9968,7 +9997,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                       additionalProperties: false,
                       required: ["reason", "file"],
                       description:
-                        "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                        "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
                       properties: {
                         reason: {
                           type: "string",
@@ -10215,7 +10244,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                         "other",
                       ],
                     },
-                    step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+                    step: {
+                      type: "string",
+                      pattern: "^[a-z][a-z_]{0,63}$",
+                      description:
+                        "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+                    },
                     age_seconds: { type: "integer", minimum: 0 },
                     usual_duration_seconds: { type: "integer", minimum: 1 },
                     wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -11031,7 +11065,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -11264,7 +11298,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -11559,7 +11598,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -11792,7 +11831,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -12253,7 +12297,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -12486,7 +12530,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -12613,7 +12662,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -12846,7 +12895,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -12983,7 +13037,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -13216,7 +13270,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -13585,7 +13644,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -13818,7 +13877,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -13988,7 +14052,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -14221,7 +14285,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -14433,7 +14502,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/cloudflare-dns/authorization",
     summary: "Start project-scoped Cloudflare DNS authorization",
     description:
-      "Creates or replays one short-lived authorization URL for the customer Cloudflare zone bound to the project's Paid domain. Pending requests replay the original handoff. Expired or consumed requests return cloudflare_authorization_closed (409); read current DNS authorization status and reuse a valid matching grant, or request a fresh authorization with a new key. No provider credential is returned.",
+      "Creates or replays one private 24-hour ohmyho.st confirmation link for the exact customer Cloudflare zone bound to the project's proven Paid hostname or declared mail sender. The requester needs a verified ohmyho.st account email. Send the link privately and tell the DNS administrator the verification code through a channel they trust. The admin checks the verified requester and code, then approves at Cloudflare in the same browser without an ohmyho.st session. Pending requests replay the original handoff. Expired or consumed requests return cloudflare_authorization_closed (409); read current DNS authorization status and reuse a valid matching grant, or request a fresh authorization with a new key. No provider credential is returned.",
     disposition: "named",
     toolNames: ["domain_cloudflare_authorize"],
     requestBody: {
@@ -14482,7 +14551,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     outputSchema: {
       type: "object",
       description:
-        "Short-lived credential-free redirect information for one Cloudflare OAuth authorization.",
+        "Private browser link for one Cloudflare OAuth authorization. Project DNS uses an ohmyho.st confirmation link. Application identity and workspace sender DNS use direct Cloudflare links with the initiating portal session.",
       additionalProperties: false,
       required: ["authorization_id", "authorization_url", "expires_at"],
       properties: {
@@ -14492,9 +14561,16 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           format: "uri",
           minLength: 20,
           maxLength: 4096,
-          pattern: "^https://dash\\.cloudflare\\.com/oauth2/auth\\?",
+          pattern:
+            "^https://(?:(?:dev\\.)?app\\.ohmyho\\.st/v1/cloudflare/oauth/authorize\\?request=f1\\.[0-7][0-9A-HJKMNP-TV-Z]{25}\\.[A-Za-z0-9_-]{43}$|dash\\.cloudflare\\.com/oauth2/auth\\?)",
         },
         expires_at: { type: "string", format: "date-time" },
+        verification_code: {
+          type: "string",
+          pattern: "^[0-9A-F]{6}$",
+          description:
+            "Present for project confirmation links. Tell the DNS admin this code through a channel they trust.",
+        },
       },
     },
   },
@@ -14609,7 +14685,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/handle",
     summary: "Move a project to a chosen address",
     description:
-      "Starts a durable operation that re-publishes the project's Dev and Prod gateways at the chosen address and stores it only once both serve it. The previous address stops answering and returns to the pool for any project to claim. Ask GET /v1/project-handles/{handle} first; a taken, unusable or unchanged address is refused before any gateway moves, and a project with an operation in flight is refused until it finishes.",
+      "Starts a durable operation that re-publishes the project's Dev and Prod gateways at the chosen address and stores it only once both serve it. The previous address stops answering and is held for 30 days against other organizations; the same organization may take it back at once. Ask GET /v1/project-handles/{handle} first; a taken, unusable or unchanged address is refused before any gateway moves, and a project with an operation in flight is refused until it finishes.",
     disposition: "named",
     toolNames: ["project_handle_set"],
     requestBody: {
@@ -14698,7 +14774,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -14931,7 +15007,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -15026,7 +15107,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -15259,7 +15340,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -15388,7 +15474,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/paid-domain",
     summary: "Apply one Paid customer-owned hostname",
     description:
-      "Requires Paid access (a Stripe period or a grant) or, for a Free workspace, a project that currently shows the powered-by flag, and no expired credit-exhaustion grace. Returns paid_plan_required otherwise, or insufficient_organization_credits after seven days with no available credits, without provider mutation. Top-ups lift a credit-exhaustion block but never start or extend Paid access. Without an active Prod deployment, apply declares the hostname as awaiting_deployment, enabling Cloudflare consent without provider resources, DNS changes or domain charges. After a successful Prod deployment, replay the same hostname and idempotency key to activate it. A key already used for this connection returns idempotency_key_reused (409) when its request changed or its connection has since ended. The same member's fresh key for this hostname's live connection is answered with that connection as it stands and provisions nothing; only the original key activates an awaiting_deployment connection. A fresh key for another hostname, or for a connection another member configured, answers domain_already_configured (409); the project's one connection must be deleted first to replace it. A connection still being deleted answers domain_deleting (409) until its deletion finishes.",
+      "Requires Paid access (a Stripe period or a grant) or, for a Free workspace, a project that currently shows the powered-by flag, and no expired credit-exhaustion grace. Returns paid_plan_required otherwise, or insufficient_organization_credits after seven days with no available credits, without provider mutation. Top-ups lift a credit-exhaustion block but never start or extend Paid access. Without an active Prod deployment, apply declares the hostname as awaiting_deployment, enabling Cloudflare consent without provider resources, DNS changes or domain charges. DNS authorization and publishing the live site are separate customer decisions. Ask before starting a Prod deployment. Once Prod is healthy, replay the same hostname and idempotency key to activate it. A key already used for this connection returns idempotency_key_reused (409) when its request changed or its connection has since ended. The same member's fresh key for this hostname's live connection is answered with that connection as it stands and provisions nothing; only the original key activates an awaiting_deployment connection. A fresh key for another hostname, or for a connection another member configured, answers domain_already_configured (409); the project's one connection must be deleted first to replace it. A connection still being deleted answers domain_deleting (409) until its deletion finishes.",
     disposition: "named",
     toolNames: ["domain_paid_apply"],
     requestBody: {
@@ -15770,7 +15856,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/deployments:plan",
     summary: "Plan a deployment",
     description:
-      "Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. Native Auth requires rollout approval for this workspace and project; a missing approval returns 409 native_auth_launch_unavailable before a build is reserved. A commit the platform does not admit answers 409 with a nonretryable problem code. For framework_conversion_required, detail names the rule when the refusal is typed. An invalid ohmyhost.yaml includes configuration_diagnostic and, when its framework and package manager are identified, valid_example. For source_syntax_error, detail names the file and its one-based line and column without including a source excerpt.",
+      "Resolves immutable inputs and estimates effects without provider mutation or billable work. An omitted `environment` selects Dev when it exists, otherwise Prod. A Prod plan builds straight into Prod, including for a project with shared data; database migrations then affect both environments when Dev exists. Managed mail requires a confirmed Paid service period; it is checked again before build reservation. Selecting the managed Better Auth bridge does not require managed mail or Paid access. An old sender configuration is not Paid authority. Native Auth requires rollout approval for this workspace and project; a missing approval returns 409 native_auth_launch_unavailable before a build is reserved. A source refusal returns a nonretryable 409 with suggested_action. A missing or changed planning source returns deployment_source_not_ready or deployment_source_changed. GitHub installation access can be refused with github_source_access_denied. An archive exceeding inspection limits returns source_archive_too_large. Unsupported tar structure returns source_archive_unsupported. Temporary provider failures, incomplete or corrupt gzip downloads, and an exceeded 27-second server planning deadline return a retryable 503. For framework_conversion_required, detail names the rule when the refusal is typed. An invalid ohmyhost.yaml includes configuration_diagnostic and, when its framework and package manager are identified, valid_example. For source_syntax_error, detail names the file and its one-based line and column without including a source excerpt.",
     disposition: "named",
     toolNames: ["deployment_plan"],
     requestBody: {
@@ -16020,7 +16106,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -16253,7 +16339,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -16563,7 +16654,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               code: { type: "string", pattern: "^[A-Z][A-Z0-9_]{1,63}$" },
               message: { type: "string", pattern: "^[A-Z][A-Z0-9_]{1,127}$" },
               exception_class: { type: "string", maxLength: 128 },
-              file: { type: "string", maxLength: 512 },
+              file: {
+                type: "string",
+                maxLength: 512,
+                description:
+                  "The diagnostic may identify a file without a line or column. Unavailable coordinates are omitted.",
+              },
               line: { type: "integer", minimum: 1 },
               column: { type: "integer", minimum: 0 },
               route: { type: "string", maxLength: 512 },
@@ -16575,7 +16671,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 minLength: 1,
                 maxLength: 16384,
                 description:
-                  "The customer's own output with control characters removed before storage: on BUILD_FAILED the tail of the install/build output (newest lines last), on HEALTH_CHECK_FAILED the head of the body the health check was answered with (at most 4096 characters, never a header). A running application holds its environment's secrets and this answer is not scanned for them, so, like a query of the project's database, a HEALTH_CHECK_FAILED excerpt is returned only to an owner of the project; never answer a health check with a secret.",
+                  "Diagnostic output with control characters removed before storage. On BUILD_FAILED this is the tail of the install/build log (newest lines last), which may include a platform packaging diagnostic. On HEALTH_CHECK_FAILED this is the head of the body the health check was answered with (at most 4096 characters, never a header). A running application holds its environment's secrets and this answer is not scanned for them, so, like a query of the project's database, a HEALTH_CHECK_FAILED excerpt is returned only to an owner of the project; never answer a health check with a secret.",
               },
               excerpt_truncated: {
                 type: "boolean",
@@ -16769,7 +16865,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -17002,7 +17098,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -17168,7 +17269,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -17401,7 +17502,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -17574,7 +17680,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/database/write",
     summary: "Execute one bounded database write in Dev or Prod",
     description:
-      "Owner-authorized INSERT, UPDATE or DELETE through the restricted runtime role, including ordinary upsert. Environment is mandatory. One direct statement and transaction, five-second timeout and at most 1000 directly affected rows; customer triggers and cascades may affect more rows. Rows are not returned. The durable Idempotency-Key receipt persists until project deletion. Same-key retries observe the original execution attempt; unknown outcomes never automatically execute again. Inspect target data before deliberately choosing a new key. Schema changes use GitHub migrations. Database compute is metered normally and existing credit grace and Stop budgets apply. Application row-level security policies remain effective for writes.",
+      "Owner-authorized INSERT, UPDATE or DELETE through the restricted runtime role, including ordinary upsert. Environment is mandatory. One direct statement and transaction, five-second timeout and at most 1000 directly affected rows; customer triggers and cascades may affect more rows. Rows are not returned. The durable Idempotency-Key receipt persists until project deletion. Same-key retries observe the original execution attempt; unknown outcomes never automatically execute again. Inspect target data before deliberately choosing a new key. Schema changes use GitHub migrations. Database compute is metered normally and existing credit grace and Stop budgets apply. Application row-level security policies remain effective for writes. A confirmed missing database returns database_not_set_up (409). A temporary database setup lookup failure returns retryable service_unavailable (503).",
     disposition: "named",
     toolNames: ["database_write"],
     requestBody: {
@@ -17650,7 +17756,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                   additionalProperties: false,
                   required: ["reason", "file"],
                   description:
-                    "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                    "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
                   properties: {
                     reason: {
                       type: "string",
@@ -17748,11 +17854,13 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
           type: "string",
           minLength: 1,
           maxLength: 4096,
-          pattern: "^\\s*(?:SELECT|WITH)\\b",
+          pattern: "^\\s*(?:[Ss][Ee][Ll][Ee][Cc][Tt]|[Ww][Ii][Tt][Hh])\\b",
+          description:
+            "One SELECT or WITH statement in any letter case, at most 4,096 bytes, without a trailing semicolon, because it runs as a subquery.",
         },
         parameters: {
           type: "array",
-          maxItems: 50,
+          maxItems: 32,
           items: {
             oneOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }, { type: "null" }],
           },
@@ -17764,7 +17872,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/database/query",
     summary: "Run one bounded read-only Dev or Prod database query",
     description:
-      "Executes one SELECT through the project's least-privilege read-only role. Application row-level security policies apply and may filter rows; a complete SQL archive uses the separate authorized export workflow. Connection credentials are never returned.",
+      "Executes one SELECT through the project's least-privilege read-only role. Application row-level security policies apply and may filter rows; a complete SQL archive uses the separate authorized export workflow. Connection credentials are never returned. A confirmed missing database returns database_not_set_up (409). The read request authorizes no setup. A temporary database setup lookup failure returns retryable service_unavailable (503).",
     disposition: "named",
     toolNames: ["database_query"],
     requestBody: {
@@ -17781,11 +17889,13 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 type: "string",
                 minLength: 1,
                 maxLength: 4096,
-                pattern: "^\\s*(?:SELECT|WITH)\\b",
+                pattern: "^\\s*(?:[Ss][Ee][Ll][Ee][Cc][Tt]|[Ww][Ii][Tt][Hh])\\b",
+                description:
+                  "One SELECT or WITH statement in any letter case, at most 4,096 bytes, without a trailing semicolon, because it runs as a subquery.",
               },
               parameters: {
                 type: "array",
-                maxItems: 50,
+                maxItems: 32,
                 items: {
                   oneOf: [
                     { type: "string" },
@@ -18329,7 +18439,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     path: "/v1/projects/{project_id}/database/tables",
     summary: "Create a table in the project's database",
     description:
-      "Creates one ordinary table in the public schema of one environment's database, with the columns and the primary key the request names. Repeating an identical request answers the existing table with 200; a table of the same name with another definition is refused with database_table_conflict (409). The request wakes a sleeping database. A reached Stop budget refuses with project_budget_exceeded (402). At most 100 tables exist per database.",
+      "Creates one ordinary table in the public schema of one environment's database, with the columns and the primary key the request names. Repeating an identical request answers the existing table with 200; a table of the same name with another definition is refused with database_table_conflict (409). The request wakes a sleeping database. A reached Stop budget refuses with project_budget_exceeded (402). At most 100 tables exist per database. A confirmed missing database returns database_not_set_up (409). A temporary database setup lookup failure returns retryable service_unavailable (503).",
     disposition: "named",
     toolNames: ["database_table_create"],
     requestBody: {
@@ -21364,7 +21474,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -21597,7 +21707,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -21872,7 +21987,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -22105,7 +22220,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -22878,8 +22998,8 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
     operationId: "getOperation",
     method: "GET",
     path: "/v1/operations/{operation_id}",
-    summary: "Get an operation",
-    description: "Get an operation",
+    summary: "Get an operation and its last recorded provider verification step",
+    description: "Get an operation and its last recorded provider verification step",
     disposition: "named",
     toolNames: ["operation_get"],
     parameters: [
@@ -22932,7 +23052,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -23165,7 +23285,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -24708,7 +24833,7 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -24941,7 +25066,12 @@ export const remoteMcpOperations: readonly RemoteMcpOperation[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -24979,7 +25109,7 @@ export const remoteMcpWorkflowTools: readonly RemoteMcpWorkflowTool[] = [
     name: "api_reference",
     title: "Read the Master Tool Contract",
     description:
-      "Find documented API operations, exact schemas and remote MCP support in the deployed Master Tool Contract. This lookup never executes an API operation. See https://github.com/amerged-org/ohmyhost for the ohmyho.st hosting platform (OMH) and https://github.com/amerged-org/cloudflare-postgres for its PostgreSQL infrastructure (PGCF).",
+      "Find documented API operations, exact schemas and remote MCP support in the deployed Master Tool Contract. This documentation lookup executes no API operation.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -25032,7 +25162,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "github_disconnect",
     title: "Disconnect the workspace GitHub connection",
     description:
-      "Owner only: disconnect this workspace's GitHub connection. It revokes every repository grant under it, so auto-deploy and linked sources stop at once. The GitHub App stays installed for other workspaces; github_connect starts a new connection. Destructive: requires confirmed: true. Read github_status afterwards.",
+      "Owner-only. Disconnect this workspace's GitHub connection. All repository grants under it are revoked and linked sources and automatic deployments stop immediately. The GitHub App stays installed for other workspaces. Requires confirmed: true.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -25276,7 +25406,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "feedback_submit",
     title: "Store a redacted customer-agent feedback report",
     description:
-      "Report a bug, suspected issue or feature request to ohmyho.st. Submit a redacted expected/actual description and minimal reproduction; never credentials, raw logs, environment dumps or personal records. Available at zero credits. Reuse the same key after uncertainty; only a returned receipt ID confirms submission, not triage or a fix. This is ohmyho.st support for a signed-in agent: give the user the receipt ID and follow up with feedback_status (https://docs.ohmyho.st/support).",
+      "Submit a bug report, suspected issue or feature request to ohmyho.st with redacted expected and actual behavior and minimal reproduction steps. Credentials, raw logs, environment dumps and personal records belong outside the report. The result contains a receipt ID for the submission. Reusing the original key identifies the same report. Available at zero credits.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -25643,7 +25773,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "billing_checkout_create",
     title: "Create or resume an owner's hosted Stripe Checkout",
     description:
-      "Owner-only: create or resume a hosted Checkout. Paid is USD 10/month; each top-up pack is USD 10 before tax; a purchase grants 100 credits per dollar up to USD 100 and 125 credits per dollar for the part above, so 10 packs grant 10000 and 20 packs grant 22500 top-up credits. Monthly Paid credits expire at billing-period end; top-ups never expire, also after a downgrade to Free. The human reviews and pays at the returned URL; browser return is not confirmation of payment. Preserve the same offer/packs/idempotency key after uncertainty. An existing active, overdue, unpaid or paused subscription must be managed through billing_portal_create, not replaced with another Paid purchase. Then read checkout status and organization credits. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
+      "Owner-only. Create or resume a hosted Checkout and return its payment URL. Paid is USD 10 per month. Each top-up pack costs USD 10 before tax. A purchase grants 100 credits per dollar through USD 100 and 125 per dollar above it. Monthly Paid credits expire at period end and top-up credits have no expiry. An existing active, overdue, unpaid or paused subscription cannot be replaced here. Top-ups require active Paid access. The same offer, pack count and idempotency key identify the original checkout. Available at zero credits.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -25737,7 +25867,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "billing_checkout_get",
     title: "Observe and reconcile an owner's original checkout",
     description:
-      "Owner-only: observe the original checkout and reconcile confirmed credits/refunds, without another purchase. payment_confirmed is historical; read organization_credits_get for spendable funds and organization_account_get's effective plan for Paid coverage; paid_until is the end of paid coverage: the paid Stripe period end plus its 14-day renewal grace. Follow required_action: complete_checkout means give its URL to the human; open_billing_portal means call billing_portal_create and give that fresh URL to the human to resolve payment. contact_support means contact https://ohmyho.st/contact about the original invoice; none means no human payment step now, not proof of current Paid coverage. Never start a second subscription to repair a failed renewal. Follow billing_issue when tax needs attention: use billing_portal_create for open_billing_portal, or https://ohmyho.st/contact for contact_support; retain the original invoice and never disable tax. Retry the same checkout after an outage. state=expired ends this attempt; use a new key only for an explicitly requested new purchase, never automatically after an error or timeout.",
+      "Owner-only. Read the original checkout and reconcile confirmed credits or refunds without starting another purchase. payment_confirmed records historical payment. paid_until is the end of paid coverage, including the 14-day Stripe renewal grace. required_action describes whether the checkout needs payment, billing details, support or no further payment action. billing_issue identifies tax issues on the original invoice. An expired state ends the attempt.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -25845,7 +25975,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "billing_recharge_get",
     title: "Read auto-recharge and the current payment handoff",
     description:
-      "Owner-only: read auto-recharge consent, spending limit and payment handoff. Reading never initiates a charge. Return private setup_url/invoice_url only to the human; never log them. Read again after Stripe card setup or payment. billing_issue identifies the original invoice: open_billing_portal means collect corrected billing details through billing_portal_create; contact_support means use https://ohmyho.st/contact. Never disable tax, discard the invoice or start another purchase to repair it.",
+      "Owner-only. Read auto-recharge consent, spending limit and payment status without initiating a charge. The result may contain private setup_url or invoice_url values. billing_issue identifies the affected original invoice and the billing action needed.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -25933,7 +26063,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "billing_recharge_configure",
     title: "Enable or disable auto-recharge",
     description:
-      "Owner-only: enable or disable automatic off-session payments. Enabling requires active Paid access. Enabling records the Owner's consent to off-session charges of USD 9 plus tax per 1000 top-up credits, which never expire, when credits fall below 100, up to the chosen gross USD monthly limit. Send consent off_session_v1 when enabling; null when disabling. Read current revision first. Preserve the original idempotency key and payload after uncertainty. A saved Stripe card may require setup_url. Disabling prevents new payment initiation; in-progress payments may finish. This does not create a subscription or Paid access.",
+      "Owner-only: enable or disable automatic off-session payments. Enabling requires active Paid access. Enabling records the Owner's consent to off-session charges of USD 9 plus tax per 1000 top-up credits, which never expire, when credits fall below 100, up to the chosen gross USD monthly limit. Send consent off_session_v1 when enabling; null when disabling. The revision guard is the current auto-recharge configuration revision. Preserve the original idempotency key and payload after uncertainty. A saved Stripe card may require setup_url. Disabling prevents new payment initiation; in-progress payments may finish. This does not create a subscription or Paid access.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -26052,7 +26182,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "organization_credits_get",
     title: "Read the owner's shared organization credit pool",
     description:
-      "Read the owner's shared organization credit balance (available_micros is monthly plus one-time credit minus reservations) and the seven-day grace_started_at/grace_expires_at that begins when the credit is used up. It states what is left, not what the credit was spent on; read organization_usage_get for the recent charges. Existing services/domains are not immediately shut down at zero credit; an explicit project stop budget is separate. One credit is 1000000 microcredits. Provider outages are not customer debt. Works at zero credit. Top-ups and enabling auto-recharge require active Paid access.",
+      "Read the Owner's shared organization credit balance and seven-day zero-credit grace period. available_micros is monthly plus one-time credits minus reservations. One credit equals 1,000,000 microcredits. Existing services and domains are not immediately shut down at zero credit. Project stop budgets are separate. Provider outages are not customer debt. Available at zero credits.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -26237,7 +26367,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "project_export_get",
     title: "Read encrypted database export status",
     description:
-      "Owner-only: read the original encrypted SQL ZIP export's progress and error, never its password or a download URL. While queued or running, follow next_poll_after_seconds and poll this same project_id and export_id; do not create another export to poll. Once succeeded, obtaining a private download link requires the authorized direct CLI/REST export workflow outside this remote catalog. Available at zero credits.",
+      "Owner-only. Read the original encrypted SQL ZIP export's progress and error, including next_poll_after_seconds while queued or running. The export password and a download URL are never returned. Available at zero credits.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -26290,7 +26420,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                   additionalProperties: false,
                   required: ["reason", "file"],
                   description:
-                    "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                    "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
                   properties: {
                     reason: {
                       type: "string",
@@ -26494,7 +26624,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "project_budget_set",
     title: "Set or clear the owner's project budget",
     description:
-      "Set an owner's optional monthly project budget in microcredits (1000000 = one credit). continue is the default and uses the org pool after the threshold; stop blocks new billable work. null clears the budget and requires continue. Changing it never resets usage or adds credits. Replay the same key after uncertainty; read the budget again for current usage.",
+      "Set an owner's optional monthly project budget in microcredits (1000000 = one credit). continue is the default and uses the org pool after the threshold; stop takes the live app offline in Dev and Prod with HTTP 402 (Project execution paused) once measured usage plus reservations reach the budget, so explain that before setting it. null clears the budget and requires continue. Changing it never resets usage or adds credits. Replay the same key after uncertainty; read the budget again for current usage.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -26584,7 +26714,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "delete_execute",
     title: "Delete a project",
     description:
-      "Execute the whole-project deletion described by a fresh delete_plan. Pass its resource_etag unchanged as if_match, the returned confirmation_token and one idempotency_key. This irreversibly removes both Dev and Prod resources, databases/files/exports, managed code history and project-owned routes/mail/DNS; both addresses stop working. Reuse the original unchanged request and key after uncertainty. An accepted response is not completed deletion: poll operation_get for the returned operation until its actual outcome is known. A stale plan requires a fresh delete_plan.",
+      "Permanently delete the selected project and its Dev and Prod resources, including deployments, databases, files, schedules, SQL exports, managed code history and project-owned routes, mail and DNS. Both addresses stop working. if_match guards the resource revision and confirmation_token binds the exact deletion. An unchanged request with the same idempotency key identifies the original deletion. Returns an asynchronous operation.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -26662,7 +26792,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -26895,7 +27025,12 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -26909,7 +27044,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "project_notes_set",
     title: "Replace bounded shared project notes without losing concurrent edits",
     description:
-      "Save shared project to-dos, at most 250 lines / 16384 UTF-8 bytes. Read project_context_get first; use notes.version as expected_version. Never save credentials, logs or signed URLs. On conflict read and merge before using a new key; retry an uncertain request unchanged. Empty Markdown clears notes.",
+      "Save shared project notes up to 250 lines or 16,384 UTF-8 bytes. expected_version is the current notes revision. An empty Markdown value clears the notes. Notes are shared and must exclude credentials, logs and signed URLs. An unchanged retry with the same idempotency key refers to the original write.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -26952,7 +27087,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "project_handle_check",
     title: "Check whether a project handle is free",
     description:
-      "Check whether a project address is free before offering it to the customer. A handle is one to five lowercase words of letters and digits joined by single hyphens, three to fifty-nine characters, and never a reserved word such as admin, api, dev or www; it becomes <handle>.check.omh.st for Prod and dev-<handle>.check.omh.st for Dev. The answer names why a handle cannot be used and returns free alternatives, so offer one of those instead of guessing again. Check the name here first, then move an existing project onto it with project_handle_set.",
+      "Check whether a project address is available. A handle is one to five lowercase words of letters and digits joined by single hyphens, three to fifty-nine characters, excluding reserved words such as admin, api, dev and www. It becomes <handle>.check.omh.st for Prod and dev-<handle>.check.omh.st for Dev. An unavailable handle returns a reason and available alternatives.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -27202,7 +27337,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "powered_by_flag_set",
     title: 'Show or hide the "Powered by ohmyho.st" flag',
     description:
-      "Owner only, ask the human first: show or hide a small \"Powered by ohmyho.st\" flag on the right edge of the production site. While it is on, this project's custom domain uses no domain credits on any plan and also works on a Free workspace, and each Paid period bought through Stripe adds 250 credits to the workspace, however many of its projects show the flag. Hiding it is refused while a Free workspace's domain depends on it. Replay the same key and value after uncertainty to get the first answer without switching again; every new switch needs a new key.",
+      "Owner-only. Show or hide a small \"Powered by ohmyho.st\" flag on the right edge of the production site. While it is on, this project's custom domain uses no domain credits on any plan and also works on a Free workspace, and each Paid period bought through Stripe adds 250 credits to the workspace, however many of its projects show the flag. Hiding it is refused while a Free workspace's domain depends on it. Replay the same key and value after uncertainty to get the first answer without switching again; every new switch needs a new key.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -27249,7 +27384,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "delete_plan",
     title: "Plan project deletion",
     description:
-      "Prepare a ten-minute persisted deletion plan for exactly the selected project_id. It issues a confirmation token but does not delete resources yet. Review the returned effects and risks: deletion removes both Dev and Prod, deployments, databases, files, schedules, SQL exports, managed code/history and project-owned routes/mail/DNS; both addresses stop working and data removal cannot be undone. Download needed data first. delete_execute needs the plan's resource_etag unchanged as if_match and its confirmation_token with one idempotency_key.",
+      "Persist a ten-minute deletion plan for the selected project_id. Returns a resource ETag, an action-bound confirmation token, and the scope and effects of deletion. Deletion permanently removes Dev and Prod deployments, databases, files, schedules, SQL exports, managed code history and project-owned routes, mail and DNS. Both addresses stop working. Planning itself removes no resources.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -27461,7 +27596,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "domain_cloudflare_authorize",
     title: "Start project-scoped Cloudflare DNS authorization",
     description:
-      "Check domain_cloudflare_status first and reuse a valid matching grant. Offer optional customer Cloudflare DNS authorization for the zone of this project's declared Paid hostname or mail sender. Open the short-lived authorization_url in the customer's Cloudflare account and keep it private. Replay the same project/zone/key after an uncertain request; read domain_cloudflare_status after the callback. cloudflare_authorization_closed means read status instead of replaying the callback; an expired or revoked grant needs a fresh authorization key. Authorization alone does not configure DNS or activate HTTPS. Non-Cloudflare customers can use the exact manual DNS records instead; no provider API token is accepted.",
+      "Check the current DNS authorization status and reuse a valid matching grant. Offer optional customer Cloudflare DNS authorization for the zone of this project's proven Paid hostname or declared mail sender. Issue it as a user with a verified ohmyho.st account email. Send authorization_url privately and tell the DNS admin this verification_code through a channel they trust. The link is valid for up to 24 hours. The admin checks the requester and code, then approves in the same browser, with no ohmyho.st account needed. Cloudflare grants scopes for the selected accounts and ohmyho.st limits its DNS work to the declared zone and hostnames. Replay the same project/zone/key after an uncertain request; read the authorization status after the callback. cloudflare_authorization_closed means read status instead of replaying the callback; an expired or revoked grant needs a fresh authorization key. Authorization alone does not configure DNS or activate HTTPS. Non-Cloudflare customers can use the exact manual DNS records instead; no provider API token is accepted.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -27497,7 +27632,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     outputSchema: {
       type: "object",
       description:
-        "Short-lived credential-free redirect information for one Cloudflare OAuth authorization.",
+        "Private browser link for one Cloudflare OAuth authorization. Project DNS uses an ohmyho.st confirmation link. Application identity and workspace sender DNS use direct Cloudflare links with the initiating portal session.",
       additionalProperties: false,
       required: ["authorization_id", "authorization_url", "expires_at"],
       properties: {
@@ -27507,9 +27642,16 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
           format: "uri",
           minLength: 20,
           maxLength: 4096,
-          pattern: "^https://dash\\.cloudflare\\.com/oauth2/auth\\?",
+          pattern:
+            "^https://(?:(?:dev\\.)?app\\.ohmyho\\.st/v1/cloudflare/oauth/authorize\\?request=f1\\.[0-7][0-9A-HJKMNP-TV-Z]{25}\\.[A-Za-z0-9_-]{43}$|dash\\.cloudflare\\.com/oauth2/auth\\?)",
         },
         expires_at: { type: "string", format: "date-time" },
+        verification_code: {
+          type: "string",
+          pattern: "^[0-9A-F]{6}$",
+          description:
+            "Present for project confirmation links. Tell the DNS admin this code through a channel they trust.",
+        },
       },
     },
   },
@@ -27517,7 +27659,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "domain_cloudflare_status",
     title: "Get project-scoped Cloudflare DNS authorization status",
     description:
-      "Read the project's customer DNS authorization state, zone, scopes and expiry without credentials. authorized is not DNS/TLS readiness. For a Paid hostname, use domain_paid_apply with the original hostname/key after consent, then domain_paid_status. If DNS/TLS is pending, tell the customer to ask their agent again after 60 minutes; do not repeat correct records or create another deployment.",
+      "Read the project's Cloudflare DNS authorization state, zone, scopes and expiry without exposing credentials. The authorized state describes the grant only.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -27575,7 +27717,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "project_handle_set",
     title: "Move a project to a chosen address",
     description:
-      "Move a project to an address the customer chose, after project_handle_check said it is free. The Dev and Prod gateways are re-published at the new address and it is stored only once both serve it; the previous address stops answering and anyone may claim it, so a link already shared stops working. Needs the project's current ETag from project_status and one idempotency key; reuse the same key after an uncertain answer. Refused while another operation is running for the project, and refused for an address that is taken, unusable, or the one the project already has. Returns an operation to follow with operation_get.",
+      "Move a project to an address the customer chose, after confirming it is available. The Dev and Prod gateways are re-published at the new address and it is stored only once both serve it; the previous address stops answering and is held for 30 days against other organizations (the same organization may take it back at once), so a link already shared stops working. Needs the project's current project status ETag and one idempotency key; reuse the same key after an uncertain answer. Refused while another operation is running for the project, and refused for an address that is taken, unusable, or the one the project already has. Returns an asynchronous operation.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -27651,7 +27793,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -27884,7 +28026,12 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -27959,7 +28106,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -28192,7 +28339,12 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -28206,7 +28358,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "domain_paid_plan",
     title: "Plan one Paid customer-owned hostname",
     description:
-      "Plan a customer-owned production hostname before or after the first Prod deployment. This reads the project and describes declaration and activation without changing DNS. domain_paid_apply can declare a hostname as awaiting_deployment for early Cloudflare consent. Without Paid, only a project that shows the powered-by flag (powered_by_flag_get) can connect its own hostname; for any other Free project domain_paid_apply answers paid_plan_required.",
+      "Read a plan for connecting a customer-owned production hostname before or after the first Prod deployment, without changing DNS. Connection eligibility requires Paid access or an enabled Powered by ohmyho.st flag on a Free project.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -28260,7 +28412,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "domain_paid_apply",
     title: "Apply one Paid customer-owned hostname",
     description:
-      "Declare or activate the explicitly requested customer hostname. Requires Paid access, or a Free workspace whose project shows the powered-by flag (powered_by_flag_set, only with the owner's consent). Without an active Prod deployment, returns awaiting_deployment and reserves the hostname without provider resources, DNS changes or domain charges; request Cloudflare consent now, then deploy to Prod. After Prod succeeds and domain_cloudflare_status is authorized, replay the original hostname/key to activate and reconcile its exact DNS records. Otherwise return the manual records to the human. Preserve the original hostname/key after uncertainty; no arbitrary DNS or provider credentials are accepted.",
+      "Declare or activate the explicitly requested customer hostname. Requires Paid access, or a Free workspace whose project shows the powered-by flag (only with the owner's consent), and `confirm: true`. Without an active Prod deployment, returns awaiting_deployment and reserves the hostname without provider resources, DNS changes or domain charges. Offer optional Cloudflare DNS authorization. DNS authorization and publishing the live site are separate customer decisions. Ask the customer before deploying to Prod. Once Prod is healthy, replay the original hostname/key to activate. Reconcile DNS through an authorized grant or give the customer the exact manual records. Preserve the original hostname/key after uncertainty; no arbitrary DNS or provider credentials are accepted.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -28362,7 +28514,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "domain_paid_status",
     title: "Read the Paid customer-owned hostname",
     description:
-      "Read DNS/TLS and effective Paid-domain access. suspended is not active: for paid_plan_required start Paid checkout or, on a Free workspace and with the owner's consent, show the powered-by flag on this project; for insufficient_organization_credits add credits; for project_budget_exceeded raise the stop budget or select continue. Do not delete or redeploy to resolve a billing outage. Existing status remains readable without Paid; TLS alone does not prove application readiness.",
+      "Read DNS, TLS and effective access for the Paid domain, including the reason for any suspension. Status stays readable without Paid access. TLS readiness describes the hostname's certificate rather than the application's health.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -28450,7 +28602,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "domain_paid_delete",
     title: "Delete one exact Paid customer-owned hostname",
     description:
-      "Delete only the explicitly named project's stored customer hostname/route and owned DNS records. Leaves Free domains, application data and unrelated customer MX records untouched. Available without Paid. Requires explicit confirmation; retry the same hostname/key after uncertainty.",
+      "Delete only the explicitly named project's stored customer hostname/route and owned DNS records. Leaves Free domains, application data and unrelated customer MX records untouched. Available without Paid. Requires `confirm: true`; retry the same hostname/key after uncertainty.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -28552,7 +28704,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_migrate",
     title: "Apply the saved migration files to a database",
     description:
-      "Apply the migration files of one saved version to the Dev or Prod database of this project, and create that database first when the environment has none. Call it only after the user said where to apply them: Free and a project without Dev apply to prod; with a Dev site ask whether dev only or dev and prod (call it once per environment, dev first). When Dev and Prod share data it is one database; say so. Files already applied are skipped; an applied file that was edited is refused, so add a new file instead. It never builds, deploys or publishes. The preview shows the app but does not save data: saving works once the app is published. Pass the commit_sha that source_changes returned. A saved version with a noncanonical file name, no migration file or no database in ohmyhost.yaml is refused at once with its reason. The job starts within about a minute of the 202; poll the original operation with operation_get; a failed file is named in error.migration. Dev needs an active Paid workspace; Prod, and a Dev that shares its database with Prod, need publication permission on the connection. A job that ends database_migrate_unavailable applied nothing half: call it again, which starts a new job and skips the applied files.",
+      "Apply the migration files at commit_sha to the project's selected Dev or Prod database, provisioning it if needed. Dev requires active Paid access. Prod and Dev with shared data require publication permission. Shared Dev and Prod use the same database. The job skips applied files, rejects edits to applied files and changes the database without building, deploying or publishing. Missing migrations, noncanonical filenames and missing database configuration are rejected before queuing. Returns an operation that starts within about a minute. A failed file is identified in error.migration. A job ending in database_migrate_unavailable leaves no partially applied file. Requires confirm: true.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -28620,7 +28772,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -28853,7 +29005,12 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -28867,7 +29024,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_compute_set",
     title: "Select database memory and included storage",
     description:
-      "Choose fixed database RAM: 256, 512, 1024, 2048 or 4096 MiB. Free permits only 256 MiB; larger sizes require Paid. Included total disk is 500, 1024, 2048, 4096 or 8192 MiB, including PostgreSQL/WAL, plus seven-day backups. Prices are 10, 20, 40, 80 or 160 credits per active hour respectively, prorated. Sleep follows 300 idle seconds; sleeping has no active-RAM charge. No separate database CPU, network or connection charges apply. First read database_compute_get, explain the size, price, possible interruption and shared Dev/Prod scope, then obtain the user's choice before confirm=true. Smaller volumes need a separate data move. Poll the original operation; never duplicate a pending request. Legacy profile input applies only during provider transition. Supply exactly one of memory_mib and profile.",
+      "Choose fixed database RAM: 256, 512, 1024, 2048 or 4096 MiB. Free permits only 256 MiB; larger sizes require Paid. Included total disk is 500, 1024, 2048, 4096 or 8192 MiB, including PostgreSQL/WAL, plus seven-day backups. Prices are 10, 20, 40, 80 or 160 credits per active hour respectively, prorated. Sleep follows 300 idle seconds; sleeping has no active-RAM charge. No separate database CPU, network or connection charges apply. Read the current compute size first, explain the size, price, possible interruption and shared Dev/Prod scope, then obtain the user's choice before `confirm: true`. Smaller volumes need a separate data move. Poll the original operation; never duplicate a pending request. Legacy profile input applies only during provider transition. Supply exactly one of memory_mib and profile.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -28980,7 +29137,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -29213,7 +29370,12 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
@@ -29325,7 +29487,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_write",
     title: "Execute one bounded database write in Dev or Prod",
     description:
-      "Execute one INSERT, UPDATE or DELETE/upsert in the chosen Dev or Prod database. Requires Owner project permission, confirmation and an idempotency key. At most 1000 directly affected rows and five seconds. Returns a durable receipt, not rows. If outcome is unknown, never automatically repeat with another key: inspect data using database_query and retain the operation ID. Same-key retries only observe the existing attempt. Schema changes use GitHub migrations; compute wakes and is metered normally. Application RLS policies also apply to writes.",
+      "Execute one INSERT, UPDATE or DELETE/upsert in the chosen Dev or Prod database. Requires Owner project permission, `confirmed: true` and an idempotency key. At most 1000 directly affected rows and five seconds. Returns a durable receipt, not rows. If outcome is unknown, never automatically repeat with another key: inspect the data with a read-only query and retain the operation ID. Same-key retries only observe the existing attempt. Schema changes use GitHub migrations; compute wakes and is metered normally. Application RLS policies also apply to writes. If the selected environment has no database, follow database_not_set_up.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -29396,7 +29558,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                   additionalProperties: false,
                   required: ["reason", "file"],
                   description:
-                    "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                    "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
                   properties: {
                     reason: {
                       type: "string",
@@ -29482,7 +29644,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_query",
     title: "Run one bounded read-only Dev or Prod database query",
     description:
-      "Read one owner-authorized Dev or Prod database query (at most 100 rows, five-second timeout). Explicitly choose the environment. Shared data resolves to the same physical database. Application RLS policies apply; use an authorized SQL export when a full archive is required.",
+      "Read one owner-authorized Dev or Prod database query (at most 100 rows, five-second timeout). Explicitly choose the environment. Shared data resolves to the same physical database. Application RLS policies apply; use an authorized SQL export when a full archive is required. The statement starts with SELECT or WITH in any letter case, has no trailing semicolon and is at most 4,096 bytes, with at most 32 scalar parameters; a result over 256 KiB fails and any SQL error returns one generic 400. If the selected environment has no database, follow database_not_set_up.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -29505,11 +29667,13 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
           type: "string",
           minLength: 1,
           maxLength: 4096,
-          pattern: "^\\s*(?:SELECT|WITH)\\b",
+          pattern: "^\\s*(?:[Ss][Ee][Ll][Ee][Cc][Tt]|[Ww][Ii][Tt][Hh])\\b",
+          description:
+            "One SELECT or WITH statement in any letter case, at most 4,096 bytes, without a trailing semicolon, because it runs as a subquery.",
         },
         parameters: {
           type: "array",
-          maxItems: 50,
+          maxItems: 32,
           items: {
             oneOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }, { type: "null" }],
           },
@@ -29713,7 +29877,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_table_create",
     title: "Create a table in the project's database",
     description:
-      "Create one ordinary table in the public schema of a Dev or Prod database, as the migration role with the same access as migration tables, so a database_watch_create can attach later. Each column has a lower-case name, a type (text, integer, bigint, boolean, numeric, double precision, timestamptz, date, uuid or jsonb) and optional nullable, identity (integer or bigint only) and default (now for timestamptz, uuid for uuid); at most 64 columns, 8 primary-key columns and 100 tables per database. An identical repeat answers created: false; a table of the same name with another definition is refused with database_table_conflict. Tables created this way are not in the repository's migration files: record them in project notes and add a migration when the source should reproduce the database. Requires confirmed: true and an idempotency key. Refused with project_budget_exceeded while the Stop budget is reached.",
+      "Create one ordinary table in the public schema of a Dev or Prod database, as the migration role with the same access as migration tables, so a row-change watch can attach later. Each column has a lower-case name, a type (text, integer, bigint, boolean, numeric, double precision, timestamptz, date, uuid or jsonb) and optional nullable, identity (integer or bigint only) and default (now for timestamptz, uuid for uuid); at most 64 columns, 8 primary-key columns and 100 tables per database. An identical repeat answers created: false; a table of the same name with another definition is refused with database_table_conflict. Tables created this way are not in the repository's migration files: record them in project notes and add a migration when the source should reproduce the database. Requires confirmed: true and an idempotency key. Refused with project_budget_exceeded while the Stop budget is reached. If the selected environment has no database, follow database_not_set_up.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -29880,7 +30044,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_watch_create",
     title: "Watch the columns of one table for data events",
     description:
-      "Create or replace the row-change capture watch for one ordinary application table in the selected Dev or Prod database. Repeating it with different columns or operations replaces the existing trigger and changes which future row values and events are published; this can overwrite an active watch configuration. Only the selected columns (at most 32) are published under the returned data.<topic> event type. Historical rows are not emitted and watched columns must not be dropped while active. A sleeping database wakes and normal compute metering applies. Requires confirmed: true and idempotency_key; keep the original key after an uncertain response. Creating a receiver subscription requires one-time secret custody through an authorized direct CLI/REST workflow outside this remote catalog. A reached Stop budget refuses with project_budget_exceeded.",
+      "Create or replace the row-change capture watch for one ordinary application table in the selected Dev or Prod database. Repeating it with different columns or operations replaces the existing trigger and changes which future row values and events are published; this can overwrite an active watch configuration. Only the selected columns (at most 32) are published under the returned data.<topic> event type. Historical rows are not emitted and watched columns must not be dropped while active. A sleeping database wakes and normal compute metering applies. Requires confirmed: true and idempotency_key; keep the original key after an uncertain response. A reached Stop budget refuses with project_budget_exceeded.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -30454,7 +30618,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_schedule_set",
     title: "Create or replace one database schedule",
     description:
-      "Create or replace a named database schedule in the explicitly selected Dev or Prod environment. SQL statements run repeatedly as the application's runtime role with row-level security, so write statements must be safe to repeat. Select exactly one of cron (five-field UTC) or every_seconds (60 to 2678400); timeout_ms is 1000 to 30000, default 10000. Replacing an existing schedule overwrites its definition and requires confirmed: true. A reached Stop budget automatically disables schedules within about an hour after billed usage reaches it; enabled: true and database_schedule_run_now then refuse with project_budget_exceeded. To re-enable a schedule after funding or budget allows it, read its full definition with database_schedule_get and submit that definition to database_schedule_set with enabled: true and confirmed: true.",
+      "Create or replace a named database schedule in the selected Dev or Prod environment. SQL statements execute as the application's runtime role with row-level security. Write statements must be safe to repeat. Supply exactly one of cron (five-field UTC expression) and every_seconds (60 to 2678400). timeout_ms accepts 1000 to 30000 and defaults to 10000. Replacing a schedule overwrites its definition and requires confirmed: true. A reached Stop budget disables schedules within about an hour and refuses enabled: true with project_budget_exceeded. Restoring a schedule requires its full definition.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -30804,7 +30968,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "database_schedule_run_now",
     title: "Queue one immediate run of a database schedule",
     description:
-      "Queue one immediate run of a database schedule. Refused while the schedule is disabled or a run is already queued. Destructive: the statements execute against the database; requires confirmed: true. If the answer is lost, call again with the same idempotency_key to get the stored answer; without a key a second call queues another run. Refused with project_budget_exceeded while the project's Stop budget is reached.",
+      "Queue one immediate run of a database schedule. Refused while the schedule is disabled or a run is already queued. Destructive: the statements execute against the database; requires confirmed: true. If the answer is lost, call again with the same idempotency_key to get the stored answer; the idempotency_key is required, and a call with a new key queues another run. Refused with project_budget_exceeded while the project's Stop budget is reached.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -30856,7 +31020,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "function_runs_list",
     title: "List the newest scheduled function runs of an environment",
     description:
-      "List the newest scheduled function runs (functions.crons) of an environment: one run per due UTC minute with state, attempt, the status the scheduled handler returned and timing. Use it to verify that a declared cron actually ran; deployment logs do not include scheduled runs.",
+      "List the newest scheduled function runs for one environment. Each due UTC minute has a run with its state, attempt, timing and the status returned by the scheduled handler.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -30927,7 +31091,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "secret_delete",
     title: "Delete an environment secret",
     description:
-      "Delete only the named secret in the selected project_id and environment_id. Use project_status to select the correct environment and secrets_list for names; never request or return the secret value. Removing it changes the deployed runtime binding without a new application deployment and can break the running application. Reuse the original unchanged request and idempotency_key after uncertainty. Report desired_generation, applied_generation and delivery_state accurately: pending or failed delivery is not proof that the runtime change finished.",
+      "Remove one named secret from the selected project and environment using an idempotency key. The value is never accepted or returned. Removal changes the runtime binding without a new deployment and can break the running application. The result includes desired_generation, applied_generation and delivery_state.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -31081,7 +31245,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "mail_domain_set",
     title: "Configure sending and receiving on a selected mail domain",
     description:
-      "Configure the requested sending/receiving settings for the project's one production mail domain using its Prod environment_id. Dev and Prod application URLs do not create separate mail domains. Requires Paid access. Receiving requires an already configured and verified customer webhook. Preparing or rotating its server-only signing secret requires private custody through an authorized direct CLI/REST workflow; current Main has no remote custody adapter. For an existing configured webhook, use mail_webhook_verify and inspect mail_domain_status before enabling receiving.",
+      "Configure the project's one production mail domain using its Prod environment ID. Dev and Prod share the mail domain. Requires Paid access. Receiving requires an already verified application webhook.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -31194,7 +31358,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "mail_domain_status",
     title: "Read independent sending and receiving readiness",
     description:
-      "Read separate sending and receiving readiness and exact DNS records for the project’s production mail domain. Follow next_check_after_seconds and preserve existing mailbox routing.",
+      "Read separate sending and receiving readiness, exact DNS records and the next-check interval for the project's production mail domain.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -31290,7 +31454,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "mail_domain_delete",
     title: "Retire the project's mail domain while the project stays active",
     description:
-      "Retire the project's mail domain while the project stays active; use its Prod environment ID. Sending and receiving stop at once, then its provider domain and key are removed. DNS is not changed: remove the returned dns_records from the domain's DNS. Only when the customer no longer wants mail or wants a different mail domain. Requires explicit confirmation; repeat the same key after uncertainty.",
+      "Retire the project's mail domain while the project stays active; use its Prod environment ID. Sending and receiving stop at once, then its provider domain and key are removed. DNS is not changed: remove the returned dns_records from the domain's DNS. Only when the customer no longer wants mail or wants a different mail domain. Requires `confirm: true`; repeat the same key after uncertainty.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -31644,7 +31808,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "project_data_plan",
     title: "Plan a Dev and Prod data assignment change",
     description:
-      "Owner only: plan a Dev/Prod data assignment change and review the data, files, deployments and database logins it keeps or removes. isolate_prod_keeps_data keeps existing data with Prod and gives Dev an empty area; isolate_dev_keeps_data keeps it with Dev and gives Prod an empty area; share_prod_keeps_data keeps Prod and removes Dev-only data, files and deployment; reset_dev removes isolated Dev data, files and deployment while preserving secrets and access mode and renewing a protected share link. New databases appear on the next deployment; no data is copied and ordinary usage rates apply. The returned plan ETag and confirmation token bind this exact change for ten minutes.",
+      "Owner-only. Persist a ten-minute plan for a Dev or Prod data assignment change and return its ETag, confirmation token and effects on data, files, deployments and database logins. isolate_prod_keeps_data assigns existing data to Prod, and isolate_dev_keeps_data assigns it to Dev. The other environment starts empty. share_prod_keeps_data retains Prod and removes Dev-only data, files and deployment. reset_dev removes isolated Dev data, files and deployment, preserves secrets and access mode, and renews a protected share link. The plan performs no data change.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -31754,7 +31918,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
     name: "project_data_change",
     title: "Execute a confirmed Dev and Prod data assignment change",
     description:
-      "Owner only: execute the exact reviewed project_data_plan. Pass its change, resource_etag as if_match and confirmation_token with one idempotency_key; confirmed must be true. The operation never copies data. Read operation_get until terminal; after uncertainty reuse the same key, and never start another reset or data change with a new key just to retry. reset_dev requires isolated data, and sharing requires an existing Prod database. Deleted Dev data/files cannot be restored by reversing the mode.",
+      "Owner-only. Apply a Dev or Prod data assignment change using change, if_match, confirmation_token, confirmed: true and an idempotency key. if_match and confirmation_token bind the exact action and project revision. reset_dev requires isolated data and sharing requires an existing Prod database. Returns an asynchronous operation. Data is never copied, and deleted Dev data and files cannot be recovered by reversing the mode.",
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -31851,7 +32015,7 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
               additionalProperties: false,
               required: ["reason", "file"],
               description:
-                "Validated migration metadata only; contains no SQL, values or PostgreSQL message. Statement index is one-based and is present only for a failed customer statement.",
+                "Safe reason and file metadata for database_migration_failed and database_migrate_failed when recorded.",
               properties: {
                 reason: {
                   type: "string",
@@ -32084,7 +32248,12 @@ export const remoteMcpToolDefinitions: readonly RemoteMcpToolDefinition[] = [
                 "other",
               ],
             },
-            step: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },
+            step: {
+              type: "string",
+              pattern: "^[a-z][a-z_]{0,63}$",
+              description:
+                "During provider verification the last recorded check can be verifying_source, verifying_build, verifying_database, verifying_runtime_secrets, verifying_storage, verifying_gateway or verifying_app_runtime. Historical work without a recorded phase carries the general recovery step.",
+            },
             age_seconds: { type: "integer", minimum: 0 },
             usual_duration_seconds: { type: "integer", minimum: 1 },
             wait_reason: { type: "string", pattern: "^[a-z][a-z_]{0,63}$" },

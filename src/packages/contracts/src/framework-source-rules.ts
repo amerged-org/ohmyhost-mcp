@@ -314,7 +314,8 @@ export function viteCompanionRequired(configuration: OhmyhostConfig): boolean {
 
 /**
  * The admission of every governed framework package the application declares where the framework
- * needs it. The lockfile resolution decides when the lockfile names one; otherwise the declaration.
+ * needs it. A pnpm v9 importer with a stale specifier leaves the decision to the declaration.
+ * The installed-version check still runs before the framework starts.
  */
 export function frameworkVersionAdmissions(
   framework: FrameworkSourceFramework,
@@ -322,7 +323,7 @@ export function frameworkVersionAdmissions(
   lockfile: FrameworkSourceLockfile | null,
 ): readonly FrameworkVersionAdmission[] {
   const admissions: FrameworkVersionAdmission[] = [];
-  let locked: ((packageName: string) => string | null) | undefined;
+  let locked: ReturnType<typeof lockedPackageVersions> | undefined;
   for (const [name, placement] of framework === "astro" &&
   declaredDependency(manifest, "@astrojs/cloudflare", "build") !== null
     ? [...REQUIRED_DEPENDENCIES.astro, ["@astrojs/cloudflare", "build"] as const]
@@ -331,7 +332,7 @@ export function frameworkVersionAdmissions(
     const declared = declaredDependency(manifest, name, placement);
     if (declared === null) continue;
     locked ??= lockfile === null ? () => null : lockedPackageVersions(lockfile);
-    admissions.push(classifyFrameworkVersion(name, declared, locked(name)));
+    admissions.push(classifyFrameworkVersion(name, declared, locked(name, declared)));
   }
   return Object.freeze(admissions);
 }
@@ -346,7 +347,7 @@ export function frameworkVersionAdmissions(
  */
 export function lockedPackageVersions(
   lockfile: Readonly<{ name: string; text: string }>,
-): (packageName: string) => string | null {
+): (packageName: string, declared?: string) => string | null {
   const { name, text } = lockfile;
   const npm = name === "package-lock.json";
   if (
@@ -356,10 +357,10 @@ export function lockedPackageVersions(
   )
     return () => null;
   const document = npm ? parseJsonLockfile(text) : parsePnpmLockfileHead(text);
-  return (packageName) => {
+  return (packageName, declared) => {
     const version = npm
       ? npmLockedVersion(document, packageName)
-      : pnpmLockedVersion(document, packageName);
+      : pnpmLockedVersion(document, packageName, declared);
     return isResolvedFrameworkVersion(version) ? version : null;
   };
 }
@@ -1027,7 +1028,7 @@ function npmLockedVersion(document: unknown, packageName: string): unknown {
     : null;
 }
 
-function pnpmLockedVersion(document: unknown, packageName: string): unknown {
+function pnpmLockedVersion(document: unknown, packageName: string, declared?: string): unknown {
   if (!isRecord(document)) return null;
   const lockfileVersion = document["lockfileVersion"];
   if (typeof lockfileVersion !== "string" || !PNPM_LOCKFILE_VERSION.test(lockfileVersion))
@@ -1043,9 +1044,15 @@ function pnpmLockedVersion(document: unknown, packageName: string): unknown {
     const dependencies = root[group];
     if (!isRecord(dependencies) || !Object.hasOwn(dependencies, packageName)) continue;
     const entry = dependencies[packageName];
-    return isRecord(entry) && typeof entry["version"] === "string"
-      ? (PNPM_RESOLVED_VERSION.exec(entry["version"])?.[1] ?? null)
-      : null;
+    if (!isRecord(entry) || typeof entry["version"] !== "string") return null;
+    if (
+      lockfileVersion === "9.0" &&
+      declared !== undefined &&
+      typeof entry["specifier"] === "string" &&
+      entry["specifier"] !== declared
+    )
+      return null;
+    return PNPM_RESOLVED_VERSION.exec(entry["version"])?.[1] ?? null;
   }
   return null;
 }

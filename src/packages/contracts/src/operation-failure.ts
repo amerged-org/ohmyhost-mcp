@@ -52,7 +52,7 @@ const failures = {
 
   database_migrate_failed: [
     "The database migration files were not applied; none of the files of this request took effect.",
-    "Read error.migration: it names the file and the reason. Keep applied files unchanged, give new files later timestamps, and keep changes to existing objects within the hosted migration rules. For a function replacement, copy the SECURITY INVOKER declaration created in an earlier applied migration and change only its body. If the function has a dependent constraint, index, column expression or RLS policy, add a new function and migrate the dependent object to it. For a trigger replacement, use the same owned table and existing trigger name. Save the corrected version with source_changes, then call database_migrate again with its commit_sha and a new idempotency key; never reset the database.",
+    "Read error.migration.file and error.migration.reason. Preserve the database and keep applied files unchanged. Fix the pending migration using the function and trigger replacement rules at https://docs.ohmyho.st/migrations. Save the corrected source with source_changes and run database_migrate again with its commit_sha and a new idempotency key.",
   ],
   database_migrate_unavailable: [
     "The database could not be created or migrated in time; nothing from this request was left half applied.",
@@ -112,7 +112,7 @@ const failures = {
   ],
   database_migration_failed: [
     "The database migrations were not applied; none of this deployment's new migration files took effect.",
-    "Read the DATABASE_MIGRATION_FAILED item in 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --json' (next page: --cursor <next_cursor>) and fix what it names; run 'ohmyhost init --dry-run --json' for migration_sql_not_admitted. Keep applied files unchanged, give new files later timestamps, and keep changes to existing objects within the hosted migration rules. For a function replacement, copy the SECURITY INVOKER declaration created in an earlier applied migration and change only its body. If the function has a dependent constraint, index, column expression or RLS policy, add a new function and migrate the dependent object to it. For a trigger replacement, use the same owned table and existing trigger name. Save or push the corrected version and plan its commit; never reset the database.",
+    "Read error.migration.file and error.migration.reason. Run 'ohmyhost deployment logs --project PROJECT_ULID --deployment DEPLOYMENT_ULID --json' for the diagnostic. Preserve the database and keep applied files unchanged. Fix the pending migration using https://docs.ohmyho.st/migrations. Run 'ohmyhost init --dry-run --json', then save or push the corrected source and plan its commit.",
   ],
   runtime_candidate_failed: [
     "The deployed candidate failed its runtime checks.",
@@ -128,7 +128,7 @@ const failures = {
   ],
   storage_jurisdiction_conflict: [
     "storage.jurisdiction must match the project's recorded storage jurisdiction.",
-    "Read 'Storage jurisdiction' in 'ohmyhost project context --project ULID --json' and set storage.jurisdiction in ohmyhost.yaml to that recorded value (us or eu). Existing R2 buckets and reservations keep their jurisdiction after a project-region migration; only new storage without a recorded bucket uses the project region. If context reports unavailable, report the request ID through feedback rather than guessing. Save or push the corrected version and plan its commit; for promotion, deploy it to Dev and promote again. Do not delete or recreate the project to move files.",
+    "Run 'ohmyhost project context --project ULID --json'. Set storage.jurisdiction in ohmyhost.yaml to its recorded value (us or eu). Existing buckets and reservations keep their jurisdiction after a project-region migration. New storage without a recorded bucket uses the project region. If the value is unavailable, report the request ID through feedback. Save or push the correction and plan its commit. For promotion, deploy it to Dev and promote again. Keep the existing project and files.",
   ],
   provider_state_absent: [
     "Reconciliation confirmed that the required deployment resources are absent.",

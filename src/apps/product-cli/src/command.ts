@@ -874,6 +874,20 @@ export type ProductCliCommand =
       readonly credentialStore: "native";
     }
   | {
+      readonly kind: "secret-form-create";
+      readonly projectId: string;
+      readonly environmentId: string;
+      readonly names: readonly string[];
+      readonly credentialStore: "native";
+    }
+  | {
+      readonly kind: "secret-form-status";
+      readonly projectId: string;
+      readonly environmentId: string;
+      readonly requestId: string;
+      readonly credentialStore: "native";
+    }
+  | {
       readonly kind: "function-runs";
       readonly projectId: string;
       readonly environmentId: string;
@@ -1308,6 +1322,8 @@ export type RecognizedCommandLabel =
   | "function runs"
   | "secret set"
   | "secret delete"
+  | "secret form create"
+  | "secret form status"
   | "mail setup"
   | "mail status"
   | "mail webhook set"
@@ -1548,6 +1564,8 @@ export const recognizedCommandLabel = (argv: readonly string[]): RecognizedComma
       if (values[0] === "list") return "secret list";
       if (values[0] === "set") return "secret set";
       if (values[0] === "delete") return "secret delete";
+      if (values[0] === "form" && values[1] === "create") return "secret form create";
+      if (values[0] === "form" && values[1] === "status") return "secret form status";
     }
     if (value === "auth") return "auth";
     if (value === "function" && values[0] === "runs") return "function runs";
@@ -3855,6 +3873,48 @@ export const parseProductCliCommand = (argv: readonly string[]): ProductCliComma
       kind: "secret-list",
       projectId: options["--project"],
       environmentId: options["--environment"],
+      credentialStore,
+    };
+  }
+  if (first === "secret" && values[0] === "form" && values[1] === "create") {
+    if (yes || wait || follow || stdin) throw new InvalidCommandError();
+    values.splice(0, 2);
+    const options = parseOptions(values, ["--project", "--environment", "--names"]);
+    const names = options["--names"].split(",");
+    // One to ten distinct customer names, the rule the service enforces.
+    if (
+      !ORGANIZATION_ULID.test(options["--project"]) ||
+      !ORGANIZATION_ULID.test(options["--environment"]) ||
+      names.length > 10 ||
+      new Set(names).size !== names.length ||
+      !names.every((name) => isUserSecretName(name))
+    )
+      throw new InvalidCommandError();
+    return {
+      kind: "secret-form-create",
+      projectId: options["--project"],
+      environmentId: options["--environment"],
+      names,
+      credentialStore,
+    };
+  }
+  if (first === "secret" && values[0] === "form" && values[1] === "status") {
+    if (yes || wait || follow || stdin) throw new InvalidCommandError();
+    values.splice(0, 2);
+    const requestId = values.shift();
+    const options = parseOptions(values, ["--project", "--environment"]);
+    if (
+      requestId === undefined ||
+      !/^[a-f0-9]{64}$/u.test(requestId) ||
+      !ORGANIZATION_ULID.test(options["--project"]) ||
+      !ORGANIZATION_ULID.test(options["--environment"])
+    )
+      throw new InvalidCommandError();
+    return {
+      kind: "secret-form-status",
+      projectId: options["--project"],
+      environmentId: options["--environment"],
+      requestId,
       credentialStore,
     };
   }

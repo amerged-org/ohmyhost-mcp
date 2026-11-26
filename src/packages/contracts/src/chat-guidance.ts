@@ -5,7 +5,7 @@ import {
   type FrameworkConversionDiagnostic,
 } from "./framework-admission.js";
 import { renderConfigurationExample } from "./framework-source-rules.js";
-import { previewFailureSay } from "./previews.js";
+import { previewFailureSay, type PreviewFailureDetail } from "./previews.js";
 import { PROBLEM_POLICY, type ProblemChatGuidance, type ProblemCode } from "./problem-policy.js";
 
 type ChatGuidance = { next_step: string; say_to_user?: string };
@@ -209,9 +209,9 @@ export const CHAT_MAIN_PATH_INSTRUCTIONS =
   "Results may carry next_step for you and say_to_user for the user. Say it in the user's language. Share IDs, commits, states and codes only on request. ";
 
 export const PREVIEW_OPEN_DESCRIPTION =
-  "Open or create the private live preview for this project and environment and return its link, state, expires_at, failure, data and ready_to_show. Available on Free and Paid. Source saves update it without a deployment. The link is for the user: hand it over when ready_to_show is true. Private means: keep it out of source files, notes and logs. The link is valid for at most 24 hours from creation; the preview sleeps after 10 minutes without activity and wakes when the link is opened, and preview_open makes a new preview and link after the 24 hours. If the start failed, failure carries a code and next_step: follow it instead of waiting. data says whether the app's database has its tables and never delays ready_to_show. The preview shows the app but does not save data: saving works once the app is published, after database_migrate.";
+  "Open or create a private live preview for the specified project and environment. Available on Free and Paid. Source saves update the preview without a deployment. Returns its private link, state, expires_at, failure, data and ready_to_show. The link lasts at most 24 hours, and opening a preview after expiry creates a new link. The preview sleeps after ten idle minutes and wakes when the link is opened. Database readiness is reported independently of ready_to_show. Preview does not persist application data.";
 export const PREVIEW_GET_DESCRIPTION =
-  "Read the private live preview for this project and environment: its link, state, saved and applied version, expires_at, failure, data and ready_to_show. The link is for the user: hand it over when ready_to_show is true. Private means: keep it out of source files, notes and logs. The link is valid for at most 24 hours from creation. If the start failed, failure carries a code and next_step: follow it instead of waiting. data says whether the app's database has its tables and never delays ready_to_show. The preview shows the app but does not save data: saving works once the app is published, after database_migrate.";
+  "Read the private live preview for the specified project and environment. Returns its private link, state, saved and applied versions, expiry, failure details, database readiness and ready_to_show. Links last at most 24 hours. Database readiness is reported independently of ready_to_show. Preview does not persist application data.";
 
 /** The question the user answers before database files are applied; the platform never chooses where. */
 function previewDataGuidance(view: ChatResult): ChatGuidance | null {
@@ -285,10 +285,15 @@ export function previewGuidance(view: ChatResult): ChatGuidance | null {
     typeof (failure as Record<string, unknown>)["code"] === "string" &&
     typeof (failure as Record<string, unknown>)["next_step"] === "string"
   ) {
-    const { code, next_step } = failure as { code: string; next_step: string };
+    const { code, detail, next_step } = failure as {
+      code: string;
+      detail?: PreviewFailureDetail;
+      next_step: string;
+    };
     return {
       next_step,
-      say_to_user: previewFailureSay(code) ?? "Your preview could not start. I am looking into it.",
+      say_to_user:
+        previewFailureSay(code, detail) ?? "Your preview could not start. I am looking into it.",
     };
   }
   if (view["status"] === "sleeping")
@@ -325,7 +330,7 @@ export function projectCreateGuidance(
   if (result["state"] !== "queued" || typeof result["project_id"] !== "string") return null;
   return {
     next_step: starterRequested
-      ? "The project exists and its starter files are being prepared, usually in under a minute. Read source_get until the source is ready, then save the app with source_changes using its current commit and generation. The starter's package.json already lists @ohmyhost/customer-runtime for the database, mail and storage clients: keep that line. Do not initialize the source again."
+      ? "The project exists and its starter files are being prepared, usually in under a minute. Read source_get until the source is ready, then save the app with source_changes using its current commit and generation. The starter is React, Vite and TypeScript with a package.json and a finished pnpm-lock.yaml: keep both, including @ohmyhost/customer-runtime for the database, mail and storage clients. To add a package, edit package.json only. Preview and build update the pnpm lockfile when the saved dependency pins can be preserved. Do not initialize the source again."
       : "The project exists. Read operation_get until it succeeds, then read the source binding with source_get. If there is no source, use source_initialize for managed source or source_link for the chosen GitHub repository.",
     say_to_user: "Your project is set up. I am building the first version now.",
   };
@@ -341,10 +346,10 @@ export function deploymentGuidance(result: ChatResult): ChatGuidance | null {
 }
 
 export const OPERATION_RECONCILE_DESCRIPTION =
-  "Recovers an operation after operation_get reports reconciliation_required. Use the original write’s idempotency key and confirm one attempt. The receipt identifies the original operation for a follow-up operation_get. If recovery is exhausted, stop and keep the original resource.";
+  "Recover an operation in reconciliation_required using the original write's idempotency key and confirmed: true. Returns a receipt identifying the original operation. Exhausted recovery leaves the original resource in place.";
 
 export const OPERATION_GET_DESCRIPTION =
-  "Read the original operation’s state, work kind, current step, age, usual duration, wait reason and next step. A deployment failure includes the deployment ID for deployment_logs. For waiting_for_mail, read mail_domain_status or GET /v1/projects/{project_id}/environments/{environment_id}/mail-domain.";
+  "Read an operation by ID, including the last recorded provider verification step when available. Returns its state, work kind, current step, age, usual duration, wait reason and any next step. A deployment failure includes the deployment ID.";
 
 export const SOURCE_PREPARATION_GUIDANCE = {
   usual_duration_seconds: 60,
@@ -496,6 +501,21 @@ export function withChatGuidance(
       break;
     case "deployment_get":
       guidance = deploymentGuidance(result);
+      break;
+    case "database_compute_set":
+    case "database_migrate":
+    case "delete_execute":
+    case "deployment_create":
+    case "project_data_change":
+    case "project_development_add":
+    case "project_handle_set":
+    case "source_initialize":
+    case "source_link":
+      guidance =
+        typeof result["id"] === "string" &&
+        (result["state"] === "queued" || result["state"] === "running")
+          ? { next_step: "Read operation_get using this operation's id until it finishes." }
+          : null;
       break;
     case "identity_get":
       guidance =
