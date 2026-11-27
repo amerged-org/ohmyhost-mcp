@@ -81,9 +81,9 @@ import {
   writeProjectDatabase,
 } from "./sdk.gen.js";
 export const remoteMcpContractSha256 =
-  "d6b121e5815e026156a7ff78b3176eb80e529d817507839e45cc2e6301fd4c39";
+  "a143ba4c91f5a70227c350472125818c4b202e8c3fb08684caf5ee9f8f08347f";
 export const remoteMcpContractVersion = "0.0.0";
-export const remoteMcpReleaseVersion = "0.1.85";
+export const remoteMcpReleaseVersion = "0.1.86";
 export interface RemoteMcpOperation {
   operationId: string;
   method: string;
@@ -26025,6 +26025,18 @@ export const remoteMcpWorkflowTools: readonly RemoteMcpWorkflowTool[] = [
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: "preview_draft",
+    title: "Create or update temporary live preview (no login required)",
+    description:
+      "Creates or updates a temporary 24-hour live preview on ohmyho.st without signing in (including a small unclaimed Postgres database up to 5 tables and 5 MiB when ohmyhost.yaml declares database migrations; exceeding 5 tables or 5 MiB returns guest_database_limit_exceeded with claim_url so the user can sign up and unlock full Postgres storage). Pass files to build and preview an app immediately (omitting package.json starts from the vite-react template). Returns preview_url, claim_url (to sign in and save permanently), draft_id and edit_token. Pass draft_id and edit_token on follow-up edits to update the same live preview in place. After 24 hours without claim, live compute and database are deleted and the app plus database snapshot stay archived in R2 for 30 days so claim_url can still restore and claim them.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
       openWorldHint: false,
     },
   },

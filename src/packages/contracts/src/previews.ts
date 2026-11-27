@@ -91,6 +91,33 @@ export const PREVIEW_LIFETIME_MS = 24 * 60 * 60 * 1000;
 /** A retryable failure is not retried before this cool-down has passed. */
 export const PREVIEW_RETRY_AFTER_SECONDS = 10;
 
+/** Public banner metadata shown on unclaimed loginless guest previews; absent on claimed/owned projects. */
+export interface PreviewGuestBanner {
+  readonly expiresAt: string;
+  readonly claimToken: string;
+}
+
+export interface GuestDraftRecord {
+  readonly draftId: string;
+  readonly organizationId: string;
+  readonly projectId: string;
+  readonly name: string;
+  readonly claimTokenPublic: string | null;
+  readonly state: "active" | "archived" | "claimed" | "expired";
+  readonly databaseStatus: "none" | "active" | "archived" | "deleted";
+  readonly archiveBucket: string | null;
+  readonly archiveKey: string | null;
+  readonly archiveSha256: string | null;
+  readonly archiveBytes: number | null;
+  readonly archiveExpiresAt: string | null;
+  readonly claimedOrganizationId: string | null;
+  readonly claimedProjectId: string | null;
+  readonly claimedByUserId: string | null;
+  readonly claimedAt: string | null;
+  readonly expiresAt: string;
+  readonly createdAt: string;
+}
+
 export interface PreviewRecord {
   readonly previewId: string;
   readonly organizationId: string;
@@ -120,6 +147,8 @@ export interface PreviewRecord {
   /** Non-null while Dev is entitled; runtime must recheck at this deadline. */
   readonly paidUntil: string | null;
   readonly retirement: "none" | "rotating" | "destroying" | "suspended";
+  /** Present only while this preview belongs to an unclaimed loginless guest draft. */
+  readonly guest?: PreviewGuestBanner | null;
 }
 
 /**
@@ -177,6 +206,143 @@ export interface PreviewRuntimeRecord extends PreviewRecord {
 }
 
 /** Control API's deliberately separate capability, including encrypted recovery custody. */
+/** Fixed internal guest-pool organization ID; never customer-assignable and never Paid. */
+export const GUEST_POOL_ORGANIZATION_ID = "01000000000000000000000000";
+
+/** Per-draft Postgres limits for unclaimed guest previews; claiming/signing up unlocks full customer limits. */
+export const GUEST_DATABASE_MAX_TABLES = 5;
+export const GUEST_DATABASE_MAX_BYTES = 5 * 1024 * 1024;
+export const GUEST_DATABASE_LIMIT_SQLSTATE = "OH001";
+export const GUEST_DATABASE_LIMIT_ERROR_CODE = "guest_database_limit_exceeded";
+export const GUEST_DATABASE_LIMIT_MESSAGE =
+  "Temporary guest preview databases are limited to 5 tables and 5 MiB. Claim your preview and sign up at ohmyho.st to unlock full Postgres databases.";
+
+export type OrganizationTier = "guest" | "free" | "paid";
+
+/** Explicit, centrally-owned capability policy per organization tier (extensible for Enterprise plans). */
+export interface PreviewCapabilityPolicy {
+  readonly tier: OrganizationTier;
+  readonly preview: boolean;
+  readonly devPreview: boolean;
+  readonly managedSource: boolean;
+  readonly runtimeEgress: boolean;
+  readonly database: boolean;
+  readonly nativeAuth: boolean;
+  readonly ai: boolean;
+  readonly mail: boolean;
+  readonly storage: boolean;
+}
+
+export function previewCapabilitiesForOrganization(input: {
+  readonly organizationId: string;
+  readonly paid: boolean;
+}): PreviewCapabilityPolicy {
+  if (input.organizationId === GUEST_POOL_ORGANIZATION_ID) {
+    return Object.freeze({
+      tier: "guest",
+      preview: true,
+      devPreview: false,
+      managedSource: true,
+      runtimeEgress: false,
+      database: true,
+      nativeAuth: false,
+      ai: false,
+      mail: false,
+      storage: false,
+    });
+  }
+  if (input.paid) {
+    return Object.freeze({
+      tier: "paid",
+      preview: true,
+      devPreview: true,
+      managedSource: true,
+      runtimeEgress: true,
+      database: true,
+      nativeAuth: true,
+      ai: true,
+      mail: true,
+      storage: true,
+    });
+  }
+  return Object.freeze({
+    tier: "free",
+    preview: true,
+    devPreview: false,
+    managedSource: true,
+    runtimeEgress: true,
+    database: true,
+    nativeAuth: true,
+    ai: true,
+    mail: true,
+    storage: true,
+  });
+}
+
+export interface GuestDatabaseTargetRef {
+  readonly providerProjectId: string;
+  readonly databaseId: string;
+  readonly physicalEnvironmentId: string;
+  readonly region: "us" | "eu";
+}
+
+export interface GuestDatabaseTableSnapshot {
+  readonly name: string;
+  readonly columns: readonly string[];
+  readonly rows: readonly (readonly unknown[])[];
+}
+
+export interface GuestDatabaseSequenceSnapshot {
+  readonly name: string;
+  readonly lastValue: number | string;
+}
+
+export interface GuestDatabaseSnapshot {
+  readonly databaseId: string;
+  readonly tables: readonly GuestDatabaseTableSnapshot[];
+  readonly sequences: readonly GuestDatabaseSequenceSnapshot[];
+  readonly truncated: boolean;
+}
+
+export interface GuestDraftArchiveCandidate {
+  readonly draftId: string;
+  readonly organizationId: string;
+  readonly projectId: string;
+  readonly name: string;
+  readonly expiresAt: string;
+  readonly databaseStatus: "none" | "active" | "archived" | "deleted";
+  readonly database: GuestDatabaseTargetRef | null;
+}
+
+export interface GuestDraftCleanupCandidate {
+  readonly draftId: string;
+  readonly organizationId: string;
+  readonly projectId: string;
+  readonly state: "archived" | "claimed" | "expired";
+  readonly repositories: readonly {
+    readonly namespace: string;
+    readonly repositoryName: string;
+  }[];
+  readonly blobOperations: readonly {
+    readonly operationId: string;
+    readonly blobs: readonly {
+      readonly path: string;
+      readonly sha256: string;
+      readonly byteLength: number;
+      readonly executable: boolean;
+      readonly bucket: string;
+      readonly key: string;
+      readonly versionId: string;
+      readonly eTag: string;
+    }[];
+  }[];
+  readonly database: GuestDatabaseTargetRef | null;
+  readonly archive: {
+    readonly bucket: string;
+    readonly key: string;
+  } | null;
+}
+
 export interface ProductApiPreviewRuntime {
   readInitialGithubCandidate(input: PreviewCustomerScope): Promise<PreviewGithubCandidate | null>;
   acceptInitialGithubSource(
@@ -225,6 +391,61 @@ export interface ProductApiPreviewRuntime {
   confirmRotation(input: PreviewRuntimeFence): Promise<void>;
   destroy(input: DestroyPreviewInput): Promise<PreviewRuntimeRecord>;
   confirmDestroy(input: PreviewRuntimeFence): Promise<void>;
+  createGuestDraft?(input: {
+    readonly draftId?: string;
+    readonly name: string;
+    readonly editTokenHash: string;
+    readonly claimTokenHash: string;
+    readonly claimTokenPublic: string;
+    readonly subjectHash?: string | null;
+  }): Promise<GuestDraftRecord>;
+  resolveGuestDraftByEdit?(input: {
+    readonly draftId?: string;
+    readonly editTokenHash: string;
+  }): Promise<GuestDraftRecord | null>;
+  readGuestDraftByClaim?(input: {
+    readonly claimTokenHash: string;
+  }): Promise<GuestDraftRecord | null>;
+  reserveGuestDraftClaim?(input: {
+    readonly draftId: string;
+    readonly claimTokenHash: string;
+    readonly claimedOrganizationId: string;
+    readonly claimedByUserId: string;
+  }): Promise<GuestDraftRecord>;
+  completeGuestDraftClaim?(input: {
+    readonly draftId: string;
+    readonly claimTokenHash: string;
+    readonly claimedOrganizationId: string;
+    readonly claimedProjectId: string;
+    readonly claimedByUserId: string;
+  }): Promise<GuestDraftRecord>;
+  expireGuestDrafts?(input: { readonly limit: number }): Promise<{ readonly expired: number }>;
+  listGuestDraftsDueForArchive?(input: {
+    readonly limit: number;
+  }): Promise<readonly GuestDraftArchiveCandidate[]>;
+  archiveGuestDraft?(input: {
+    readonly draftId: string;
+    readonly archiveBucket: string;
+    readonly archiveKey: string;
+    readonly archiveSha256: string;
+    readonly archiveBytes: number;
+  }): Promise<GuestDraftRecord>;
+  expireArchivedGuestDrafts?(input: {
+    readonly limit: number;
+  }): Promise<{ readonly expired: number }>;
+  markGuestDraftDatabaseActive?(input: { readonly draftId: string }): Promise<void>;
+  retireGuestDraftDatabase?(input: {
+    readonly draftId: string;
+    readonly organizationId: string;
+    readonly projectId: string;
+    readonly physicalEnvironmentId: string;
+    readonly providerProjectId: string;
+    readonly databaseId: string;
+  }): Promise<void>;
+  listPendingGuestDraftCleanups?(input: {
+    readonly limit: number;
+  }): Promise<readonly GuestDraftCleanupCandidate[]>;
+  markGuestDraftCleaned?(input: { readonly draftId: string }): Promise<void>;
 }
 
 /** Only this private capability may operate a preview; no recoverable token is exposed. */

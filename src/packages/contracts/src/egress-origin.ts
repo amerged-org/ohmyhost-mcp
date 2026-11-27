@@ -36,13 +36,16 @@ export function isDnsEgressOrigin(value: unknown): value is string {
   );
 }
 
-/** A customer-authored egress origin: the DNS rule, and never a platform gateway name. */
+/** A customer-authored egress origin: the DNS rule, and never a platform or Cloudflare API host. */
 export function isCustomerEgressOrigin(value: unknown): value is string {
   if (!isDnsEgressOrigin(value)) return false;
   const { hostname } = new URL(value);
   return (
     !PLATFORM_GATEWAY_NAME.test(hostname) &&
-    hostname !== "connect.ohmyho.st" &&
-    !hostname.endsWith(".connect.ohmyho.st")
+    hostname !== "ohmyho.st" &&
+    !hostname.endsWith(".ohmyho.st") &&
+    hostname !== "omh.st" &&
+    !hostname.endsWith(".omh.st") &&
+    hostname !== "api.cloudflare.com"
   );
 }

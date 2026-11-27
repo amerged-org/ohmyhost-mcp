@@ -1,6 +1,6 @@
 {
   "name": "@ohmyhost/sdk-ts",
-  "version": "0.1.85",
+  "version": "0.1.86",
   "private": true,
   "type": "module",
   "exports": {
